@@ -350,13 +350,17 @@ Run:
 
 ```bash
 set -e
-for url in $(sed -n '/^## Official References/,$p' docs/TECH_STACK.md | rg -o 'https://[^)]+'); do
-  curl --max-time 20 -L --fail --silent --show-error --output /dev/null "$url"
+urls=$(sed -n '/^## Official References/,$p' docs/TECH_STACK.md | rg -o 'https://[^)]+')
+url_count=$(printf '%s\n' "$urls" | sed '/^$/d' | wc -l | tr -d ' ')
+test "$url_count" -eq 10
+printf 'extracted %s official reference URLs\n' "$url_count"
+for url in $urls; do
+  curl --max-time 20 --retry 3 --retry-all-errors -L --fail --silent --show-error --output /dev/null "$url"
   printf 'validated %s\n' "$url"
 done
 ```
 
-Expected: exits `0`; every official reference returns a successful HTTP response after redirects.
+Expected: exits `0`; exactly 10 official reference URLs are extracted and every reference returns a successful HTTP response after bounded retries and redirects.
 
 - [x] **Step 5: Mark Task 2 complete and commit**
 
@@ -401,10 +405,17 @@ Expected: all commands exit `0`.
 Run:
 
 ```bash
-rg -n "TypeScript only|TypeScript modular monolith" AGENTS.md docs/TECH_STACK.md
-rg -n "store application|store app" AGENTS.md docs/TECH_STACK.md docs/superpowers/specs/2026-07-16-repository-governance-and-tech-stack-design.md
-rg -n "oauth/v3/token|v3 token" AGENTS.md docs/TECH_STACK.md docs/superpowers/specs/2026-07-16-repository-governance-and-tech-stack-design.md
-rg -n "HARNESS_REFLECTIONS.md" AGENTS.md docs/superpowers/specs/2026-07-16-repository-governance-and-tech-stack-design.md
+rg -n "TypeScript only" AGENTS.md
+rg -n "TypeScript modular monolith" docs/TECH_STACK.md
+rg -n "TypeScript across|TypeScript modular-monolith" docs/superpowers/specs/2026-07-16-repository-governance-and-tech-stack-design.md
+rg -n "store application|store app" AGENTS.md
+rg -n "store application|store app" docs/TECH_STACK.md
+rg -n "store application|store app" docs/superpowers/specs/2026-07-16-repository-governance-and-tech-stack-design.md
+rg -n "v3 token" AGENTS.md
+rg -n "oauth/v3/token" docs/TECH_STACK.md
+rg -n "oauth/v3/token" docs/superpowers/specs/2026-07-16-repository-governance-and-tech-stack-design.md
+rg -n "HARNESS_REFLECTIONS.md" AGENTS.md
+rg -n "HARNESS_REFLECTIONS.md" docs/superpowers/specs/2026-07-16-repository-governance-and-tech-stack-design.md
 ! rg -n "/opt/anaconda|pytest|Gitee WebHook|DEPLOY_BRANCH=master|open-apis/authen/v2/oauth/token" AGENTS.md docs/TECH_STACK.md docs/HARNESS_REFLECTIONS.md
 ```
 

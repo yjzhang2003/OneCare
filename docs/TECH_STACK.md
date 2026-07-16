@@ -11,6 +11,7 @@ Auto Insight will use a TypeScript modular monolith:
 - Node.js 24 LTS;
 - Next.js App Router;
 - React Server Components by default;
+- Client Components only for interactive views;
 - Route Handlers for server endpoints;
 - PostgreSQL;
 - Drizzle ORM;
@@ -38,7 +39,7 @@ Website login uses the OAuth authorization-code flow:
 - token exchange: `https://accounts.feishu.cn/oauth/v3/token`;
 - user information: `https://open.feishu.cn/open-apis/authen/v1/user_info`.
 
-The server generates and validates a single-use `state`, exchanges the code, retrieves stable Feishu identity, maps the user and tenant, and creates an application session. Secrets and Feishu access tokens never enter client-rendered code.
+Before exchanging the code, the server rejects a missing, expired, reused, or mismatched server-generated `state`. The server then retrieves Feishu identity, maps the user and tenant, and creates an application session. User identity keys use stable Feishu identifiers; email addresses and mobile numbers are attributes, not identity keys. Secrets and Feishu access tokens never enter client-rendered code.
 
 ## Multi-Enterprise Application Model
 
