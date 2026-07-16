@@ -349,7 +349,11 @@ Expected: all selected-stack and Feishu constraints are found, deprecated token 
 Run:
 
 ```bash
-for url in $(rg -o 'https://[^)]+' docs/TECH_STACK.md); do curl -L --fail --silent --show-error --output /dev/null "$url"; done
+set -e
+for url in $(sed -n '/^## Official References/,$p' docs/TECH_STACK.md | rg -o 'https://[^)]+'); do
+  curl --max-time 20 -L --fail --silent --show-error --output /dev/null "$url"
+  printf 'validated %s\n' "$url"
+done
 ```
 
 Expected: exits `0`; every official reference returns a successful HTTP response after redirects.
