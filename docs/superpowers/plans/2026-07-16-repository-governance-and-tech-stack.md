@@ -39,7 +39,7 @@
 - Consumes: repository facts from `README.md` and the approved design specification.
 - Produces: mandatory operating rules that future agents read and an audit location for later self-improvement.
 
-- [ ] **Step 1: Record the documentation validation baseline**
+- [x] **Step 1: Record the documentation validation baseline**
 
 Run:
 
@@ -50,7 +50,7 @@ test ! -e docs/HARNESS_REFLECTIONS.md
 
 Expected: both commands exit `0`, proving the deliverables do not already exist and the change is additive.
 
-- [ ] **Step 2: Create the harness reflection log**
+- [x] **Step 2: Create the harness reflection log**
 
 Create `docs/HARNESS_REFLECTIONS.md` with this complete structure:
 
@@ -90,7 +90,7 @@ Every applied change must appear in the task diff and final summary.
 No reflections have been recorded yet.
 ```
 
-- [ ] **Step 3: Create the concise root operating guide**
+- [x] **Step 3: Create the concise root operating guide**
 
 Create `AGENTS.md` with these sections and exact rules:
 
@@ -178,7 +178,7 @@ Before claiming completion:
 4. Report changed files, validation results, known gaps, and next steps without overstating readiness.
 ```
 
-- [ ] **Step 4: Validate the governance documents**
+- [x] **Step 4: Validate the governance documents**
 
 Run:
 
@@ -193,7 +193,7 @@ git diff --check
 
 Expected: both files exist; required rules are found; inherited repository-specific forbidden text is absent; `git diff --check` exits `0`.
 
-- [ ] **Step 5: Mark Task 1 complete and commit**
+- [x] **Step 5: Mark Task 1 complete and commit**
 
 Update Task 1 checkboxes in this plan, then run:
 
