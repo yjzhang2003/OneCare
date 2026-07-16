@@ -90,7 +90,7 @@
     "@types/node": "24.13.3",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
-    "eslint": "10.7.0",
+    "eslint": "9.39.5",
     "eslint-config-next": "16.2.10",
     "jsdom": "29.1.1",
     "typescript": "5.9.3",
