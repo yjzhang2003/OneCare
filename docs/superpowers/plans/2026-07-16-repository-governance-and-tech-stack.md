@@ -214,7 +214,7 @@ Expected: one commit containing only the operating guide, reflection log, and pl
 - Consumes: Feishu, Next.js, and Node.js official references listed in the approved specification.
 - Produces: the architecture baseline referenced by `AGENTS.md` and future feature specifications.
 
-- [ ] **Step 1: Record the missing-document baseline**
+- [x] **Step 1: Record the missing-document baseline**
 
 Run:
 
@@ -224,7 +224,7 @@ test ! -e docs/TECH_STACK.md
 
 Expected: exits `0` because the technology decision has not yet been created.
 
-- [ ] **Step 2: Create the technology stack decision**
+- [x] **Step 2: Create the technology stack decision**
 
 Create `docs/TECH_STACK.md` with the following complete sections and decisions:
 
@@ -328,7 +328,7 @@ These decisions require their own specifications when product requirements are k
 - [Node.js releases](https://nodejs.org/en/about/previous-releases)
 ```
 
-- [ ] **Step 3: Validate architecture requirements**
+- [x] **Step 3: Validate architecture requirements**
 
 Run:
 
@@ -344,7 +344,7 @@ git diff --check
 
 Expected: all selected-stack and Feishu constraints are found, deprecated token endpoint is absent, WebSocket is explicitly rejected as the foundation, and whitespace validation passes.
 
-- [ ] **Step 4: Validate official reference URLs**
+- [x] **Step 4: Validate official reference URLs**
 
 Run:
 
@@ -354,7 +354,7 @@ for url in $(rg -o 'https://[^)]+' docs/TECH_STACK.md); do curl -L --fail --sile
 
 Expected: exits `0`; every official reference returns a successful HTTP response after redirects.
 
-- [ ] **Step 5: Mark Task 2 complete and commit**
+- [x] **Step 5: Mark Task 2 complete and commit**
 
 Update Task 2 checkboxes in this plan, then run:
 
