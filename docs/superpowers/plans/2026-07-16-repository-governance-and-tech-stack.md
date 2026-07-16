@@ -381,7 +381,7 @@ Expected: one commit containing the technology decision and plan progress.
 - Consumes: all documentation delivered by Tasks 1 and 2.
 - Produces: a consistent, navigable documentation baseline ready for application planning.
 
-- [ ] **Step 1: Verify every required local document exists**
+- [x] **Step 1: Verify every required local document exists**
 
 Run:
 
@@ -396,7 +396,7 @@ test -f docs/superpowers/plans/2026-07-16-repository-governance-and-tech-stack.m
 
 Expected: all commands exit `0`.
 
-- [ ] **Step 2: Verify decisions remain consistent across documents**
+- [x] **Step 2: Verify decisions remain consistent across documents**
 
 Run:
 
@@ -410,7 +410,7 @@ rg -n "HARNESS_REFLECTIONS.md" AGENTS.md docs/superpowers/specs/2026-07-16-repos
 
 Expected: selected decisions appear in their intended documents and inherited or deprecated instructions are absent.
 
-- [ ] **Step 3: Review the final diff and repository state**
+- [x] **Step 3: Review the final diff and repository state**
 
 Run:
 
@@ -422,13 +422,13 @@ git log -3 --oneline --decorate
 
 Expected: no whitespace errors; only intended plan progress or validation fixes are uncommitted; recent commits show the specification and documentation commits.
 
-- [ ] **Step 4: Apply and document only validation-driven corrections**
+- [x] **Step 4: Apply and document only validation-driven corrections**
 
 If a Step 1-3 command fails, change only the smallest documentation text required to make the approved specification and delivered files consistent, then rerun all Task 3 validation commands.
 
 Expected: every command passes without expanding scope or adding application files.
 
-- [ ] **Step 5: Mark Task 3 complete and commit final progress if needed**
+- [x] **Step 5: Mark Task 3 complete and commit final progress if needed**
 
 Update Task 3 checkboxes. If this changes the plan or fixes documentation, run:
 
