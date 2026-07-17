@@ -392,10 +392,10 @@ git add README.md docs/superpowers/plans/2026-07-18-onecare-hisense-showroom-dem
 git commit -m "docs: record OneCare showroom demo"
 ```
 
-- [ ] **Step 5: Create and verify Vercel Preview**
+- [x] **Step 5: Create and verify Vercel Preview**
 
 Run `vercel deploy --yes` without `--prod`, inspect the deployment until `Ready`, assign `onecare-homepage-preview.vercel.app`, and reuse or create a time-limited shareable link. Verify HTTP 200 and the rendered strings `四个视角`, `一次理解，不再重复描述`, and `感知—诊断—编排—服务—学习`.
 
-- [ ] **Step 6: Report Preview and known boundaries**
+- [x] **Step 6: Report Preview and known boundaries**
 
 Return the direct Preview share URL, validation results, branch status, and the fact that Preview Feishu environment variables remain unconfigured. Do not push, open a PR, merge, or deploy Production.
