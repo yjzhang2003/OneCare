@@ -45,7 +45,10 @@ export function LandingContent({ user, authError }: LandingContentProps) {
           <div className="hero-copy">
             <StatusTag>PRODUCT PROTOTYPE · 01</StatusTag>
             <p className="eyebrow">AI SERVICE LOOP ENGINE</p>
-            <h1>让每一次服务，都比问题更早一步</h1>
+            <h1>
+              <span>让每一次服务，</span>
+              <span>都比问题更早一步</span>
+            </h1>
             <p className="hero-intro">
               OneCare 面向海信智能家庭场景，把用户声音、设备信号与服务协同
               串成一条有感知、有判断、有行动、会学习的服务闭环。
