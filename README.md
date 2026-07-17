@@ -1,5 +1,74 @@
 # Auto Insight：AI 驱动的汽车用户洞察引擎
 
+## 当前实现
+
+仓库现已包含首个 TypeScript 展示站：
+
+- Next.js App Router 响应式首页；
+- 飞书企业自建应用 OAuth 授权码登录；
+- 服务端签名的 8 小时网站会话；
+- 仅登录用户可访问的洞察工作台框架；
+- Vercel 部署配置。
+
+当前版本是单企业演示。只有企业自建应用所属企业中、且位于应用可用范围内的成员能够登录。工作台内容是产品框架，不包含真实汽车数据、AI 分析或飞书机器人。
+
+生产站点：<https://auto-insight-omega.vercel.app>
+
+## 本地运行
+
+需要 Node.js 24。
+
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+在 `.env.local` 中配置：
+
+- `FEISHU_APP_ID`：企业自建应用的 App ID；
+- `FEISHU_APP_SECRET`：企业自建应用的 App Secret；
+- `FEISHU_REDIRECT_URI`：本地或线上完整 OAuth 回调 URL；
+- `SESSION_SECRET`：至少 32 字节的随机会话密钥，可用 `openssl rand -base64 48` 生成。
+
+真实密钥不得提交到 Git。仓库会忽略 `.env*`，只保留无敏感值的 `.env.example`。
+
+## 飞书后台配置
+
+在飞书开发者后台打开对应企业自建应用：
+
+1. 确认应用已启用，登录成员位于应用可用范围内；
+2. 进入“开发配置 → 安全设置 → 重定向 URL”；
+3. 添加与 `FEISHU_REDIRECT_URI` 完全一致的地址，例如 `https://your-domain.example/api/auth/feishu/callback`；
+4. 如配置属于正式版本，按企业规则发布版本并完成管理员审核。
+
+登录实现使用飞书当前 OAuth v3 令牌端点，不申请手机号或邮箱权限，也不持久化飞书访问令牌。
+
+## 验证
+
+```bash
+npm test
+npm run test:runtime
+npm run lint
+npm run typecheck
+npm run build
+npm audit --omit=dev
+```
+
+## Vercel 部署
+
+首次部署采用两阶段流程，因为飞书回调地址依赖最终生产域名：
+
+1. `vercel link` 链接或创建项目；
+2. 在 Vercel Production 环境设置 `FEISHU_APP_ID`、`FEISHU_APP_SECRET`、`FEISHU_REDIRECT_URI` 和 `SESSION_SECRET`；
+3. 运行 `vercel --prod` 获得生产域名；
+4. 将精确生产回调地址加入飞书安全设置；
+5. 更新 Vercel 的 `FEISHU_REDIRECT_URI` 后再次生产部署。
+
+`FEISHU_APP_SECRET` 和 `SESSION_SECRET` 应在 Vercel 标记为 Sensitive。环境变量更新只对后续部署生效。
+
+`npm run test:runtime` 会先执行生产构建，再在本地启动 `next start` 验证认证 Route Handlers。该检查用于捕获只在 Next.js 生产 Bundle 中出现、普通模块单测无法复现的运行时兼容问题。
+
 ## 背景
 
 在汽车行业竞争白热化的今天，“以用户为中心”已成为产品定义的核心逻辑。

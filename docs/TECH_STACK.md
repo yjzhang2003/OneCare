@@ -2,87 +2,96 @@
 
 ## Status
 
-Decision accepted on 2026-07-16. This document describes the target architecture; it does not mean the application or integrations already exist.
+The TypeScript web baseline and Feishu custom-app login were implemented on 2026-07-17. The current application is a single-enterprise demonstration; automotive data, AI analysis, persistence, and the Feishu agent remain unimplemented.
 
-## Decision Summary
+The production deployment is available at `https://auto-insight-omega.vercel.app`. Feishu custom-app version 1.0.1 and the exact production redirect URL are published, and the login, protected dashboard, logout, and post-logout redirect behavior have been manually verified with a real enterprise member.
 
-Auto Insight will use a TypeScript modular monolith:
+## Implemented Baseline
+
+Auto Insight uses one TypeScript modular monolith:
 
 - Node.js 24 LTS;
-- Next.js App Router;
+- Next.js 16 App Router;
 - React Server Components by default;
-- Client Components only for interactive views;
-- Route Handlers for server endpoints;
-- PostgreSQL;
-- Drizzle ORM;
-- Vitest, React Testing Library, and Playwright when implementation begins.
+- Route Handlers for OAuth endpoints;
+- signed, database-free HTTP-only website sessions;
+- Vitest and React Testing Library;
+- Vercel as the selected web host.
 
 Python is outside this repository's architecture.
 
-## Why this stack
-
-One TypeScript codebase is the smallest architecture that can support the website, OAuth callbacks, Feishu HTTP events, tenant-aware application services, and a later asynchronous worker. It avoids a premature split between frontend and backend frameworks while preserving module boundaries.
-
-Node.js 24 is an LTS release as of the decision date. Next.js recommends the App Router for current applications and provides Route Handlers for HTTP endpoints.
+This is the smallest deployable shape that supports a real website login while preserving boundaries for later persistence, tenant isolation, insights, and Feishu integration.
 
 ## Repository Shape
 
-The initial application should remain one deployable Next.js project with feature modules for identity, tenants, insights, and Feishu integration. Extract a separate TypeScript worker only when real asynchronous bot or AI workloads require independent scaling.
+The repository contains one deployable Next.js project. Authentication protocol code lives under `src/features/auth`; HTTP orchestration lives under `app/api/auth`; pages remain responsible only for presentation and session-aware navigation.
 
-Do not add a Python service. If later AI infrastructure exposes an external API, consume it through a typed TypeScript adapter.
+A separate TypeScript worker is deferred until real asynchronous bot or AI workloads require independent scaling. If later AI infrastructure exposes an external API, the website will consume it through a typed TypeScript adapter.
 
-## Feishu Login
+## Current Feishu Login
 
-Website login uses the OAuth authorization-code flow:
+The current demonstration uses one Feishu custom application owned by one enterprise:
 
 - authorization: `https://accounts.feishu.cn/open-apis/authen/v1/authorize`;
 - token exchange: `https://accounts.feishu.cn/oauth/v3/token`;
 - user information: `https://open.feishu.cn/open-apis/authen/v1/user_info`.
 
-Before exchanging the code, the server rejects a missing, expired, reused, or mismatched server-generated `state`. The server then retrieves Feishu identity, maps the user and tenant, and creates an application session. User identity keys use stable Feishu identifiers; email addresses and mobile numbers are attributes, not identity keys. Secrets and Feishu access tokens never enter client-rendered code.
+The server creates a 10-minute, single-use OAuth `state` Cookie and rejects missing or mismatched values before exchanging the authorization code. It retrieves only the stable `open_id`, display name, and optional avatar URL, then creates an eight-hour HMAC-SHA-256 website session.
 
-## Multi-Enterprise Application Model
+The App Secret, user access token, and session secret remain server-side. Feishu access tokens are used for one request chain and are not persisted. Email and mobile are neither requested nor used as identity keys.
 
-The demonstration targets one Feishu store application installed by multiple enterprises. The App ID is shared, while `tenant_key` identifies each tenant and is required for tenant-specific access tokens and data isolation.
+Because this is a custom application, only users in the owning enterprise and in the application's availability scope can log in.
 
-This is intentionally different from Feishu's one-click agent application SDK, which creates or updates separate applications. Auto Insight users use one shared bot.
+## Future Multi-Enterprise Model
 
-The later production deployment may be restricted to one enterprise without changing domain interfaces: it becomes a deployment and installation constraint, not a rewrite of user or tenant models.
+The longer-term demonstration architecture still targets one Feishu store application installed by multiple enterprises. Its shared App ID and validated `tenant_key` will identify tenant context and enforce tenant-specific data access.
 
-## Feishu Events
+That store-app path requires the appropriate ISV and marketplace process and is not claimed by the current build. Migrating to it will require persistent user and tenant mappings, installation lifecycle handling, tenant tokens, event verification, and tenant-aware repositories.
 
-Store applications receive events at a public HTTP endpoint. Feishu WebSocket long connections are limited to custom applications and are not the foundation of this design.
+Feishu's one-click agent-application SDK remains outside the intended product flow because it creates or updates separate applications rather than one shared product application.
 
-The event endpoint must verify requests, deduplicate events, persist or enqueue accepted work, and respond within three seconds. AI inference and other slow work execute asynchronously after acknowledgement.
+## Hosting and Runtime
 
-Queue technology is deliberately deferred until bot workloads are implemented.
+Vercel is the selected host for the Next.js application and Node.js Route Handlers. Production secrets are configured as Vercel environment variables and are never passed as public `NEXT_PUBLIC_*` values.
+
+The first production deployment establishes the canonical domain. The exact `/api/auth/feishu/callback` URL on that domain must then be added to the Feishu developer console and stored as `FEISHU_REDIRECT_URI` before the final production deployment.
+
+Authentication routes explicitly use the Node.js runtime. The repository pins Node 24 and overrides Next.js's transitive PostCSS dependency to a compatible patched release because the upstream pinned version is affected by GHSA-qx2v-qp2m-jg93.
 
 ## Persistence and Tenant Isolation
 
-PostgreSQL is the system of record. Drizzle owns TypeScript schemas and migrations.
+The current build has no database and stores no insight records, refresh tokens, or persistent user profiles.
 
-Every tenant-owned row carries an internal tenant ID mapped from validated Feishu `tenant_key`. Repository and service interfaces require tenant context, and absent tenant context defaults to no access. PostgreSQL row-level security may be added as defense in depth after the first schema is designed.
+PostgreSQL and Drizzle remain the intended system-of-record stack when persistence begins. At that point every tenant-owned row must carry an internal tenant identifier derived from validated Feishu installation or identity data. Missing tenant context defaults to no access. PostgreSQL row-level security may be added as defense in depth after the first schema is specified.
+
+## Feishu Events and Agent
+
+No event endpoint or Feishu agent is implemented yet.
+
+For the future store application, events must use a verified public HTTP callback. The endpoint must verify requests, deduplicate events, persist or enqueue accepted work, and acknowledge within three seconds. AI inference and other slow work execute asynchronously after acknowledgement. Queue technology remains deferred until that workload is specified.
 
 ## Testing Baseline
 
-- Vitest: domain, service, adapter, and route tests.
-- React Testing Library: interactive component behavior.
-- Playwright: critical login, authorization, and tenant-isolation browser flows.
-- Contract fixtures: Feishu OAuth and event payload compatibility.
+- Vitest covers environment validation, OAuth state, signed sessions, Feishu adapters, and Route Handlers.
+- A separate built-runtime Vitest suite starts the output of `next build` with `next start` and exercises the authentication routes across the real Next.js production boundary.
+- React Testing Library covers the landing page and dashboard presentation contracts.
+- External Feishu calls are injected in tests and never reach the network.
+- Production behavior is implemented test-first.
+- A production build, dependency audit, secret scan, and live deployment smoke test are required before release.
 
-Production behavior is implemented test-first. Feishu network calls stay behind typed adapters so tests remain deterministic.
+Playwright browser tests remain deferred until a persistent non-personal test identity is available. The current production flow has been manually verified in Edge with a real enterprise member after publishing the Feishu redirect URL.
 
 ## Deferred Decisions
 
-- hosting provider and region;
 - queue and background-job implementation;
-- application session library;
+- PostgreSQL hosting and migration workflow;
 - AI model and orchestration provider;
 - automotive data sources;
 - analytics and visualization libraries;
-- final deployment topology.
+- store-app ISV and marketplace path;
+- final multi-service deployment topology.
 
-These decisions require their own specifications when product requirements are known.
+Each deferred item requires a focused specification before implementation.
 
 ## Official References
 
@@ -91,8 +100,9 @@ These decisions require their own specifications when product requirements are k
 - [Feishu user access token v3](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/authentication-management/access-token/get-user-access-token-v3)
 - [Feishu user information](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/authen-v1/user_info/get)
 - [Feishu custom and store application differences](https://open.feishu.cn/document/server-docs/im-v1/faq?lang=zh-CN)
-- [Feishu long-connection restrictions](https://open.feishu.cn/document/server-docs/event-subscription-guide/event-subscription-configure-/request-url-configuration-case)
 - [Feishu event callback optimization](https://open.feishu.cn/document/event-subscription-guide/event-subscriptions/event-callback-optimization-guide?lang=zh-CN)
-- [Feishu one-click agent application](https://open.feishu.cn/document/mcp_open_tools/integrating-agents-with-feishu/overview)
-- [Next.js App Router](https://nextjs.org/docs/app/getting-started)
+- [Next.js App Router](https://nextjs.org/docs/app)
+- [Next.js Cookie API](https://nextjs.org/docs/app/api-reference/functions/cookies)
+- [Vercel CLI deployment](https://vercel.com/docs/cli/deploy)
+- [Vercel environment variables](https://vercel.com/docs/environment-variables)
 - [Node.js releases](https://nodejs.org/en/about/previous-releases)
