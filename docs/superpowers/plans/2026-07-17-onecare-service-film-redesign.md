@@ -48,7 +48,7 @@
 - Consumes: `LandingContent({ user, authError })`.
 - Produces: a failing contract for the new navigation, four journey scenes, blueprint, outcomes, team credits, and removed card classes.
 
-- [ ] **Step 1: Replace the first homepage test with the new contract**
+- [x] **Step 1: Replace the first homepage test with the new contract**
 
 Keep the signed-in and authentication-error tests unchanged. Replace only `presents the multi-page service story without dead perspective links` with:
 
@@ -116,7 +116,7 @@ it("presents one continuous service journey without card-wall patterns", () => {
 });
 ```
 
-- [ ] **Step 2: Run the targeted test and verify RED**
+- [x] **Step 2: Run the targeted test and verify RED**
 
 Run:
 
@@ -126,7 +126,7 @@ npm test -- app/landing-content.test.tsx
 
 Expected: FAIL because `服务旅程`, `冰箱好像不太冷了`, the accessible blueprint list, and the new outcome copy are absent; the existing `.role-card`, `.signal-flow`, and `.team-card` elements are still present.
 
-- [ ] **Step 3: Commit the verified failing contract**
+- [x] **Step 3: Commit the verified failing contract**
 
 ```bash
 git add app/landing-content.test.tsx
@@ -150,7 +150,7 @@ git commit -m "test: define OneCare service film story"
 - Produces: `Perspective.sceneLine`, `Perspective.handoff`, `outcomes`, `JourneyScene({ perspective })`, `ServiceBlueprint({ layers, events })`, and `OutcomeStatement({ outcomes })`.
 - Consumes: existing `Perspective.value`, `Perspective.capabilities`, `ServiceLayer`, `ScenarioStep`, `TeamMember`, `AuthUser`, and unchanged authentication URLs.
 
-- [ ] **Step 1: Extend the readonly content model and exact copy**
+- [x] **Step 1: Extend the readonly content model and exact copy**
 
 Add two properties to `Perspective`:
 
@@ -196,7 +196,7 @@ export const outcomes: readonly Outcome[] = [
 ] as const;
 ```
 
-- [ ] **Step 2: Create `JourneyScene`**
+- [x] **Step 2: Create `JourneyScene`**
 
 Create `src/features/showcase/components/journey-scene.tsx`:
 
@@ -228,7 +228,7 @@ export function JourneyScene({ perspective }: { perspective: Perspective }) {
 }
 ```
 
-- [ ] **Step 3: Create `ServiceBlueprint`**
+- [x] **Step 3: Create `ServiceBlueprint`**
 
 Create `src/features/showcase/components/service-blueprint.tsx`:
 
@@ -278,7 +278,7 @@ export function ServiceBlueprint({ layers, events }: ServiceBlueprintProps) {
 }
 ```
 
-- [ ] **Step 4: Create `OutcomeStatement`**
+- [x] **Step 4: Create `OutcomeStatement`**
 
 Create `src/features/showcase/components/outcome-statement.tsx`:
 
@@ -306,7 +306,7 @@ export function OutcomeStatement({
 
 If the existing stylesheet does not already contain `.sr-only`, add this utility in Task 3. The visually hidden full phrase makes the exact outcome accessible while the visible layout keeps emphasis and label separate.
 
-- [ ] **Step 5: Update public navigation and footer anchors**
+- [x] **Step 5: Update public navigation and footer anchors**
 
 Replace `navigation` in `site-header.tsx` with:
 
@@ -326,7 +326,7 @@ Replace the footer nav children with:
 <a href="#team">返回团队</a>
 ```
 
-- [ ] **Step 6: Recompose `LandingContent`**
+- [x] **Step 6: Recompose `LandingContent`**
 
 Remove imports for `RoleCard` and `SignalFlow`; import `outcomes`, `JourneyScene`, `ServiceBlueprint`, and `OutcomeStatement`. Keep `errorMessages`, `LandingContentProps`, `errorMessage`, `workspaceHref`, the auth notice, and the exact login/workspace behavior unchanged.
 
@@ -423,7 +423,7 @@ Replace the content inside `<main>` with this structure:
 </SectionFrame>
 ```
 
-- [ ] **Step 7: Remove retired components and run the targeted test**
+- [x] **Step 7: Remove retired components and run the targeted test**
 
 Delete `role-card.tsx` and `signal-flow.tsx`, then run:
 
@@ -433,7 +433,7 @@ npm test -- app/landing-content.test.tsx
 
 Expected: PASS for all tests in `app/landing-content.test.tsx`.
 
-- [ ] **Step 8: Commit the semantic redesign**
+- [x] **Step 8: Commit the semantic redesign**
 
 ```bash
 git add app/landing-content.tsx app/landing-content.test.tsx src/features/showcase
@@ -449,7 +449,7 @@ git commit -m "feat: turn OneCare homepage into a service journey"
 - Consumes: the classes from Task 2.
 - Produces: a card-free desktop narrative, single-column mobile fallback, static reduced-motion view, and unchanged dashboard styling.
 
-- [ ] **Step 1: Add the accessibility utility and restrain shared landing headings**
+- [x] **Step 1: Add the accessibility utility and restrain shared landing headings**
 
 Add near the global element rules:
 
@@ -489,7 +489,7 @@ Change landing section typography to:
 }
 ```
 
-- [ ] **Step 2: Replace the old landing hero and card-layout rules**
+- [x] **Step 2: Replace the old landing hero and card-layout rules**
 
 Remove landing-only rules for `.hero-copy > .status-tag`, `.role-grid`, `.role-card*`, `.signal-flow`, `.signal-layer*`, `#scenario`, `.scenario-*`, `.team-grid`, and `.team-card*`. Keep dashboard classes and shared auth/button/footer rules.
 
@@ -712,7 +712,7 @@ Add these required layout rules after `.secondary-action:hover`:
 }
 ```
 
-- [ ] **Step 3: Add blueprint, outcome, and team-credit rules**
+- [x] **Step 3: Add blueprint, outcome, and team-credit rules**
 
 Add:
 
@@ -918,7 +918,7 @@ Add:
 }
 ```
 
-- [ ] **Step 4: Replace retired responsive rules with narrative fallbacks**
+- [x] **Step 4: Replace retired responsive rules with narrative fallbacks**
 
 Inside `@media (max-width: 900px)`, remove rules for the retired role, signal, scenario, and team classes, then add:
 
@@ -1057,7 +1057,7 @@ Inside `@media (max-width: 640px)`, add:
 }
 ```
 
-- [ ] **Step 5: Run targeted tests and static checks**
+- [x] **Step 5: Run targeted tests and static checks**
 
 Run:
 
@@ -1070,7 +1070,7 @@ git diff --check
 
 Expected: every command exits 0. CSS is intentionally verified by the browser QA in Task 4 because unit tests cannot establish typography scale, card-free composition, clipping, or responsive visual hierarchy.
 
-- [ ] **Step 6: Commit the visual system**
+- [x] **Step 6: Commit the visual system**
 
 ```bash
 git add app/globals.css
@@ -1087,7 +1087,7 @@ git commit -m "style: create OneCare service film layout"
 - Consumes: the completed homepage and the repository Preview handoff rule.
 - Produces: full validation evidence, desktop/mobile visual QA, updated documentation, a Ready Vercel Preview, and a time-limited review URL.
 
-- [ ] **Step 1: Update README current implementation copy**
+- [x] **Step 1: Update README current implementation copy**
 
 Replace the homepage bullets under `## 当前实现` with:
 
@@ -1104,7 +1104,7 @@ Add after the paragraph describing the current homepage boundary:
 当前主页采用克制的编辑式工业叙事：通过线路、节点、章节色块和场景接力表达系统关系，不使用四列角色卡、五列架构卡或三列成员卡。所有业务结果仍是方案目标，不是生产指标。
 ```
 
-- [ ] **Step 2: Run the complete validation suite**
+- [x] **Step 2: Run the complete validation suite**
 
 ```bash
 npm test
@@ -1125,7 +1125,7 @@ Expected:
 - audit reports no known production dependency vulnerabilities;
 - `git diff --check` prints no output.
 
-- [ ] **Step 3: Perform desktop browser QA**
+- [x] **Step 3: Perform desktop browser QA**
 
 Use the repository browser-testing workflow at `1440 × 900` and verify:
 
@@ -1137,7 +1137,7 @@ Use the repository browser-testing workflow at `1440 × 900` and verify:
 - login CTA remains visible and no `/experience/*` link exists;
 - browser console has no application error.
 
-- [ ] **Step 4: Perform mobile and reduced-motion QA**
+- [x] **Step 4: Perform mobile and reduced-motion QA**
 
 At `390 × 844`, verify:
 
@@ -1148,7 +1148,7 @@ At `390 × 844`, verify:
 - header navigation remains reachable;
 - emulated `prefers-reduced-motion: reduce` leaves all signal lines and content understandable.
 
-- [ ] **Step 5: Commit documentation and mark plan steps complete**
+- [x] **Step 5: Commit documentation and mark plan steps complete**
 
 Update the checkboxes in this plan to reflect completed work, then run:
 
