@@ -81,7 +81,11 @@ export function LandingContent({ user, authError }: LandingContentProps) {
           </div>
         </section>
 
-        <section className="perspectives-section" aria-labelledby="perspectives-title">
+        <section
+          className="perspectives-section"
+          id="perspectives"
+          aria-labelledby="perspectives-title"
+        >
           <div className="showroom-section-heading">
             <p>01 · 四个视角</p>
             <h2 id="perspectives-title">一次问题，四种角色，同一条服务上下文</h2>

@@ -19,6 +19,11 @@ describe("LandingContent", () => {
       "href",
       "#perspectives",
     );
+    expect(container.querySelector("#perspectives")).toContainElement(
+      screen.getByRole("heading", {
+        name: "一次问题，四种角色，同一条服务上下文",
+      }),
+    );
     expect(screen.getByRole("link", { name: "五层引擎" })).toHaveAttribute(
       "href",
       "#architecture",

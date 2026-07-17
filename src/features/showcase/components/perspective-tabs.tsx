@@ -43,7 +43,7 @@ export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
   }
 
   return (
-    <section className="perspective-showcase" id="perspectives">
+    <section className="perspective-showcase">
       <div
         className="perspective-tabs"
         role="tablist"
