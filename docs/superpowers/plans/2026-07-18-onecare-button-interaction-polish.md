@@ -28,7 +28,7 @@
 - Consumes: `LandingContent({ user, authError })`.
 - Produces: a failing contract for text-only CTA content and the return-to-top pill.
 
-- [ ] **Step 1: Write a failing test**
+- [x] **Step 1: Write a failing test**
 
 Add assertions that the rendered page contains no `.action-arrow` or arrow glyphs inside `.header-cta`, `.primary-action`, `.secondary-action`, and `.back-to-top`; assert that `返回顶部` links to `#top`.
 
@@ -46,11 +46,11 @@ expect(screen.getByRole("link", { name: "返回顶部" })).toHaveAttribute(
 );
 ```
 
-- [ ] **Step 2: Run the targeted test and verify RED**
+- [x] **Step 2: Run the targeted test and verify RED**
 
 Run `npm test -- app/landing-content.test.tsx` and expect failure because the current controls render `↗`, `↓`, and `↑`.
 
-- [ ] **Step 3: Commit the failing contract**
+- [x] **Step 3: Commit the failing contract**
 
 Commit `app/landing-content.test.tsx` with message `test: define text-only button contract`.
 
@@ -66,7 +66,7 @@ Commit `app/landing-content.test.tsx` with message `test: define text-only butto
 - Consumes: existing `workspaceHref`, `user`, `#perspectives`, and `#top` targets.
 - Produces: text-only pill controls with color-only hover feedback.
 
-- [ ] **Step 1: Remove decorative arrow nodes**
+- [x] **Step 1: Remove decorative arrow nodes**
 
 Render only the existing CTA label in the header and Hero links. Replace the footer `↑` content with `返回顶部` while retaining `aria-label="返回顶部"` and `href="#top"`.
 
@@ -82,7 +82,7 @@ Render only the existing CTA label in the header and Hero links. Replace the foo
 </a>
 ```
 
-- [ ] **Step 2: Apply the shared interaction contract**
+- [x] **Step 2: Apply the shared interaction contract**
 
 Set `gap: 0`, `justify-content: center`, `text-align: center`, symmetric padding, and `transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease`. Override inherited transforms with `transform: none` in base, hover, and active states. Set hover to white background and black text; set active background to `#E7E7E7`.
 
@@ -109,22 +109,23 @@ Set `gap: 0`, `justify-content: center`, `text-align: center`, symmetric padding
 }
 ```
 
-- [ ] **Step 3: Make return-to-top a pill**
+- [x] **Step 3: Make return-to-top a pill**
 
-Use `width: auto`, `min-width: 104px`, `height: 48px`, `padding: 0 22px`, `border-radius: 999px`, and centered `15px` text. Keep the teal default and white hover state.
+Use `width: auto`, `min-width: 120px`, `height: 48px`, `padding: 0 22px`, `border-radius: 999px`, centered `15px` text, and `white-space: nowrap`. Keep the teal default and white hover state.
 
 ```css
 .landing-shell .back-to-top {
   width: auto;
-  min-width: 104px;
+  min-width: 120px;
   height: 48px;
   padding: 0 22px;
   border-radius: 999px;
   font-size: 15px;
+  white-space: nowrap;
 }
 ```
 
-- [ ] **Step 4: Add reduced-motion coverage**
+- [x] **Step 4: Add reduced-motion coverage**
 
 Under `prefers-reduced-motion: reduce`, set transition duration to `0.01ms` for the three CTA classes and `.back-to-top`.
 
@@ -139,7 +140,7 @@ Under `prefers-reduced-motion: reduce`, set transition duration to `0.01ms` for 
 }
 ```
 
-- [ ] **Step 5: Run targeted verification and verify GREEN**
+- [x] **Step 5: Run targeted verification and verify GREEN**
 
 Run `npm test -- app/landing-content.test.tsx`, `npm run lint`, and `npm run typecheck`; expect all commands to pass.
 
@@ -151,15 +152,15 @@ Run `npm test -- app/landing-content.test.tsx`, `npm run lint`, and `npm run typ
 **Interfaces:**
 - Produces: checked plan, verified browser evidence, and refreshed non-production Preview.
 
-- [ ] **Step 1: Run the full verification suite**
+- [x] **Step 1: Run the full verification suite**
 
 Run `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:runtime`, `npm audit --omit=dev`, and `git diff --check`.
 
-- [ ] **Step 2: Perform browser QA**
+- [x] **Step 2: Perform browser QA**
 
 At `1440 × 900` and `390 × 844`, verify no overflow. Inspect computed styles before and after hover for the header CTA, primary CTA, secondary CTA, and return-to-top pill; confirm centered text, white hover background, black hover text, `transform: none`, clean console, and reduced-motion transition suppression.
 
-- [ ] **Step 3: Commit implementation and completed plan**
+- [x] **Step 3: Commit implementation and completed plan**
 
 Commit the implementation, tests, and checked plan with message `fix: unify OneCare button interactions`.
 

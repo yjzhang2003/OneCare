@@ -15,7 +15,7 @@ export function SiteFooter() {
         <a href="#team">返回团队</a>
       </nav>
       <a className="back-to-top" href="#top" aria-label="返回顶部">
-        ↑
+        返回顶部
       </a>
     </footer>
   );

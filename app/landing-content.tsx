@@ -58,14 +58,10 @@ export function LandingContent({ user, authError }: LandingContentProps) {
 
             <div className="hero-actions">
               <a className="primary-action" href="#perspectives">
-                <span>查看四个视角</span>
-                <span className="action-arrow" aria-hidden="true">
-                  ↓
-                </span>
+                查看四个视角
               </a>
               <a className="secondary-action" href={workspaceHref}>
                 {user ? "进入工作台" : "使用飞书登录"}
-                <span aria-hidden="true">↗</span>
               </a>
             </div>
             <p className="session-copy">

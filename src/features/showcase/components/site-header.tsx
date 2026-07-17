@@ -35,7 +35,6 @@ export function SiteHeader({ user }: { user: AuthUser | null }) {
         href={user ? "/dashboard" : "/api/auth/feishu/start"}
       >
         {user ? "工作台" : "飞书登录"}
-        <span aria-hidden="true">↗</span>
       </a>
     </header>
   );
