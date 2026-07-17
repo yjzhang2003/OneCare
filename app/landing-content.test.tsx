@@ -4,24 +4,55 @@ import { describe, expect, it } from "vitest";
 import { LandingContent } from "./landing-content";
 
 describe("LandingContent", () => {
-  it("presents the product and real Feishu login to signed-out visitors", () => {
-    render(<LandingContent user={null} />);
+  it("presents the multi-page service story without dead perspective links", () => {
+    const { container } = render(<LandingContent user={null} />);
 
     expect(
       screen.getByRole("heading", {
         name: "让每一次服务，都比问题更早一步",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText("VOC 智能分析")).toBeInTheDocument();
-    expect(screen.getByText("智能预诊")).toBeInTheDocument();
-    expect(screen.getByText("协同调度")).toBeInTheDocument();
-    expect(screen.getByText("闭环追踪")).toBeInTheDocument();
+
+    expect(screen.getByRole("link", { name: "角色视角" })).toHaveAttribute(
+      "href",
+      "#perspectives",
+    );
+    expect(screen.getByRole("link", { name: "五层架构" })).toHaveAttribute(
+      "href",
+      "#architecture",
+    );
+    expect(screen.getByRole("link", { name: "方案路径" })).toHaveAttribute(
+      "href",
+      "#scenario",
+    );
+    expect(screen.getByRole("link", { name: "团队" })).toHaveAttribute(
+      "href",
+      "#team",
+    );
+
+    ["用户视角", "客服视角", "工程师视角", "后台视角"].forEach(
+      (name) => {
+        expect(screen.getByRole("heading", { name })).toBeInTheDocument();
+      },
+    );
+    ["感知", "诊断", "编排", "服务", "学习"].forEach((name) => {
+      expect(screen.getByRole("heading", { name })).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByRole("heading", { name: "冰箱温控异常" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("成员 01")).toBeInTheDocument();
+    expect(screen.getByText("成员 02")).toBeInTheDocument();
+    expect(screen.getByText("成员 03")).toBeInTheDocument();
+    expect(screen.getAllByText("成员信息待补充")).toHaveLength(3);
 
     const login = screen.getByRole("link", { name: "使用飞书登录" });
     expect(login).toHaveAttribute("href", "/api/auth/feishu/start");
     expect(
       screen.getByText(/尚未接入真实业务数据或 AI 服务/),
     ).toBeInTheDocument();
+    expect(container.querySelector('a[href^="/experience/"]')).toBeNull();
   });
 
   it("returns signed-in visitors to the workspace", () => {
