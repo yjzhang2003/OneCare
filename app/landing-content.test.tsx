@@ -94,6 +94,23 @@ describe("LandingContent", () => {
     );
   });
 
+  it("keeps text controls centered and free of decorative arrows", () => {
+    const { container } = render(<LandingContent user={null} />);
+
+    const textControls = container.querySelectorAll(
+      ".header-cta, .primary-action, .secondary-action, .back-to-top",
+    );
+
+    expect(container.querySelector(".action-arrow")).toBeNull();
+    textControls.forEach((control) => {
+      expect(control.textContent).not.toMatch(/[↗↓↑]/);
+    });
+    expect(screen.getByRole("link", { name: "返回顶部" })).toHaveAttribute(
+      "href",
+      "#top",
+    );
+  });
+
   it("returns signed-in visitors to the workspace", () => {
     render(
       <LandingContent
