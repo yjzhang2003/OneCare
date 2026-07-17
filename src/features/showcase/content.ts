@@ -2,6 +2,8 @@ export type Perspective = Readonly<{
   index: string;
   title: string;
   value: string;
+  sceneLine: string;
+  handoff: string;
   capabilities: readonly string[];
 }>;
 
@@ -20,6 +22,11 @@ export type ScenarioStep = Readonly<{
   description: string;
 }>;
 
+export type Outcome = Readonly<{
+  emphasis: string;
+  label: string;
+}>;
+
 export type TeamMember = Readonly<{
   index: string;
   title: string;
@@ -31,24 +38,32 @@ export const perspectives: readonly Perspective[] = [
     index: "01",
     title: "用户视角",
     value: "少描述、少等待，随时知道服务走到哪一步。",
+    sceneLine: "冰箱好像不太冷了",
+    handoff: "设备异常 → 主动提醒",
     capabilities: ["AI 对话", "主动提醒", "进度追踪"],
   },
   {
     index: "02",
     title: "客服视角",
     value: "一次理解用户，把复杂问题交给正确的人。",
+    sceneLine: "一次理解，不再重复描述",
+    handoff: "用户声音 → 服务上下文",
     capabilities: ["诉求摘要", "知识建议", "智能路由"],
   },
   {
     index: "03",
     title: "工程师视角",
     value: "上门前获得诊断与配件线索，推动一次解决。",
+    sceneLine: "一次带对",
+    handoff: "预诊建议 → 配件与上门计划",
     capabilities: ["设备预诊", "配件建议", "现场反馈"],
   },
   {
     index: "04",
     title: "后台视角",
     value: "看见全局服务质量，让每个问题沉淀为改善。",
+    sceneLine: "一次解决，持续学习",
+    handoff: "服务结果 → VOC 改善",
     capabilities: ["VOC 趋势", "异常预警", "闭环治理"],
   },
 ] as const;
@@ -122,6 +137,12 @@ export const scenarioSteps: readonly ScenarioStep[] = [
     title: "沉淀改善线索",
     description: "回访进入 VOC 聚类，更新案例知识与产品改善线索。",
   },
+] as const;
+
+export const outcomes: readonly Outcome[] = [
+  { emphasis: "更短", label: "服务周期" },
+  { emphasis: "更低", label: "重复上门" },
+  { emphasis: "更高", label: "用户满意" },
 ] as const;
 
 export const teamMembers: readonly TeamMember[] = [

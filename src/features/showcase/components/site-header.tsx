@@ -3,9 +3,8 @@ import Link from "next/link";
 import type { AuthUser } from "../../auth/types";
 
 const navigation = [
-  { href: "#perspectives", label: "角色视角" },
-  { href: "#architecture", label: "五层架构" },
-  { href: "#scenario", label: "方案路径" },
+  { href: "#journey", label: "服务旅程" },
+  { href: "#architecture", label: "五层引擎" },
   { href: "#team", label: "团队" },
 ] as const;
 
