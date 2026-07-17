@@ -49,7 +49,7 @@
 - Consumes: `LandingContent({ user, authError })`.
 - Produces: failing behavioral contracts for `PerspectiveTabs`, showroom anchors, authentication, five-layer order, and the absence of dead routes.
 
-- [ ] **Step 1: Replace the homepage presentation test and add tab keyboard coverage**
+- [x] **Step 1: Replace the homepage presentation test and add tab keyboard coverage**
 
 Use `fireEvent` from React Testing Library and assert:
 
@@ -100,7 +100,7 @@ it("moves between perspective tabs with the keyboard", () => {
 });
 ```
 
-- [ ] **Step 2: Run the targeted test and verify RED**
+- [x] **Step 2: Run the targeted test and verify RED**
 
 Run:
 
@@ -110,7 +110,7 @@ npm test -- app/landing-content.test.tsx
 
 Expected: FAIL because the homepage has no tablist, no interactive tabpanel, and the navigation still says `服务旅程`.
 
-- [ ] **Step 3: Commit the verified failing contract**
+- [x] **Step 3: Commit the verified failing contract**
 
 ```bash
 git add app/landing-content.test.tsx
@@ -131,7 +131,7 @@ git commit -m "test: define OneCare showroom demo"
 - Produces: `HeroMedia()` and `PerspectiveTabs({ perspectives })`.
 - Consumes: existing `Perspective`, `perspectives`, `serviceLayers`, `scenarioSteps`, `outcomes`, and authentication URLs.
 
-- [ ] **Step 1: Create the server-friendly Hero media component**
+- [x] **Step 1: Create the server-friendly Hero media component**
 
 ```tsx
 import Image from "next/image";
@@ -153,7 +153,7 @@ export function HeroMedia() {
 }
 ```
 
-- [ ] **Step 2: Create `PerspectiveTabs` with click and keyboard behavior**
+- [x] **Step 2: Create `PerspectiveTabs` with click and keyboard behavior**
 
 The component begins with `"use client"`, stores the selected index, uses one ref per tab, and handles `ArrowLeft`, `ArrowRight`, `Home`, and `End`. It renders exactly one tabpanel:
 
@@ -208,7 +208,7 @@ The component begins with `"use client"`, stores the selected index, uses one re
 
 Selecting from the keyboard must call `.focus()` on the destination tab after updating state.
 
-- [ ] **Step 3: Recompose `LandingContent`**
+- [x] **Step 3: Recompose `LandingContent`**
 
 - Render `HeroMedia` behind the existing hero headline.
 - Change the primary CTA to `查看四个视角` and `href="#perspectives"`.
@@ -217,7 +217,7 @@ Selecting from the keyboard must call `.focus()` on the destination tab after up
 - Render team members as `className="team-card surface-card"`.
 - Preserve signed-in copy, safe auth errors, service layers, scheme outcomes, and prototype boundary copy.
 
-- [ ] **Step 4: Update the shared header and footer**
+- [x] **Step 4: Update the shared header and footer**
 
 Header navigation becomes:
 
@@ -232,7 +232,7 @@ const navigation = [
 
 Footer uses the same anchors, includes `Typeface: MiSans`, and adds a circular `返回顶部` link with `href="#top"` and an accessible name.
 
-- [ ] **Step 5: Run the targeted test and verify GREEN**
+- [x] **Step 5: Run the targeted test and verify GREEN**
 
 ```bash
 npm test -- app/landing-content.test.tsx
@@ -240,7 +240,7 @@ npm test -- app/landing-content.test.tsx
 
 Expected: all landing content tests PASS.
 
-- [ ] **Step 6: Commit the semantic implementation**
+- [x] **Step 6: Commit the semantic implementation**
 
 ```bash
 git add app/landing-content.tsx app/landing-content.test.tsx \
@@ -265,7 +265,7 @@ git commit -m "feat: add OneCare showroom perspectives"
 - Produces: optimized local image URLs and `.landing-shell` showroom styles.
 - Consumes: the class names and markup from Task 2.
 
-- [ ] **Step 1: Download and optimize the two approved Hisense images**
+- [x] **Step 1: Download and optimize the two approved Hisense images**
 
 ```bash
 mkdir -p public/images/hisense
@@ -283,7 +283,7 @@ Use the exact URLs already recorded in the spec research session:
 
 Verify the hero is below `700KB` and the refrigerator is below `350KB`.
 
-- [ ] **Step 2: Record sources and font acknowledgement**
+- [x] **Step 2: Record sources and font acknowledgement**
 
 `SOURCES.md` records both official page and direct asset URLs, capture date `2026-07-18`, intended crop, and this acknowledgement:
 
@@ -291,11 +291,11 @@ Verify the hero is below `700KB` and the refrigerator is below `350KB`.
 Typography: This software uses MiSans. MiSans is provided by Xiaomi under the MiSans Font Intellectual Property License Agreement. The demo loads documented web subsets from `cdn.jsdelivr.net/npm/misans@4.1.0` and does not redistribute the font files from this repository.
 ```
 
-- [ ] **Step 3: Load MiSans and set the global family**
+- [x] **Step 3: Load MiSans and set the global family**
 
 Add stylesheet links for `MiSans-Regular.min.css` and `MiSans-Demibold.min.css` to the document head, with `preconnect` for jsDelivr. Apply `font-family: MiSans, "PingFang SC", "Microsoft YaHei", sans-serif` globally and override every landing heading, button, navigation, label, and number that currently sets Songti or Arial Narrow.
 
-- [ ] **Step 4: Add landing-scoped showroom tokens and layout**
+- [x] **Step 4: Add landing-scoped showroom tokens and layout**
 
 Implement these exact foundations:
 
@@ -336,7 +336,7 @@ Then implement:
 - mobile layout with `17px` horizontally scrollable tabs, `38–44px` hero, vertical panel/engine/team, and no page overflow;
 - reduced-motion overrides.
 
-- [ ] **Step 5: Run static verification and targeted tests**
+- [x] **Step 5: Run static verification and targeted tests**
 
 ```bash
 npm test -- app/landing-content.test.tsx
@@ -347,7 +347,7 @@ git diff --check
 
 Expected: all commands PASS.
 
-- [ ] **Step 6: Commit the visual system and assets**
+- [x] **Step 6: Commit the visual system and assets**
 
 ```bash
 git add app/layout.tsx app/globals.css public/images/hisense
@@ -363,11 +363,11 @@ git commit -m "style: apply OneCare showroom visual system"
 **Interfaces:**
 - Produces: verified documentation, completed plan state, and a non-production Preview URL.
 
-- [ ] **Step 1: Update README presentation status**
+- [x] **Step 1: Update README presentation status**
 
 Describe the black/white showroom shell, large Hisense image use, MiSans, four perspective tabs, rounded cards, static prototype boundary, and Preview-only authentication limitation.
 
-- [ ] **Step 2: Run the full verification suite**
+- [x] **Step 2: Run the full verification suite**
 
 ```bash
 npm test
@@ -381,11 +381,11 @@ git diff --check
 
 Expected: 9 test files and 34 tests PASS; lint, typecheck, both builds, 3 runtime auth tests, audit, and diff check PASS.
 
-- [ ] **Step 3: Perform browser QA**
+- [x] **Step 3: Perform browser QA**
 
 Run the app locally and inspect `1440 × 900` and `390 × 844`. Verify computed styles for black header/footer, white main, MiSans, pill buttons, circular icon controls, card radii, tab sizes, no overflow, clean console, keyboard tabs, and reduced motion. Fix visual defects without changing product scope, then rerun targeted checks.
 
-- [ ] **Step 4: Update all plan checkboxes and commit documentation**
+- [x] **Step 4: Update all plan checkboxes and commit documentation**
 
 ```bash
 git add README.md docs/superpowers/plans/2026-07-18-onecare-hisense-showroom-demo.md
