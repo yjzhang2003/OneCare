@@ -45,7 +45,7 @@
 - Consumes: `LandingContent({ user, authError })`.
 - Produces: assertions for current anchors, four roles, five layers, scenario, team placeholders, prototype boundary, and absence of dead role links.
 
-- [ ] **Step 1: Write the failing homepage test**
+- [x] **Step 1: Write the failing homepage test**
 
 Add this test while retaining the existing signed-in and authentication-error tests:
 
@@ -75,13 +75,13 @@ it("presents the multi-page service story without dead perspective links", () =>
 });
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run: `npm test -- app/landing-content.test.tsx`
 
 Expected: FAIL because `角色视角`, the role headings, and five-layer content are not rendered.
 
-- [ ] **Step 3: Commit the verified failing contract**
+- [x] **Step 3: Commit the verified failing contract**
 
 Run:
 
@@ -106,7 +106,7 @@ git commit -m "test: define OneCare homepage story"
 - Produces: `perspectives`, `serviceLayers`, `scenarioSteps`, `teamMembers`; `SiteHeader({ user })`; `SiteFooter()`; `SectionFrame({ id, index, eyebrow, title, intro, tone, children })`; `StatusTag({ children })`; `RoleCard({ role })`; `SignalFlow({ layers })`.
 - Consumes: `AuthUser` from `src/features/auth/types` and the unchanged authentication URLs.
 
-- [ ] **Step 1: Define readonly showcase types and exact content**
+- [x] **Step 1: Define readonly showcase types and exact content**
 
 Create `content.ts` with these public types and exports:
 
@@ -173,7 +173,7 @@ export const teamMembers: readonly TeamMember[] = [
 ] as const;
 ```
 
-- [ ] **Step 2: Implement focused shared components**
+- [x] **Step 2: Implement focused shared components**
 
 Use semantic elements and the following signatures:
 
@@ -187,7 +187,7 @@ export function SignalFlow({ layers }: { layers: readonly ServiceLayer[] }): Rea
 
 `SiteHeader` renders only the four valid anchors and the existing session-aware auth CTA. `RoleCard` renders an `<article>`, not an anchor or button. `SignalFlow` uses an ordered list so layer order remains semantic without CSS.
 
-- [ ] **Step 3: Compose the new homepage**
+- [x] **Step 3: Compose the new homepage**
 
 Refactor `LandingContent` so it renders, in order:
 
@@ -205,13 +205,13 @@ Refactor `LandingContent` so it renders, in order:
 
 Keep `errorMessages`, the alert behavior, `让每一次服务，都比问题更早一步`, `/api/auth/feishu/start`, and `/dashboard`. The primary hero CTA is `href="#perspectives"`; the secondary CTA is the session-aware auth link.
 
-- [ ] **Step 4: Run the homepage test and verify GREEN**
+- [x] **Step 4: Run the homepage test and verify GREEN**
 
 Run: `npm test -- app/landing-content.test.tsx`
 
 Expected: PASS for all tests in `app/landing-content.test.tsx`.
 
-- [ ] **Step 5: Commit the reusable homepage structure**
+- [x] **Step 5: Commit the reusable homepage structure**
 
 Run:
 
@@ -229,7 +229,7 @@ git commit -m "feat: build reusable OneCare homepage story"
 - Consumes: class names rendered by Task 2.
 - Produces: landing-scoped tokens, four-role layouts, continuous five-layer signal flow, scenario timeline, team cards, responsive navigation, and reduced-motion behavior.
 
-- [ ] **Step 1: Scope the visual tokens to the public landing page**
+- [x] **Step 1: Scope the visual tokens to the public landing page**
 
 Add the exact landing token override so dashboard colors remain unchanged:
 
@@ -246,7 +246,7 @@ Add the exact landing token override so dashboard colors remain unchanged:
 }
 ```
 
-- [ ] **Step 2: Implement layouts for all new sections**
+- [x] **Step 2: Implement layouts for all new sections**
 
 Add the layout rules below, extending them with typography, borders, padding, and hover states that use only the scoped tokens:
 
@@ -263,7 +263,7 @@ Add the layout rules below, extending them with typography, borders, padding, an
 
 `.role-card` and `.team-card` must share the same one-pixel grid border language. `.status-tag` is an inline-flex uppercase/narrow label. `.signal-layer` keeps its input, action, and output visible without hover so the architecture remains understandable on touch devices.
 
-- [ ] **Step 3: Implement motion and interaction states**
+- [x] **Step 3: Implement motion and interaction states**
 
 Add this signal animation, reuse `rise-in` and `orbit-pulse`, and keep decoration `pointer-events: none`:
 
@@ -280,7 +280,7 @@ Add this signal animation, reuse `rise-in` and `orbit-pulse`, and keep decoratio
 
 Use transform and color transitions only on hover. Retain the global `prefers-reduced-motion` override so this animation collapses to one negligible-duration iteration.
 
-- [ ] **Step 4: Implement responsive behavior**
+- [x] **Step 4: Implement responsive behavior**
 
 Add these exact layout overrides, with the existing mobile spacing rules left intact:
 
@@ -297,13 +297,13 @@ Add these exact layout overrides, with the existing mobile spacing rules left in
 }
 ```
 
-- [ ] **Step 5: Run targeted tests and static checks**
+- [x] **Step 5: Run targeted tests and static checks**
 
 Run: `npm test -- app/landing-content.test.tsx && npm run lint && npm run typecheck`
 
 Expected: all commands exit 0.
 
-- [ ] **Step 6: Commit the visual system**
+- [x] **Step 6: Commit the visual system**
 
 Run:
 
@@ -321,7 +321,7 @@ git commit -m "style: align OneCare homepage with Hisense palette"
 **Interfaces:**
 - Produces: accurate current-state documentation and completed plan checkboxes.
 
-- [ ] **Step 1: Update README current implementation**
+- [x] **Step 1: Update README current implementation**
 
 Replace the current landing-page bullet with these facts:
 
@@ -334,7 +334,7 @@ Replace the current landing-page bullet with these facts:
 
 Add a boundary sentence stating that the four role pages and user-side AI chat demonstration are subsequent phases and are not implemented yet.
 
-- [ ] **Step 2: Check current-state language**
+- [x] **Step 2: Check current-state language**
 
 Run:
 
@@ -344,7 +344,7 @@ rg -n "下一阶段开放|尚未接入真实|AI 聊天" README.md app src/featur
 
 Expected: current prototype and deferred work are explicitly visible; no copy claims real AI or production data.
 
-- [ ] **Step 3: Mark completed plan steps and commit documentation**
+- [x] **Step 3: Mark completed plan steps and commit documentation**
 
 Run:
 
