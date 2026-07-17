@@ -377,7 +377,7 @@ a {
 .capability-grid,
 .module-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   border-top: 1px solid var(--ink);
   border-left: 1px solid var(--ink);
 }

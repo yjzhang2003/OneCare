@@ -1,14 +1,14 @@
-# Auto Insight Technology Stack
+# OneCare Technology Stack
 
 ## Status
 
-The TypeScript web baseline and Feishu custom-app login were implemented on 2026-07-17. The current application is a single-enterprise demonstration; automotive data, AI analysis, persistence, and the Feishu agent remain unimplemented.
+The TypeScript web baseline and Feishu custom-app login were implemented on 2026-07-17. The current application is a single-enterprise demonstration; IoT and VOC data, service-system integrations, AI analysis, persistence, and the Feishu agent remain unimplemented.
 
 The production deployment is available at `https://auto-insight-omega.vercel.app`. Feishu custom-app version 1.0.1 and the exact production redirect URL are published, and the login, protected dashboard, logout, and post-logout redirect behavior have been manually verified with a real enterprise member.
 
 ## Implemented Baseline
 
-Auto Insight uses one TypeScript modular monolith:
+OneCare uses one TypeScript modular monolith:
 
 - Node.js 24 LTS;
 - Next.js 16 App Router;
@@ -20,7 +20,7 @@ Auto Insight uses one TypeScript modular monolith:
 
 Python is outside this repository's architecture.
 
-This is the smallest deployable shape that supports a real website login while preserving boundaries for later persistence, tenant isolation, insights, and Feishu integration.
+This is the smallest deployable shape that supports a real website login while preserving boundaries for later persistence, tenant isolation, service-domain modules, and Feishu integration.
 
 ## Repository Shape
 
@@ -60,7 +60,7 @@ Authentication routes explicitly use the Node.js runtime. The repository pins No
 
 ## Persistence and Tenant Isolation
 
-The current build has no database and stores no insight records, refresh tokens, or persistent user profiles.
+The current build has no database and stores no device, VOC, service, refresh-token, or persistent user-profile records.
 
 PostgreSQL and Drizzle remain the intended system-of-record stack when persistence begins. At that point every tenant-owned row must carry an internal tenant identifier derived from validated Feishu installation or identity data. Missing tenant context defaults to no access. PostgreSQL row-level security may be added as defense in depth after the first schema is specified.
 
@@ -86,7 +86,7 @@ Playwright browser tests remain deferred until a persistent non-personal test id
 - queue and background-job implementation;
 - PostgreSQL hosting and migration workflow;
 - AI model and orchestration provider;
-- automotive data sources;
+- IoT, VOC, customer-service, work-order, parts, and follow-up data sources;
 - analytics and visualization libraries;
 - store-app ISV and marketplace path;
 - final multi-service deployment topology.

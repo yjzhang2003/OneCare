@@ -5,21 +5,27 @@ import type { AuthUser } from "../../src/features/auth/types";
 const workspaceModules = [
   {
     index: "A1",
-    title: "人群地图",
-    description: "按人生阶段、城市线级与车型偏好交叉下钻。",
-    signal: "SEGMENT",
+    title: "VOC 洞察",
+    description: "识别跨渠道高频问题、情绪变化与产品改善机会。",
+    signal: "LISTEN",
   },
   {
     index: "A2",
-    title: "用户原声",
-    description: "回到可定位的评论与访谈片段，理解结论从何而来。",
-    signal: "EVIDENCE",
+    title: "智能预诊",
+    description: "聚合设备风险信号，为上门诊断与配件准备提供线索。",
+    signal: "PREDICT",
   },
   {
     index: "A3",
-    title: "车型对比",
-    description: "持续观察竞品人群、卖点和市场反馈之间的变化。",
-    signal: "COMPARE",
+    title: "协同调度",
+    description: "串联客服、工程师、配件与回访角色的服务节点。",
+    signal: "DISPATCH",
+  },
+  {
+    index: "A4",
+    title: "闭环追踪",
+    description: "监控处理进度、回访与满意度，确认问题真正解决。",
+    signal: "CLOSE",
   },
 ] as const;
 
@@ -31,9 +37,9 @@ export function DashboardContent({ user }: { user: AuthUser }) {
       <header className="dashboard-header">
         <Link className="wordmark compact-wordmark" href="/">
           <span className="wordmark-mark" aria-hidden="true">
-            AI
+            1C
           </span>
-          <span>AUTO INSIGHT</span>
+          <span>ONECARE</span>
         </Link>
 
         <div className="identity-cluster">
@@ -65,8 +71,8 @@ export function DashboardContent({ user }: { user: AuthUser }) {
       <main className="dashboard-main">
         <section className="workspace-intro">
           <div>
-            <p className="eyebrow">RESEARCH DESK / 01</p>
-            <h1>今天，从哪一群用户开始？</h1>
+            <p className="eyebrow">SERVICE CONTROL / 01</p>
+            <h1>服务闭环指挥台</h1>
           </div>
           <div className="prototype-badge">
             <span aria-hidden="true" /> PRODUCT PROTOTYPE
@@ -77,12 +83,12 @@ export function DashboardContent({ user }: { user: AuthUser }) {
           <div className="signal-panel">
             <div className="panel-heading">
               <div>
-                <p>VOICE PULSE</p>
-                <h2>用户信号脉冲</h2>
+                  <p>DEVICE RISK PULSE</p>
+                  <h2>设备风险信号</h2>
               </div>
               <span>STATIC PREVIEW</span>
             </div>
-            <div className="pulse-chart" aria-label="静态用户信号示意图">
+            <div className="pulse-chart" aria-label="静态设备风险信号示意图">
               {[34, 52, 43, 68, 61, 82, 73, 92, 78, 87, 71, 95].map(
                 (height, index) => (
                   <span
@@ -93,35 +99,35 @@ export function DashboardContent({ user }: { user: AuthUser }) {
               )}
             </div>
             <div className="chart-axis">
-              <span>观察</span>
-              <span>验证</span>
-              <span>决策</span>
+              <span>感知</span>
+              <span>预诊</span>
+              <span>响应</span>
             </div>
           </div>
 
           <aside className="queue-panel">
-            <p>RESEARCH QUEUE</p>
-            <h2>研究队列</h2>
+            <p>SERVICE QUEUE</p>
+            <h2>待协同服务</h2>
             <ol>
               <li>
                 <span>01</span>
                 <div>
-                  <strong>核心家庭用户</strong>
-                  <small>等待数据接入</small>
+                  <strong>冰箱温控异常</strong>
+                  <small>静态预览 · 待预诊</small>
                 </div>
               </li>
               <li>
                 <span>02</span>
                 <div>
-                  <strong>年轻首购人群</strong>
-                  <small>等待数据接入</small>
+                  <strong>空调制冷波动</strong>
+                  <small>静态预览 · 待调度</small>
                 </div>
               </li>
               <li>
                 <span>03</span>
                 <div>
-                  <strong>新能源增换购</strong>
-                  <small>等待数据接入</small>
+                  <strong>电视开机反馈</strong>
+                  <small>静态预览 · 待回访</small>
                 </div>
               </li>
             </ol>
@@ -130,8 +136,8 @@ export function DashboardContent({ user }: { user: AuthUser }) {
 
         <section className="module-section" aria-labelledby="module-title">
           <div className="module-heading">
-            <p>WORKSPACE MODULES</p>
-            <h2 id="module-title">洞察工作台</h2>
+            <p>ONECARE MODULES</p>
+            <h2 id="module-title">服务全链路</h2>
           </div>
           <div className="module-grid">
             {workspaceModules.map((module) => (
@@ -143,7 +149,7 @@ export function DashboardContent({ user }: { user: AuthUser }) {
                 <h3>{module.title}</h3>
                 <p>{module.description}</p>
                 <footer>
-                  <span>演示框架</span>
+                  <span>静态预览</span>
                   <span aria-hidden="true">→</span>
                 </footer>
               </article>

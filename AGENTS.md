@@ -4,11 +4,11 @@ Read this file before changing the repository. Keep work scoped, evidence-based,
 
 ## Project Baseline
 
-- Product: Auto Insight, an AI-assisted automotive user-insight platform.
+- Product: OneCare, an AI-assisted end-to-end user-service loop concept for Hisense smart-home scenarios.
 - Repository: GitHub `https://github.com/yjzhang2003/Auto-Insight.git`.
 - Default branch: `main`.
 - Language boundary: TypeScript only. Do not add Python code or Python tooling.
-- Current phase: deployed single-enterprise website demonstration using one Feishu enterprise custom application. PostgreSQL persistence, real automotive data, AI analysis, and Feishu bot/agent behavior remain planned; do not describe them as implemented.
+- Current phase: deployed single-enterprise website demonstration using one Feishu enterprise custom application. PostgreSQL persistence, real IoT and VOC data, service-system integrations, AI analysis, and Feishu bot/agent behavior remain planned; do not describe them as implemented.
 
 ## Required Reading
 

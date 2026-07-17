@@ -40,15 +40,15 @@
 - Consumes: `LandingContent({ user, authError })` 与 `DashboardContent({ user })`。
 - Produces: OneCare 品牌、四项服务闭环能力、静态演示边界与未泄露 `openId` 的展示契约。
 
-- [ ] **Step 1: 将首页测试改为断言 OneCare 与四项能力**
+- [x] **Step 1: 将首页测试改为断言 OneCare 与四项能力**
 
 断言标题“让每一次服务，都比问题更早一步”，正文中的 OneCare、`VOC 智能分析`、`智能预诊`、`协同调度`、`闭环追踪`，以及未接入真实业务数据或 AI 服务的边界说明；保留飞书登录链接和已登录返回工作台断言。
 
-- [ ] **Step 2: 将工作台测试改为断言服务闭环模块**
+- [x] **Step 2: 将工作台测试改为断言服务闭环模块**
 
 断言 `服务闭环指挥台`、`VOC 洞察`、`智能预诊`、`协同调度`、`闭环追踪` 和静态预览标记；保留飞书身份、退出表单与 `openId` 不渲染断言。
 
-- [ ] **Step 3: 运行测试并确认预期失败**
+- [x] **Step 3: 运行测试并确认预期失败**
 
 Run: `npm test -- app/landing-content.test.tsx app/dashboard/dashboard-content.test.tsx`
 
@@ -66,23 +66,23 @@ Expected: FAIL，失败信息指出新的 OneCare 标题与服务模块尚未渲
 - Consumes: Task 1 的展示契约和现有 `AuthUser`。
 - Produces: 保持原组件签名不变的 OneCare 静态展示站。
 
-- [ ] **Step 1: 实现 OneCare 首页最小文案与四项能力**
+- [x] **Step 1: 实现 OneCare 首页最小文案与四项能力**
 
 保留错误提示、会话感知 CTA 与飞书登录 URL，只替换品牌、题目、能力、目标指标、服务循环标签和演示边界文案。
 
-- [ ] **Step 2: 实现服务闭环工作台最小文案与四项模块**
+- [x] **Step 2: 实现服务闭环工作台最小文案与四项模块**
 
 保留用户头像、身份状态、退出表单和静态图形结构，替换工作台问题、信号、服务队列与模块内容。
 
-- [ ] **Step 3: 将桌面网格调整为四列**
+- [x] **Step 3: 将桌面网格调整为四列**
 
 把 `.capability-grid` 与 `.module-grid` 的桌面列数改为四列，保留现有移动端断点行为，不增加依赖或新视觉系统。
 
-- [ ] **Step 4: 更新页面元数据**
+- [x] **Step 4: 更新页面元数据**
 
 设置标题 `OneCare｜AI 用户服务闭环引擎`，描述 `面向海信智能家庭场景的 AI 用户服务全链路闭环方案。`。
 
-- [ ] **Step 5: 运行展示测试并确认通过**
+- [x] **Step 5: 运行展示测试并确认通过**
 
 Run: `npm test -- app/landing-content.test.tsx app/dashboard/dashboard-content.test.tsx`
 
@@ -101,19 +101,19 @@ Expected: PASS，两个测试文件全部通过。
 - Consumes: 已批准的 OneCare 题目与当前实现事实。
 - Produces: 不夸大能力、与页面一致的仓库入口和技术现状。
 
-- [ ] **Step 1: 更新包名与锁文件包名**
+- [x] **Step 1: 更新包名与锁文件包名**
 
 将根包名从 `auto-insight` 改为 `onecare`，不修改依赖、版本、脚本或 Node 引擎。
 
-- [ ] **Step 2: 重写 README 的产品背景与当前实现**
+- [x] **Step 2: 重写 README 的产品背景与当前实现**
 
 完整替换旧汽车题目，记录用户提供的海信背景、四项真实挑战、四个 AI 机会点、系统性方案目标，以及当前版本仅为静态展示和飞书登录框架的边界。
 
-- [ ] **Step 3: 更新当前项目基线文档**
+- [x] **Step 3: 更新当前项目基线文档**
 
 在 `AGENTS.md` 和 `docs/TECH_STACK.md` 中把当前产品名改为 OneCare，并把未实现领域从汽车数据/洞察改为 IoT、VOC、服务业务系统与 AI；保留认证、安全、租户和技术栈事实。
 
-- [ ] **Step 4: 检查当前产品文件中的旧叙事**
+- [x] **Step 4: 检查当前产品文件中的旧叙事**
 
 Run: `! rg -n "汽车用户洞察|车型对比|人群地图|AUTO INSIGHT" README.md AGENTS.md docs/TECH_STACK.md app package.json`
 
@@ -128,13 +128,13 @@ Expected: exit 0。历史规格与认证测试夹具不在此检查范围内。
 - Consumes: OneCare 展示与文档变更。
 - Produces: 可构建且认证行为无回归的本地版本。
 
-- [ ] **Step 1: 运行测试、静态检查和构建**
+- [x] **Step 1: 运行测试、静态检查和构建**
 
 Run: `npm test && npm run lint && npm run typecheck && npm run build`
 
 Expected: 所有命令 exit 0，测试无失败，Next.js 构建成功。
 
-- [ ] **Step 2: 运行格式与差异检查**
+- [x] **Step 2: 运行格式与差异检查**
 
 Run: `git diff --check && git status --short --branch`
 
@@ -150,19 +150,19 @@ Expected: `git diff --check` exit 0，状态仅包含计划内文件。
 - Consumes: GitHub CLI 与当前已链接的 Vercel 项目。
 - Produces: 名为 OneCare 的 GitHub 仓库，以及不含 Hisense 的 Vercel 项目名称和经核验的生产地址。
 
-- [ ] **Step 1: 核验当前 GitHub 与 Vercel 登录和链接**
+- [x] **Step 1: 核验当前 GitHub 与 Vercel 登录和链接**
 
 Run: `gh repo view --json name,nameWithOwner,url && vercel project inspect auto-insight`
 
 Expected: 只输出项目元数据，不输出任何密钥。
 
-- [ ] **Step 2: 将 GitHub 仓库改名为 OneCare**
+- [x] **Step 2: 将 GitHub 仓库改名为 OneCare**
 
 Run: `gh repo rename OneCare --yes`
 
 Expected: exit 0；`gh repo view --json name,nameWithOwner,url` 返回名称 `OneCare`。
 
-- [ ] **Step 3: 将 Vercel 项目改为 OneCare 名称**
+- [x] **Step 3: 将 Vercel 项目改为 OneCare 名称**
 
 优先使用 Vercel 官方项目重命名能力将项目 slug 改为 `onecare`。若名称冲突，使用最短的不含 Hisense 的 OneCare 变体。不得删除现有稳定生产别名。
 
