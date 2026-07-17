@@ -12,7 +12,9 @@
 
 当前版本用于呈现 OneCare 的产品方向与服务闭环故事。页面中的设备风险、服务队列和能力模块均为静态方案预览，尚未接入真实 IoT、VOC、客服、工单、配件、回访或 AI 服务。
 
-当前生产站点：<https://auto-insight-omega.vercel.app>
+当前生产站点：<https://onecare-loop.vercel.app>
+
+GitHub 仓库：<https://github.com/yjzhang2003/OneCare>
 
 ## 本地运行
 
@@ -43,6 +45,12 @@ npm run dev
 4. 如配置属于正式版本，按企业规则发布版本并完成管理员审核。
 
 登录实现使用飞书当前 OAuth v3 令牌端点，不申请手机号或邮箱权限，也不持久化飞书访问令牌。
+
+当前生产回调 URL：
+
+```text
+https://onecare-loop.vercel.app/api/auth/feishu/callback
+```
 
 ## 验证
 

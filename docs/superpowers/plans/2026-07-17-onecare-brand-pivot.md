@@ -166,11 +166,11 @@ Expected: exit 0；`gh repo view --json name,nameWithOwner,url` 返回名称 `On
 
 优先使用 Vercel 官方项目重命名能力将项目 slug 改为 `onecare`。若名称冲突，使用最短的不含 Hisense 的 OneCare 变体。不得删除现有稳定生产别名。
 
-- [ ] **Step 4: 核验生产域名与 OAuth 回调边界**
+- [x] **Step 4: 核验生产域名与 OAuth 回调边界**
 
 核验新默认域名和 `https://auto-insight-omega.vercel.app/api/auth/feishu/callback` 的可达性，并确认 Vercel Production 的 `FEISHU_REDIRECT_URI` 是否仍指向已登记的稳定回调。不得打印变量值；若需要飞书后台改地址，只报告待办。
 
-- [ ] **Step 5: 记录实际远程地址并重新验证文档**
+- [x] **Step 5: 记录实际远程地址并重新验证文档**
 
 把 GitHub URL、Vercel 生产 URL 与兼容说明写入 README/TECH_STACK，然后运行 `git diff --check`。
 

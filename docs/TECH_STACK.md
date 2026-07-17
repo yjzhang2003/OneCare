@@ -4,7 +4,7 @@
 
 The TypeScript web baseline and Feishu custom-app login were implemented on 2026-07-17. The current application is a single-enterprise demonstration; IoT and VOC data, service-system integrations, AI analysis, persistence, and the Feishu agent remain unimplemented.
 
-The production deployment is available at `https://auto-insight-omega.vercel.app`. Feishu custom-app version 1.0.1 and the exact production redirect URL are published, and the login, protected dashboard, logout, and post-logout redirect behavior have been manually verified with a real enterprise member.
+The production deployment is available at `https://onecare-loop.vercel.app`. Vercel Production is configured for the current enterprise custom application and the exact callback `https://onecare-loop.vercel.app/api/auth/feishu/callback`; the new enterprise application still requires that redirect URL to be saved in the Feishu developer console before the real login flow can be re-verified.
 
 ## Implemented Baseline
 
