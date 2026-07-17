@@ -9,28 +9,29 @@ describe("LandingContent", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "让每一次产品定义，都听见真实用户",
+        name: "让每一次服务，都比问题更早一步",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText("千万级数据洞察")).toBeInTheDocument();
-    expect(screen.getByText("动态人群地图")).toBeInTheDocument();
-    expect(screen.getByText("飞书协同")).toBeInTheDocument();
+    expect(screen.getByText("VOC 智能分析")).toBeInTheDocument();
+    expect(screen.getByText("智能预诊")).toBeInTheDocument();
+    expect(screen.getByText("协同调度")).toBeInTheDocument();
+    expect(screen.getByText("闭环追踪")).toBeInTheDocument();
 
     const login = screen.getByRole("link", { name: "使用飞书登录" });
     expect(login).toHaveAttribute("href", "/api/auth/feishu/start");
     expect(
-      screen.getByText(/企业内部应用演示，仅开放给应用所属企业成员/),
+      screen.getByText(/尚未接入真实业务数据或 AI 服务/),
     ).toBeInTheDocument();
   });
 
   it("returns signed-in visitors to the workspace", () => {
     render(
       <LandingContent
-        user={{ openId: "ou_auto_insight", name: "洞察研究员" }}
+        user={{ openId: "ou_onecare", name: "服务运营员" }}
       />,
     );
 
-    expect(screen.getByText("洞察研究员，欢迎回来")).toBeInTheDocument();
+    expect(screen.getByText("服务运营员，欢迎回来")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "进入工作台" })).toHaveAttribute(
       "href",
       "/dashboard",

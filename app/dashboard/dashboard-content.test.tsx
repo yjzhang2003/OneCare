@@ -9,18 +9,22 @@ describe("DashboardContent", () => {
       <DashboardContent
         user={{
           openId: "ou_must_not_render",
-          name: "洞察研究员",
+          name: "服务运营员",
           avatarUrl: "https://example.com/avatar.png",
         }}
       />,
     );
 
-    expect(screen.getByText("洞察研究员")).toBeInTheDocument();
+    expect(screen.getByText("服务运营员")).toBeInTheDocument();
     expect(screen.getByText("飞书身份已验证")).toBeInTheDocument();
-    expect(screen.getByText("人群地图")).toBeInTheDocument();
-    expect(screen.getByText("用户原声")).toBeInTheDocument();
-    expect(screen.getByText("车型对比")).toBeInTheDocument();
-    expect(screen.getAllByText("演示框架")).toHaveLength(3);
+    expect(
+      screen.getByRole("heading", { name: "服务闭环指挥台" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("VOC 洞察")).toBeInTheDocument();
+    expect(screen.getByText("智能预诊")).toBeInTheDocument();
+    expect(screen.getByText("协同调度")).toBeInTheDocument();
+    expect(screen.getByText("闭环追踪")).toBeInTheDocument();
+    expect(screen.getAllByText("静态预览")).toHaveLength(4);
     expect(container).not.toHaveTextContent("ou_must_not_render");
 
     const logout = screen.getByRole("button", { name: "退出登录" });

@@ -5,21 +5,27 @@ import type { AuthUser } from "../src/features/auth/types";
 const capabilities = [
   {
     index: "01",
-    title: "千万级数据洞察",
-    description: "把分散的用户原声、访谈与行为信号，收束成可追溯的产品判断。",
-    marker: "SIGNAL / SCALE",
+    title: "VOC 智能分析",
+    description: "汇聚客服、服务与用户反馈中的声音，识别高频问题和改善机会。",
+    marker: "LISTEN / LEARN",
   },
   {
     index: "02",
-    title: "动态人群地图",
-    description: "沿人生阶段、城市线级与车型偏好切入，找到人群之间真正的分界线。",
-    marker: "SEGMENT / MAP",
+    title: "智能预诊",
+    description: "结合 IoT 设备运行信号预判故障，让工程师上门前更接近正确答案。",
+    marker: "PREDICT / PREPARE",
   },
   {
     index: "03",
-    title: "飞书协同",
-    description: "用企业身份进入同一洞察现场，让研究结论自然流向产品定义过程。",
-    marker: "TEAM / FLOW",
+    title: "协同调度",
+    description: "把客服、工程师、配件与回访角色放进同一条可追踪的服务链路。",
+    marker: "DISPATCH / ALIGN",
+  },
+  {
+    index: "04",
+    title: "闭环追踪",
+    description: "持续监控服务进度，自动触发回访与评价，让每个问题都有结果。",
+    marker: "CLOSE / IMPROVE",
   },
 ] as const;
 
@@ -42,13 +48,13 @@ export function LandingContent({ user, authError }: LandingContentProps) {
   return (
     <div className="landing-shell">
       <header className="site-header">
-        <Link className="wordmark" href="/" aria-label="Auto Insight 首页">
+        <Link className="wordmark" href="/" aria-label="OneCare 首页">
           <span className="wordmark-mark" aria-hidden="true">
-            AI
+            1C
           </span>
           <span>
-            AUTO INSIGHT
-            <small>汽车用户洞察引擎</small>
+            ONECARE
+            <small>AI 用户服务闭环引擎</small>
           </span>
         </Link>
         <div className="header-status">
@@ -67,11 +73,11 @@ export function LandingContent({ user, authError }: LandingContentProps) {
       <main>
         <section className="hero">
           <div className="hero-copy">
-            <p className="eyebrow">USER SIGNAL OPERATING SYSTEM</p>
-            <h1>让每一次产品定义，都听见真实用户</h1>
+            <p className="eyebrow">AI SERVICE LOOP ENGINE</p>
+            <h1>让每一次服务，都比问题更早一步</h1>
             <p className="hero-intro">
-              Auto Insight 把海量用户声音变成可交互、可追溯的研究现场，
-              让车型立项从经验判断走向持续验证。
+              OneCare 面向海信智能家庭场景，把用户声音、设备信号与服务协同
+              串成一条有感知、有响应、有结果的服务闭环。
             </p>
 
             <div className="hero-actions">
@@ -95,38 +101,39 @@ export function LandingContent({ user, authError }: LandingContentProps) {
             <div className="orbit orbit-one" />
             <div className="orbit orbit-two" />
             <div className="signal-core">
-              <span>USER</span>
-              <strong>VOICE</strong>
-              <span>MODEL</span>
+              <span>ONE</span>
+              <strong>CARE</strong>
+              <span>LOOP</span>
             </div>
             <div className="stage-caption">
-              <span>INPUT</span>
-              <span>TRACE</span>
-              <span>DECIDE</span>
+              <span>LISTEN</span>
+              <span>PREDICT</span>
+              <span>DISPATCH</span>
+              <span>CLOSE</span>
             </div>
           </div>
         </section>
 
         <section className="metric-rail" aria-label="产品目标">
           <div>
-            <strong>分钟级</strong>
-            <span>洞察响应</span>
+            <strong>更短</strong>
+            <span>服务周期目标</span>
           </div>
           <div>
-            <strong>10+</strong>
-            <span>竞品持续追踪</span>
+            <strong>更低</strong>
+            <span>重复上门目标</span>
           </div>
           <div>
-            <strong>全链路</strong>
-            <span>结论可追溯</span>
+            <strong>更高</strong>
+            <span>用户满意目标</span>
           </div>
-          <p>从“等报告”到“即时查”</p>
+          <p>从“用户报修”走向“服务先行”</p>
         </section>
 
         <section className="capability-section" aria-labelledby="capability-title">
           <div className="section-heading">
-            <p>CAPABILITY INDEX</p>
-            <h2 id="capability-title">一套更接近真实用户的研究界面</h2>
+            <p>SERVICE LOOP / 01—04</p>
+            <h2 id="capability-title">从发现问题，到确认问题真正解决</h2>
           </div>
           <div className="capability-grid">
             {capabilities.map((capability) => (
@@ -144,17 +151,17 @@ export function LandingContent({ user, authError }: LandingContentProps) {
         </section>
 
         <aside className="trust-boundary">
-          <span>ACCESS BOUNDARY</span>
+          <span>PROTOTYPE BOUNDARY</span>
           <p>
-            当前为企业内部应用演示，仅开放给应用所属企业成员。页面展示产品框架，
-            尚未接入真实汽车数据或 AI 分析结果。
+            当前为 OneCare 方案原型，仅开放给应用所属企业成员。页面展示服务闭环构想，
+            尚未接入真实业务数据或 AI 服务。
           </p>
         </aside>
       </main>
 
       <footer className="site-footer">
-        <span>AUTO INSIGHT / 2026</span>
-        <span>PRODUCT DEFINITION × USER TRUTH</span>
+        <span>ONECARE / 2026</span>
+        <span>AI × SERVICE × HUMAN WARMTH</span>
       </footer>
     </div>
   );
