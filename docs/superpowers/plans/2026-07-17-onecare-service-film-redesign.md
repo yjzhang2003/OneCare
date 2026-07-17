@@ -1157,7 +1157,7 @@ git add README.md docs/superpowers/plans/2026-07-17-onecare-service-film-redesig
 git commit -m "docs: record OneCare service film homepage"
 ```
 
-- [ ] **Step 6: Create and inspect a non-Production Vercel Preview**
+- [x] **Step 6: Create and inspect a non-Production Vercel Preview**
 
 Run from the linked worktree and capture the generated URL without using a placeholder:
 
@@ -1179,7 +1179,7 @@ rm "$DEPLOY_LOG"
 
 Expected: the alias points to the new Preview deployment.
 
-- [ ] **Step 7: Create a seven-day shareable link and verify unique markers**
+- [x] **Step 7: Create a seven-day shareable link and verify unique markers**
 
 Because Preview Deployment Protection is enabled, call the authenticated Vercel REST endpoint with the existing CLI credential. This command reads the credential in memory, prints only the returned share value into a shell variable, and never writes the credential or share value to the repository:
 
@@ -1221,7 +1221,7 @@ rm "$COOKIE_JAR" "$PREVIEW_HTML"
 
 Expected: curl prints `200` and `rg` finds all three markers.
 
-- [ ] **Step 8: Final repository and harness check**
+- [x] **Step 8: Final repository and harness check**
 
 Run:
 
