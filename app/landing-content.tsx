@@ -6,8 +6,9 @@ import {
   serviceLayers,
   teamMembers,
 } from "../src/features/showcase/content";
-import { JourneyScene } from "../src/features/showcase/components/journey-scene";
+import { HeroMedia } from "../src/features/showcase/components/hero-media";
 import { OutcomeStatement } from "../src/features/showcase/components/outcome-statement";
+import { PerspectiveTabs } from "../src/features/showcase/components/perspective-tabs";
 import { SectionFrame } from "../src/features/showcase/components/section-frame";
 import { ServiceBlueprint } from "../src/features/showcase/components/service-blueprint";
 import { SiteFooter } from "../src/features/showcase/components/site-footer";
@@ -31,7 +32,7 @@ export function LandingContent({ user, authError }: LandingContentProps) {
   const workspaceHref = user ? "/dashboard" : "/api/auth/feishu/start";
 
   return (
-    <div className="landing-shell">
+    <div className="landing-shell" id="top">
       <SiteHeader user={user} />
 
       {errorMessage ? (
@@ -42,14 +43,10 @@ export function LandingContent({ user, authError }: LandingContentProps) {
       ) : null}
 
       <main>
-        <section className="hero hero--service-film">
-          <div className="hero-film__signal" aria-hidden="true">
-            <span>−18°</span>
-            <i />
-            <span>04°</span>
-          </div>
-          <div className="hero-film__copy">
-            <p className="eyebrow">ONECARE / SERVICE SIGNAL 001</p>
+        <section className="showroom-hero">
+          <HeroMedia />
+          <div className="showroom-hero__copy">
+            <p className="eyebrow">ONECARE · AI 用户服务闭环引擎</p>
             <h1>
               <span>让每一次服务，</span>
               <span>都比问题更早一步</span>
@@ -60,8 +57,8 @@ export function LandingContent({ user, authError }: LandingContentProps) {
             </p>
 
             <div className="hero-actions">
-              <a className="primary-action" href="#journey">
-                <span>跟随服务信号</span>
+              <a className="primary-action" href="#perspectives">
+                <span>查看四个视角</span>
                 <span className="action-arrow" aria-hidden="true">
                   ↓
                 </span>
@@ -77,31 +74,22 @@ export function LandingContent({ user, authError }: LandingContentProps) {
                 : "方案原型 · 未接入真实业务数据"}
             </p>
           </div>
-          <div className="hero-film__case" aria-hidden="true">
-            <span>异常信号</span>
+          <div className="showroom-hero__case" aria-hidden="true">
+            <span>服务信号 001</span>
             <strong>冰箱温控异常</strong>
-            <i />
+            <small>已识别 · 待预诊</small>
           </div>
         </section>
 
-        <section
-          className="service-journey"
-          id="journey"
-          aria-labelledby="journey-title"
-        >
-          <div className="journey-intro">
-            <p>01 / FOUR PERSPECTIVES</p>
-            <h2 id="journey-title">同一个问题，在四个角色之间连续流动</h2>
-            <p>用户不必重复描述，服务上下文沿同一条信号链持续传递。</p>
+        <section className="perspectives-section" aria-labelledby="perspectives-title">
+          <div className="showroom-section-heading">
+            <p>01 · 四个视角</p>
+            <h2 id="perspectives-title">一次问题，四种角色，同一条服务上下文</h2>
+            <p>
+              点击切换用户、客服、工程师和后台，查看同一个异常信号如何被理解、交接与闭环。
+            </p>
           </div>
-          <div className="journey-scenes">
-            {perspectives.map((perspective) => (
-              <JourneyScene
-                key={perspective.index}
-                perspective={perspective}
-              />
-            ))}
-          </div>
+          <PerspectiveTabs perspectives={perspectives} />
         </section>
 
         <SectionFrame
@@ -110,7 +98,6 @@ export function LandingContent({ user, authError }: LandingContentProps) {
           eyebrow="FIVE-LAYER ENGINE"
           title="感知—诊断—编排—服务—学习"
           intro="一次服务不是五个孤立模块，而是一条从问题信号到持续改善的闭环蓝图。"
-          tone="dark"
         >
           <ServiceBlueprint layers={serviceLayers} events={scenarioSteps} />
         </SectionFrame>
@@ -139,7 +126,10 @@ export function LandingContent({ user, authError }: LandingContentProps) {
         >
           <div className="team-credits">
             {teamMembers.map((member) => (
-              <article className="team-credit" key={member.index}>
+              <article
+                className="team-card surface-card"
+                key={member.index}
+              >
                 <span>成员 {member.index}</span>
                 <h3>{member.title}</h3>
                 <p>{member.capabilities.join(" / ")}</p>

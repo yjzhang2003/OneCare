@@ -1,7 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { LandingContent } from "./landing-content";
+
+afterEach(cleanup);
 
 describe("LandingContent", () => {
   it("presents the Hisense showroom story with interactive perspectives", () => {

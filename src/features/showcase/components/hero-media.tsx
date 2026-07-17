@@ -1,0 +1,21 @@
+import Image from "next/image";
+
+export function HeroMedia() {
+  return (
+    <div className="showroom-hero__media" aria-hidden="true">
+      <Image
+        alt=""
+        fill
+        priority
+        sizes="100vw"
+        src="/images/hisense/onecare-home.jpg"
+      />
+      <div className="showroom-hero__shade" />
+      <div className="showroom-hero__pulse">
+        <span>−18°</span>
+        <i />
+        <span>04°</span>
+      </div>
+    </div>
+  );
+}
