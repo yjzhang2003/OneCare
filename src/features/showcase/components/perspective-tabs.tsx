@@ -74,6 +74,7 @@ export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
         aria-labelledby={`perspective-tab-${selectedIndex}`}
         className="perspective-panel surface-card"
         id={`perspective-panel-${selectedIndex}`}
+        key={active.index}
         role="tabpanel"
       >
         <div className="perspective-panel__media">
