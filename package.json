@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
+    "test:runtime": "npm run build && vitest run --config vitest.runtime.config.ts",
     "test:watch": "vitest"
   },
   "dependencies": {

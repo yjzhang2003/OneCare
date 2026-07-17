@@ -115,6 +115,7 @@ describe("fetchFeishuUser", () => {
     expect(input).toBe("https://open.feishu.cn/open-apis/authen/v1/user_info");
     expect(init?.headers).toEqual({
       Authorization: "Bearer user-access-token",
+      "Content-Type": "application/json; charset=utf-8",
     });
   });
 

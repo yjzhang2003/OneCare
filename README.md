@@ -12,6 +12,8 @@
 
 当前版本是单企业演示。只有企业自建应用所属企业中、且位于应用可用范围内的成员能够登录。工作台内容是产品框架，不包含真实汽车数据、AI 分析或飞书机器人。
 
+生产站点：<https://auto-insight-omega.vercel.app>
+
 ## 本地运行
 
 需要 Node.js 24。
@@ -46,6 +48,7 @@ npm run dev
 
 ```bash
 npm test
+npm run test:runtime
 npm run lint
 npm run typecheck
 npm run build
@@ -63,6 +66,8 @@ npm audit --omit=dev
 5. 更新 Vercel 的 `FEISHU_REDIRECT_URI` 后再次生产部署。
 
 `FEISHU_APP_SECRET` 和 `SESSION_SECRET` 应在 Vercel 标记为 Sensitive。环境变量更新只对后续部署生效。
+
+`npm run test:runtime` 会先执行生产构建，再在本地启动 `next start` 验证认证 Route Handlers。该检查用于捕获只在 Next.js 生产 Bundle 中出现、普通模块单测无法复现的运行时兼容问题。
 
 ## 背景
 

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 
 import type { AuthEnv } from "../../../../../src/lib/env";
 import { OAUTH_STATE_COOKIE } from "../../../../../src/features/auth/cookies";
@@ -14,7 +15,7 @@ const env: AuthEnv = {
 const user: AuthUser = { openId: "ou_auto_insight", name: "洞察研究员" };
 
 function callbackRequest(query: string, stateCookie = "expected-state") {
-  return new Request(
+  return new NextRequest(
     `https://auto-insight.example/api/auth/feishu/callback?${query}`,
     {
       headers: {

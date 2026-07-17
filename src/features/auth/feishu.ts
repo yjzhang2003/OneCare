@@ -72,7 +72,10 @@ export async function fetchFeishuUser(
 ): Promise<AuthUser> {
   try {
     const response = await fetcher(USER_INFO_URL, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json; charset=utf-8",
+      },
     });
 
     if (!response.ok) {

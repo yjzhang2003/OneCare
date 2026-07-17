@@ -33,3 +33,13 @@ Every applied change must appear in the task diff and final summary.
 ## Entries
 
 The reflection log was initialized on 2026-07-16. Append new dated entries below this line.
+
+### 2026-07-17 — Align current phase and Feishu application model
+
+- Task: Review and complete the Vercel-hosted Feishu login demonstration.
+- Evidence: The approved `2026-07-17-vercel-feishu-login-design.md`, implemented OAuth routes, published Feishu version 1.0.1, and production Vercel deployment all use one enterprise custom application for a single enterprise. During final review, `AGENTS.md` still described the current phase as repository setup and required a store application across multiple enterprises.
+- Problem: Future contributors could treat already deployed capabilities as unimplemented or incorrectly replace the accepted custom-app boundary with the deferred ISV/store-app model.
+- `AGENTS.md` change: Describe the current phase as a deployed single-enterprise custom-app demonstration, keep persistence/AI/bot work explicitly planned, and label the store-app multi-enterprise model as deferred rather than current.
+- Expected benefit: Future specifications and reviews start from the actual deployed product boundary without weakening tenant isolation or overstating unfinished integrations.
+- Rollback condition: Append a superseding reflection and revise the baseline when the product actually migrates to a published store application or adopts a different approved Feishu distribution model.
+- Status: applied

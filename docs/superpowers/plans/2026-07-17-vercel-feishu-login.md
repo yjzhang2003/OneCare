@@ -18,12 +18,19 @@
 - 所有生产行为遵循 RED → GREEN → REFACTOR。
 - 首版不引入数据库、Auth.js、机器人、真实洞察数据或 AI 调用。
 
+## Execution Status (2026-07-17)
+
+- Tasks 1–4 and Task 5 Steps 1–8 are implemented and deployed at `https://auto-insight-omega.vercel.app`.
+- Final code review found a production-bundle `NextRequest` callback failure and a missing Feishu user-info request header. Both were reproduced with failing tests and fixed; `npm run test:runtime` now exercises the built authentication routes under `next start`.
+- Real Feishu login, identity presentation, logout, post-logout dashboard protection, and a redacted Vercel log scan are verified.
+- Task 5 Step 9 remains in progress until final documentation, Harness review, verification, and commit are complete.
+
 ---
 
 ## File Map
 
 - `package.json`、`package-lock.json`：Node 依赖与统一验证命令。
-- `tsconfig.json`、`next.config.ts`、`eslint.config.mjs`、`vitest.config.ts`、`vitest.setup.ts`：TypeScript、Next.js、ESLint 与测试配置。
+- `tsconfig.json`、`next.config.ts`、`eslint.config.mjs`、`vitest.config.ts`、`vitest.runtime.config.ts`、`vitest.setup.ts`：TypeScript、Next.js、ESLint 与测试配置。
 - `app/layout.tsx`、`app/globals.css`：全站壳层与视觉系统。
 - `app/page.tsx`、`app/landing-content.tsx`：首页会话编排与纯展示组件。
 - `app/dashboard/page.tsx`、`app/dashboard/dashboard-content.tsx`：登录保护与工作台展示。
@@ -37,6 +44,7 @@
 - `src/features/auth/feishu.ts`：飞书授权 URL、令牌和用户信息适配器。
 - `src/features/auth/current-session.ts`：从 Next.js Cookie Store 读取当前会话。
 - `*.test.ts(x)`：与上述领域模块、路由和展示组件相邻的测试。
+- `tests/runtime/auth-routes.test.ts`：启动 `next build` 产物，回归验证真实生产 Bundle 中的认证路由。
 - `.env.example`：无敏感值的变量清单。
 - `README.md`、`docs/TECH_STACK.md`：运行、验证、部署与架构现状。
 
@@ -60,7 +68,7 @@
 - Produces: `AuthEnv` and `readAuthEnv(source?: NodeJS.ProcessEnv): AuthEnv`.
 - Produces: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.
 
-- [ ] **Step 1: 创建工具链配置，不创建页面或认证生产行为**
+- [x] **Step 1: 创建工具链配置，不创建页面或认证生产行为**
 
 `package.json` 固定 Node 24 和依赖版本：
 
@@ -101,13 +109,13 @@
 
 配置 TypeScript 严格模式、`@/*` 根目录别名、Vitest `jsdom` 环境和 `vitest.setup.ts` 中的 `@testing-library/jest-dom/vitest`。`.gitignore` 增加 `node_modules/`、`.next/`、`.vercel/`、`.env*`，并显式保留 `!.env.example`。
 
-- [ ] **Step 2: 安装依赖并提交 lockfile**
+- [x] **Step 2: 安装依赖并提交 lockfile**
 
 Run: `npm install`
 
 Expected: 生成 `package-lock.json`，安装过程退出码 0。
 
-- [ ] **Step 3: 为环境变量契约写失败测试**
+- [x] **Step 3: 为环境变量契约写失败测试**
 
 `src/lib/env.test.ts` 至少断言：完整变量返回原值、缺失变量抛出只含变量名的错误、短于 32 字节的 `SESSION_SECRET` 被拒绝。
 
@@ -121,7 +129,7 @@ Run: `npm test -- src/lib/env.test.ts`
 
 Expected: FAIL，因为 `./env` 尚不存在。
 
-- [ ] **Step 4: 实现最小环境变量读取器**
+- [x] **Step 4: 实现最小环境变量读取器**
 
 ```ts
 export type AuthEnv = {
@@ -136,7 +144,7 @@ export function readAuthEnv(source = process.env): AuthEnv;
 
 错误只报告缺失或非法变量名，不包含值。
 
-- [ ] **Step 5: 验证并提交**
+- [x] **Step 5: 验证并提交**
 
 Run: `npm test -- src/lib/env.test.ts && npm run typecheck && npm run lint`
 
@@ -161,7 +169,7 @@ Commit: `chore: scaffold Next.js TypeScript application`
 - Produces: `createSession(user, secret, now?)` and `verifySession(token, secret, now?)`.
 - Produces: `OAUTH_STATE_COOKIE`, `SESSION_COOKIE`, `stateCookieOptions()`, `sessionCookieOptions()`.
 
-- [ ] **Step 1: 写 state 与 Cookie 策略失败测试**
+- [x] **Step 1: 写 state 与 Cookie 策略失败测试**
 
 断言随机 state 非空且连续两次不同、相同 state 匹配、不同长度或值不匹配；生产 Cookie 含 `secure: true`，state `maxAge: 600`，session `maxAge: 28800`，两者均为 `httpOnly`、`sameSite: "lax"`、`path: "/"`。
 
@@ -169,11 +177,11 @@ Run: `npm test -- src/features/auth/cookies.test.ts`
 
 Expected: FAIL，因为模块不存在。
 
-- [ ] **Step 2: 最小实现 state 与 Cookie 策略**
+- [x] **Step 2: 最小实现 state 与 Cookie 策略**
 
 使用 `randomBytes(32).toString("base64url")` 生成 state，使用 `timingSafeEqual` 且先比较 Buffer 长度。Cookie 名固定为 `auto_insight_oauth_state` 和 `auto_insight_session`。
 
-- [ ] **Step 3: 写签名会话失败测试**
+- [x] **Step 3: 写签名会话失败测试**
 
 断言有效会话恢复用户；任一载荷字符被篡改、签名被篡改、过期、版本错误、畸形 JSON、空用户 ID 均返回 `null`；密钥不足 32 字节抛出不含密钥值的错误。
 
@@ -186,7 +194,7 @@ Run: `npm test -- src/features/auth/session.test.ts`
 
 Expected: FAIL，因为模块不存在。
 
-- [ ] **Step 4: 最小实现 HMAC-SHA-256 会话**
+- [x] **Step 4: 最小实现 HMAC-SHA-256 会话**
 
 令牌格式为 `<base64url-json>.<base64url-signature>`，签名覆盖编码后的载荷。载荷固定为：
 
@@ -201,7 +209,7 @@ type SessionPayload = {
 
 时间使用 Unix 秒，过期时间为签发后 28,800 秒。验证器捕获解析异常并返回 `null`，但配置密钥错误仍抛出。
 
-- [ ] **Step 5: 验证并提交**
+- [x] **Step 5: 验证并提交**
 
 Run: `npm test -- src/features/auth && npm run typecheck && npm run lint`
 
@@ -229,7 +237,7 @@ Commit: `feat: add signed authentication sessions`
 - Produces: `buildAuthorizationUrl`, `exchangeAuthorizationCode`, `fetchFeishuUser`.
 - Produces: GET start/callback handlers and POST logout handler.
 
-- [ ] **Step 1: 写授权 URL 失败测试**
+- [x] **Step 1: 写授权 URL 失败测试**
 
 断言 URL origin/path 为 `https://accounts.feishu.cn/open-apis/authen/v1/authorize`，参数含 `client_id`、`response_type=code`、精确 `redirect_uri`、`state`，且不含 App Secret。
 
@@ -237,7 +245,7 @@ Run: `npm test -- src/features/auth/feishu.test.ts`
 
 Expected: FAIL，因为适配器不存在。
 
-- [ ] **Step 2: 实现授权 URL 构造器**
+- [x] **Step 2: 实现授权 URL 构造器**
 
 ```ts
 export function buildAuthorizationUrl(input: {
@@ -249,13 +257,13 @@ export function buildAuthorizationUrl(input: {
 
 使用 `URL` 和 `searchParams`，不手工拼接编码。
 
-- [ ] **Step 3: 写令牌交换与用户信息失败测试**
+- [x] **Step 3: 写令牌交换与用户信息失败测试**
 
 通过注入 `fetcher: typeof fetch` 验证：
 
 - 令牌请求只发往 `https://accounts.feishu.cn/oauth/v3/token`，JSON 请求体包含规范字段；
 - HTTP 非成功、`code !== 0` 或缺失 `access_token` 均抛出 `AuthFlowError("token_exchange_failed")`；
-- 用户信息请求只发送 `Authorization: Bearer <token>`；
+- 用户信息请求发送 `Authorization: Bearer <token>` 与飞书要求的 `Content-Type: application/json; charset=utf-8`；
 - 用户信息响应只映射 `open_id`、`name`、可选 `avatar_url`；
 - 错误对象和消息不得包含令牌或 App Secret。
 
@@ -263,7 +271,7 @@ Run: `npm test -- src/features/auth/feishu.test.ts`
 
 Expected: FAIL 在尚未实现的网络函数断言。
 
-- [ ] **Step 4: 实现飞书网络适配器**
+- [x] **Step 4: 实现飞书网络适配器**
 
 ```ts
 export async function exchangeAuthorizationCode(
@@ -279,7 +287,7 @@ export async function fetchFeishuUser(
 
 响应先按 `unknown` 解析再做字段守卫。`AuthFlowError` 只允许固定安全码：`configuration_error`、`access_denied`、`invalid_state`、`token_exchange_failed`、`user_info_failed`。
 
-- [ ] **Step 5: 写三个 Route Handler 的失败测试**
+- [x] **Step 5: 写三个 Route Handler 的失败测试**
 
 使用真实 `Request`/`NextRequest` 和可控模块依赖，断言：
 
@@ -293,11 +301,11 @@ Run: `npm test -- app/api/auth`
 
 Expected: FAIL，因为路由尚不存在。
 
-- [ ] **Step 6: 实现 Route Handlers 与当前会话读取器**
+- [x] **Step 6: 实现 Route Handlers 与当前会话读取器**
 
 所有认证路由导出 `export const runtime = "nodejs"`。callback 无论成功或失败都在返回响应上删除 state Cookie。`current-session.ts` 通过 `await cookies()` 读取会话并调用 `verifySession`；缺失或非法配置时返回未登录，不向页面泄露细节。
 
-- [ ] **Step 7: 验证并提交**
+- [x] **Step 7: 验证并提交**
 
 Run: `npm test -- src/features/auth app/api/auth && npm run typecheck && npm run lint`
 
@@ -324,7 +332,7 @@ Commit: `feat: implement Feishu OAuth login flow`
 - Consumes: `getCurrentSession()` and `AuthUser`.
 - Produces: responsive `/` and authenticated `/dashboard`.
 
-- [ ] **Step 1: 写首页展示失败测试**
+- [x] **Step 1: 写首页展示失败测试**
 
 断言未登录版本呈现“让每一次产品定义，都听见真实用户”、三项能力、“使用飞书登录”和单企业演示说明；已登录版本显示“进入工作台”。登录链接必须指向 `/api/auth/feishu/start`。
 
@@ -332,11 +340,11 @@ Run: `npm test -- app/landing-content.test.tsx`
 
 Expected: FAIL，因为组件不存在。
 
-- [ ] **Step 2: 实现首页结构和全局视觉系统**
+- [x] **Step 2: 实现首页结构和全局视觉系统**
 
 视觉方向为深石墨背景、暖白内容面、信号橙点缀和轻量数据网格。使用系统中文字体栈，不下载外部字体。首页由品牌导航、主叙事、数据刻度、能力卡和可信边界说明组成；移动端保持单列和 44px 最小点击区域。
 
-- [ ] **Step 3: 写工作台展示失败测试**
+- [x] **Step 3: 写工作台展示失败测试**
 
 断言用户名和身份状态可见，三个入口分别为“人群地图”“用户原声”“车型对比”，每项均标记“演示框架”，并存在 POST 到 `/api/auth/logout` 的退出表单。
 
@@ -344,17 +352,17 @@ Run: `npm test -- app/dashboard/dashboard-content.test.tsx`
 
 Expected: FAIL，因为组件不存在。
 
-- [ ] **Step 4: 实现受保护工作台**
+- [x] **Step 4: 实现受保护工作台**
 
 `app/dashboard/page.tsx` 调用 `getCurrentSession()`，无用户时执行 `redirect("/")`，有用户时传给纯展示组件。头像 URL 存在时使用带明确 `referrerPolicy="no-referrer"` 的普通 `<img>`，否则显示姓名首字符；不得渲染 open ID。
 
-- [ ] **Step 5: 运行页面与生产构建验证**
+- [x] **Step 5: 运行页面与生产构建验证**
 
 Run: `npm test -- app && npm run typecheck && npm run lint && npm run build`
 
 Expected: 所有测试通过，Next.js 构建成功，首页、工作台和三个认证路由出现在构建路由表中。
 
-- [ ] **Step 6: 本地 HTTP 行为验证并提交**
+- [x] **Step 6: 本地 HTTP 行为验证并提交**
 
 Run: `npm run dev`
 
@@ -384,7 +392,7 @@ Commit: `feat: add Auto Insight landing and dashboard`
 - Consumes: complete application and Vercel CLI authentication.
 - Produces: production URL, Vercel project link, configured server secrets and deployment evidence.
 
-- [ ] **Step 1: 写无敏感值的运行与部署文档**
+- [x] **Step 1: 写无敏感值的运行与部署文档**
 
 `.env.example` 只包含：
 
@@ -397,12 +405,13 @@ SESSION_SECRET=replace_with_at_least_32_random_bytes
 
 README 记录 Node 24、`npm install`、本地环境变量、测试命令、飞书安全设置路径和 Vercel 两阶段部署。`docs/TECH_STACK.md` 将 Vercel 从 deferred 改为已选定，并说明当前企业自建应用覆盖单企业、商店应用多租户仍为未来方向。
 
-- [ ] **Step 2: 运行完成前全量验证**
+- [x] **Step 2: 运行完成前全量验证**
 
 Run:
 
 ```bash
 npm test
+npm run test:runtime
 npm run lint
 npm run typecheck
 npm run build
@@ -412,11 +421,11 @@ git status --short
 
 再扫描真实 App Secret 的完整值与已知前缀，范围包含 tracked/untracked 文件但排除 `.git`、`node_modules`、`.next` 和 `.vercel`。Expected: 全部退出码 0，密钥扫描无匹配，工作区仅包含预期文件。
 
-- [ ] **Step 3: 提交应用与文档**
+- [x] **Step 3: 提交应用与文档**
 
 Commit: `docs: add deployment and Feishu setup guide`
 
-- [ ] **Step 4: 检查 Vercel 登录并链接项目**
+- [x] **Step 4: 检查 Vercel 登录并链接项目**
 
 Run: `npx vercel@latest whoami`
 
@@ -428,17 +437,17 @@ npx vercel@latest link --yes
 
 Expected: `.vercel/project.json` 存在但被 Git 忽略，项目链接成功。
 
-- [ ] **Step 5: 通过标准输入设置生产环境变量**
+- [x] **Step 5: 通过标准输入设置生产环境变量**
 
 为 `FEISHU_APP_ID`、`FEISHU_APP_SECRET`、`FEISHU_REDIRECT_URI`、`SESSION_SECRET` 分别执行 `vercel env add <NAME> production`。App Secret 和 Session Secret 使用 `--sensitive`；不得把值放在命令参数、shell history、临时文件或输出中。首次 `FEISHU_REDIRECT_URI` 可使用不可用占位域名，取得正式域名后立即更新。
 
-- [ ] **Step 6: 首次生产部署并取得稳定域名**
+- [x] **Step 6: 首次生产部署并取得稳定域名**
 
 Run: `npx vercel@latest --prod --yes`
 
 Expected: 构建成功并返回 HTTPS 生产 URL。用 `curl -fsS -o /dev/null -w '%{http_code}' <URL>` 验证首页为 200。
 
-- [ ] **Step 7: 完成飞书回调与最终生产环境变量**
+- [x] **Step 7: 完成飞书回调与最终生产环境变量**
 
 在飞书开发者后台进入该企业自建应用的“开发配置 → 安全设置 → 重定向 URL”，加入：
 
@@ -448,7 +457,7 @@ https://<production-domain>/api/auth/feishu/callback
 
 随后用 Vercel CLI 更新 `FEISHU_REDIRECT_URI` 为同一精确值，并重新运行 `npx vercel@latest --prod --yes`。环境变量值仍通过标准输入提供。
 
-- [ ] **Step 8: 生产冒烟与真实登录验收**
+- [x] **Step 8: 生产冒烟与真实登录验收**
 
 验证：
 

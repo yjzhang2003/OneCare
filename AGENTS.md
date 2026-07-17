@@ -8,7 +8,7 @@ Read this file before changing the repository. Keep work scoped, evidence-based,
 - Repository: GitHub `https://github.com/yjzhang2003/Auto-Insight.git`.
 - Default branch: `main`.
 - Language boundary: TypeScript only. Do not add Python code or Python tooling.
-- Current phase: architecture and repository setup. Do not describe planned integrations as implemented.
+- Current phase: deployed single-enterprise website demonstration using one Feishu enterprise custom application. PostgreSQL persistence, real automotive data, AI analysis, and Feishu bot/agent behavior remain planned; do not describe them as implemented.
 
 ## Required Reading
 
@@ -51,9 +51,10 @@ If a test-first exception is necessary, document why and record replacement veri
 - Use the current official Feishu documentation as the source of truth.
 - Browser login uses OAuth authorization code flow and the v3 token endpoint.
 - App secrets and Feishu tokens stay server-side and must not appear in logs or client bundles.
-- The demonstration uses one store application across multiple enterprises.
+- The current demonstration uses one enterprise custom application and supports only its owning enterprise and configured availability scope.
+- A shared store application for multiple enterprises is a deferred ISV path, not a current capability.
 - Derive tenant context from validated Feishu identity or installation data, never an unchecked client parameter.
-- Store-app events use verified public HTTP callbacks and return within Feishu's deadline; slow work runs asynchronously.
+- Feishu events use verified public HTTP callbacks and return within Feishu's deadline; slow work runs asynchronously.
 - Treat missing tenant context as no access.
 
 ## Git and GitHub Safety

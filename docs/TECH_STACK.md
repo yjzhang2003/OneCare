@@ -4,6 +4,8 @@
 
 The TypeScript web baseline and Feishu custom-app login were implemented on 2026-07-17. The current application is a single-enterprise demonstration; automotive data, AI analysis, persistence, and the Feishu agent remain unimplemented.
 
+The production deployment is available at `https://auto-insight-omega.vercel.app`. Feishu custom-app version 1.0.1 and the exact production redirect URL are published, and the login, protected dashboard, logout, and post-logout redirect behavior have been manually verified with a real enterprise member.
+
 ## Implemented Baseline
 
 Auto Insight uses one TypeScript modular monolith:
@@ -71,12 +73,13 @@ For the future store application, events must use a verified public HTTP callbac
 ## Testing Baseline
 
 - Vitest covers environment validation, OAuth state, signed sessions, Feishu adapters, and Route Handlers.
+- A separate built-runtime Vitest suite starts the output of `next build` with `next start` and exercises the authentication routes across the real Next.js production boundary.
 - React Testing Library covers the landing page and dashboard presentation contracts.
 - External Feishu calls are injected in tests and never reach the network.
 - Production behavior is implemented test-first.
 - A production build, dependency audit, secret scan, and live deployment smoke test are required before release.
 
-Playwright browser tests remain deferred until a persistent test identity and callback environment are available. The real production login flow is manually verified after the Feishu redirect URL is configured.
+Playwright browser tests remain deferred until a persistent non-personal test identity is available. The current production flow has been manually verified in Edge with a real enterprise member after publishing the Feishu redirect URL.
 
 ## Deferred Decisions
 

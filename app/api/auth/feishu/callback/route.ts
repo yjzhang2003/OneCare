@@ -46,20 +46,19 @@ function errorResponse(request: Request, code: AuthErrorCode): NextResponse {
 export function createCallbackHandler(
   dependencies: CallbackDependencies = defaultDependencies,
 ) {
-  return async function GET(request: Request): Promise<NextResponse> {
-    const nextRequest = new NextRequest(request);
-    const receivedState = nextRequest.nextUrl.searchParams.get("state") ?? undefined;
-    const expectedState = nextRequest.cookies.get(OAUTH_STATE_COOKIE)?.value;
+  return async function GET(request: NextRequest): Promise<NextResponse> {
+    const receivedState = request.nextUrl.searchParams.get("state") ?? undefined;
+    const expectedState = request.cookies.get(OAUTH_STATE_COOKIE)?.value;
 
     if (!statesMatch(receivedState, expectedState)) {
       return errorResponse(request, "invalid_state");
     }
 
-    if (nextRequest.nextUrl.searchParams.get("error") === "access_denied") {
+    if (request.nextUrl.searchParams.get("error") === "access_denied") {
       return errorResponse(request, "access_denied");
     }
 
-    const code = nextRequest.nextUrl.searchParams.get("code");
+    const code = request.nextUrl.searchParams.get("code");
     if (!code) {
       return errorResponse(request, "token_exchange_failed");
     }
