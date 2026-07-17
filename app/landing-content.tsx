@@ -1,33 +1,16 @@
-import Link from "next/link";
-
 import type { AuthUser } from "../src/features/auth/types";
-
-const capabilities = [
-  {
-    index: "01",
-    title: "VOC 智能分析",
-    description: "汇聚客服、服务与用户反馈中的声音，识别高频问题和改善机会。",
-    marker: "LISTEN / LEARN",
-  },
-  {
-    index: "02",
-    title: "智能预诊",
-    description: "结合 IoT 设备运行信号预判故障，让工程师上门前更接近正确答案。",
-    marker: "PREDICT / PREPARE",
-  },
-  {
-    index: "03",
-    title: "协同调度",
-    description: "把客服、工程师、配件与回访角色放进同一条可追踪的服务链路。",
-    marker: "DISPATCH / ALIGN",
-  },
-  {
-    index: "04",
-    title: "闭环追踪",
-    description: "持续监控服务进度，自动触发回访与评价，让每个问题都有结果。",
-    marker: "CLOSE / IMPROVE",
-  },
-] as const;
+import {
+  perspectives,
+  scenarioSteps,
+  serviceLayers,
+  teamMembers,
+} from "../src/features/showcase/content";
+import { RoleCard } from "../src/features/showcase/components/role-card";
+import { SectionFrame } from "../src/features/showcase/components/section-frame";
+import { SignalFlow } from "../src/features/showcase/components/signal-flow";
+import { SiteFooter } from "../src/features/showcase/components/site-footer";
+import { SiteHeader } from "../src/features/showcase/components/site-header";
+import { StatusTag } from "../src/features/showcase/components/status-tag";
 
 const errorMessages: Record<string, string> = {
   configuration_error: "登录服务尚未完成配置，请稍后再试。",
@@ -44,24 +27,11 @@ type LandingContentProps = {
 
 export function LandingContent({ user, authError }: LandingContentProps) {
   const errorMessage = authError ? errorMessages[authError] : undefined;
+  const workspaceHref = user ? "/dashboard" : "/api/auth/feishu/start";
 
   return (
     <div className="landing-shell">
-      <header className="site-header">
-        <Link className="wordmark" href="/" aria-label="OneCare 首页">
-          <span className="wordmark-mark" aria-hidden="true">
-            1C
-          </span>
-          <span>
-            ONECARE
-            <small>AI 用户服务闭环引擎</small>
-          </span>
-        </Link>
-        <div className="header-status">
-          <span className="status-light" aria-hidden="true" />
-          ENTERPRISE DEMO · 01
-        </div>
-      </header>
+      <SiteHeader user={user} />
 
       {errorMessage ? (
         <div className="auth-notice" role="alert">
@@ -73,31 +43,33 @@ export function LandingContent({ user, authError }: LandingContentProps) {
       <main>
         <section className="hero">
           <div className="hero-copy">
+            <StatusTag>PRODUCT PROTOTYPE · 01</StatusTag>
             <p className="eyebrow">AI SERVICE LOOP ENGINE</p>
             <h1>让每一次服务，都比问题更早一步</h1>
             <p className="hero-intro">
               OneCare 面向海信智能家庭场景，把用户声音、设备信号与服务协同
-              串成一条有感知、有响应、有结果的服务闭环。
+              串成一条有感知、有判断、有行动、会学习的服务闭环。
             </p>
 
             <div className="hero-actions">
-              <a
-                className="primary-action"
-                href={user ? "/dashboard" : "/api/auth/feishu/start"}
-              >
-                <span>{user ? "进入工作台" : "使用飞书登录"}</span>
+              <a className="primary-action" href="#perspectives">
+                <span>查看角色视角</span>
                 <span className="action-arrow" aria-hidden="true">
-                  ↗
+                  ↓
                 </span>
               </a>
-              <p className="session-copy">
-                {user ? `${user.name}，欢迎回来` : "FEISHU VERIFIED ACCESS"}
-              </p>
+              <a className="secondary-action" href={workspaceHref}>
+                {user ? "进入工作台" : "使用飞书登录"}
+                <span aria-hidden="true">↗</span>
+              </a>
             </div>
+            <p className="session-copy">
+              {user ? `${user.name}，欢迎回来` : "FEISHU VERIFIED ACCESS"}
+            </p>
           </div>
 
           <div className="signal-stage" aria-hidden="true">
-            <div className="stage-index">00—01</div>
+            <div className="stage-index">00—05</div>
             <div className="orbit orbit-one" />
             <div className="orbit orbit-two" />
             <div className="signal-core">
@@ -106,10 +78,11 @@ export function LandingContent({ user, authError }: LandingContentProps) {
               <span>LOOP</span>
             </div>
             <div className="stage-caption">
-              <span>LISTEN</span>
-              <span>PREDICT</span>
-              <span>DISPATCH</span>
-              <span>CLOSE</span>
+              <span>SENSE</span>
+              <span>DIAGNOSE</span>
+              <span>ORCHESTRATE</span>
+              <span>SERVE</span>
+              <span>LEARN</span>
             </div>
           </div>
         </section>
@@ -127,42 +100,101 @@ export function LandingContent({ user, authError }: LandingContentProps) {
             <strong>更高</strong>
             <span>用户满意目标</span>
           </div>
-          <p>从“用户报修”走向“服务先行”</p>
+          <p>从被动报修，走向主动关怀</p>
         </section>
 
-        <section className="capability-section" aria-labelledby="capability-title">
-          <div className="section-heading">
-            <p>SERVICE LOOP / 01—04</p>
-            <h2 id="capability-title">从发现问题，到确认问题真正解决</h2>
+        <SectionFrame
+          id="perspectives"
+          index="01"
+          eyebrow="FOUR PERSPECTIVES"
+          title="同一个问题，四个视角，一条连续服务链"
+          intro="每个角色拥有自己的工作界面，但共享同一份服务上下文。角色页面将逐步开放，主页先呈现它们如何协同。"
+        >
+          <div className="role-grid">
+            {perspectives.map((role) => (
+              <RoleCard key={role.index} role={role} />
+            ))}
           </div>
-          <div className="capability-grid">
-            {capabilities.map((capability) => (
-              <article className="capability-card" key={capability.index}>
-                <div className="card-topline">
-                  <span>{capability.index}</span>
-                  <span>{capability.marker}</span>
+        </SectionFrame>
+
+        <SectionFrame
+          id="architecture"
+          index="02"
+          eyebrow="FIVE-LAYER ARCHITECTURE"
+          title="感知—诊断—编排—服务—学习"
+          intro="五层不是五个孤立模块，而是一条持续流动的服务信号链：每一次解决，都成为下一次提前发现的依据。"
+          tone="dark"
+        >
+          <SignalFlow layers={serviceLayers} />
+        </SectionFrame>
+
+        <SectionFrame
+          id="scenario"
+          index="03"
+          eyebrow="SOLUTION PATH"
+          title="让架构落到一次真实可感的服务旅程"
+          intro="以下案例用于说明方案如何流动，不代表已经接入生产设备、工单或 AI 服务。"
+        >
+          <div className="scenario-layout">
+            <div className="scenario-lead">
+              <StatusTag>方案演示</StatusTag>
+              <p className="scenario-kicker">SMART REFRIGERATOR / CASE 01</p>
+              <h3>冰箱温控异常</h3>
+              <p>
+                从一条微弱的温度波动开始，OneCare 把设备、用户与服务团队连接起来，
+                让问题少一次转述，也少一次等待。
+              </p>
+              <div className="scenario-device" aria-hidden="true">
+                <span>−18°</span>
+                <i />
+                <span>04°</span>
+              </div>
+            </div>
+            <ol className="scenario-list">
+              {scenarioSteps.map((step, index) => (
+                <li key={step.layer}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <div>
+                    <small>{step.layer}</small>
+                    <h4>{step.title}</h4>
+                    <p>{step.description}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </SectionFrame>
+
+        <SectionFrame
+          id="team"
+          index="04"
+          eyebrow="TEAM CAPABILITY"
+          title="三种能力，组成一支完整的服务创新团队"
+          intro="成员资料将在确认后替换；当前只展示参赛团队所需的能力互补关系，不虚构个人履历。"
+        >
+          <div className="team-grid">
+            {teamMembers.map((member) => (
+              <article className="team-card" key={member.index}>
+                <div className="team-card__index">
+                  <span>成员 {member.index}</span>
+                  <StatusTag>成员信息待补充</StatusTag>
                 </div>
-                <h3>{capability.title}</h3>
-                <p>{capability.description}</p>
-                <div className="card-scanline" aria-hidden="true" />
+                <div className="team-card__portrait" aria-hidden="true">
+                  <span>{member.index}</span>
+                </div>
+                <h3>{member.title}</h3>
+                <ul>
+                  {member.capabilities.map((capability) => (
+                    <li key={capability}>{capability}</li>
+                  ))}
+                </ul>
               </article>
             ))}
           </div>
-        </section>
-
-        <aside className="trust-boundary">
-          <span>PROTOTYPE BOUNDARY</span>
-          <p>
-            当前为 OneCare 方案原型，仅开放给应用所属企业成员。页面展示服务闭环构想，
-            尚未接入真实业务数据或 AI 服务。
-          </p>
-        </aside>
+        </SectionFrame>
       </main>
 
-      <footer className="site-footer">
-        <span>ONECARE / 2026</span>
-        <span>AI × SERVICE × HUMAN WARMTH</span>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
