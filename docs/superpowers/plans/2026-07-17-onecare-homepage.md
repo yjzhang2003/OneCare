@@ -361,7 +361,7 @@ git commit -m "docs: record OneCare homepage phase"
 **Interfaces:**
 - Produces: evidence that presentation, authentication, type safety, production build, and repository hygiene remain valid.
 
-- [ ] **Step 1: Run the full local validation**
+- [x] **Step 1: Run the full local validation**
 
 Run:
 
@@ -375,7 +375,7 @@ git diff --check
 
 Expected: every command exits 0; Vitest reports no failed files or tests; Next.js build completes.
 
-- [ ] **Step 2: Verify route and secret boundaries**
+- [x] **Step 2: Verify route and secret boundaries**
 
 Run:
 
@@ -387,7 +387,7 @@ git ls-files '.env*'
 
 Expected: no role routes or dead links exist, and only `.env.example` is tracked.
 
-- [ ] **Step 3: Review the final diff and status**
+- [x] **Step 3: Review the final diff and status**
 
 Run:
 
