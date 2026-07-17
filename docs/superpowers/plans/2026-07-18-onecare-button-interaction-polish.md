@@ -164,6 +164,6 @@ At `1440 × 900` and `390 × 844`, verify no overflow. Inspect computed styles b
 
 Commit the implementation, tests, and checked plan with message `fix: unify OneCare button interactions`.
 
-- [ ] **Step 4: Deploy and verify Preview**
+- [x] **Step 4: Deploy and verify Preview**
 
 Run `vercel deploy --yes` without `--prod`, point `onecare-homepage-preview.vercel.app` to the Ready deployment, and verify HTTP 200 plus the strings `查看四个视角`, `使用飞书登录`, and `返回顶部` through the protected share link.
