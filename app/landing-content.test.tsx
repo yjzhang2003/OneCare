@@ -1,10 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { LandingContent } from "./landing-content";
 
 describe("LandingContent", () => {
-  it("presents one continuous service journey without card-wall patterns", () => {
+  it("presents the Hisense showroom story with interactive perspectives", () => {
     const { container } = render(<LandingContent user={null} />);
 
     expect(
@@ -13,9 +13,9 @@ describe("LandingContent", () => {
       }),
     ).toBeInTheDocument();
 
-    expect(screen.getByRole("link", { name: "服务旅程" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "四个视角" })).toHaveAttribute(
       "href",
-      "#journey",
+      "#perspectives",
     );
     expect(screen.getByRole("link", { name: "五层引擎" })).toHaveAttribute(
       "href",
@@ -26,14 +26,20 @@ describe("LandingContent", () => {
       "#team",
     );
 
-    [
+    expect(
+      screen.getByRole("tablist", { name: "OneCare 服务角色" }),
+    ).toBeInTheDocument();
+
+    const userTab = screen.getByRole("tab", { name: "用户" });
+    expect(userTab).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel")).toHaveTextContent(
       "冰箱好像不太冷了",
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "客服" }));
+    expect(screen.getByRole("tabpanel")).toHaveTextContent(
       "一次理解，不再重复描述",
-      "一次带对",
-      "一次解决，持续学习",
-    ].forEach((statement) => {
-      expect(screen.getByText(statement)).toBeInTheDocument();
-    });
+    );
 
     expect(
       screen.getByRole("list", { name: "OneCare 五层服务蓝图" }),
@@ -59,9 +65,26 @@ describe("LandingContent", () => {
       screen.getByText(/尚未接入真实业务数据或 AI 服务/),
     ).toBeInTheDocument();
     expect(container.querySelector('a[href^="/experience/"]')).toBeNull();
-    expect(
-      container.querySelector(".role-card, .signal-flow, .team-card"),
-    ).toBeNull();
+    expect(container.querySelector(".role-card, .signal-flow")).toBeNull();
+  });
+
+  it("moves between perspective tabs with the keyboard", () => {
+    render(<LandingContent user={null} />);
+
+    const customer = screen.getByRole("tab", { name: "客服" });
+    customer.focus();
+    fireEvent.keyDown(customer, { key: "ArrowRight" });
+
+    const engineer = screen.getByRole("tab", { name: "工程师" });
+    expect(engineer).toHaveAttribute("aria-selected", "true");
+    expect(engineer).toHaveFocus();
+
+    fireEvent.keyDown(engineer, { key: "End" });
+
+    expect(screen.getByRole("tab", { name: "后台" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("returns signed-in visitors to the workspace", () => {
