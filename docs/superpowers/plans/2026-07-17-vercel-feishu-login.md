@@ -23,7 +23,7 @@
 - Tasks 1–4 and Task 5 Steps 1–8 are implemented and deployed at `https://auto-insight-omega.vercel.app`.
 - Final code review found a production-bundle `NextRequest` callback failure and a missing Feishu user-info request header. Both were reproduced with failing tests and fixed; `npm run test:runtime` now exercises the built authentication routes under `next start`.
 - Real Feishu login, identity presentation, logout, post-logout dashboard protection, and a redacted Vercel log scan are verified.
-- Task 5 Step 9 remains in progress until final documentation, Harness review, verification, and commit are complete.
+- Tasks 1–5 and all final review steps are complete. The review fixes, runtime regression coverage, documentation, and Harness reflection were finalized in commit `1b21b5d`.
 
 ---
 
@@ -468,7 +468,7 @@ https://<production-domain>/api/auth/feishu/callback
 5. 退出后再次访问 `/dashboard` 返回首页；
 6. Vercel 函数日志不含 App Secret、用户访问令牌或完整会话 Cookie。
 
-- [ ] **Step 9: 最终仓库与 Harness 复盘**
+- [x] **Step 9: 最终仓库与 Harness 复盘**
 
 Run: `git status --short --branch && git log --oneline --decorate -5`
 
