@@ -181,6 +181,14 @@
 - 不新增数据库、AI SDK、聊天接口、队列或外部业务系统；
 - 不创建无法完成的角色页面，也不使用死链模拟完成度。
 
+## Preview 交付
+
+主页分支完成本地验证后，发布到当前已链接的 OneCare Vercel 项目，生成非 Production 的 Preview URL 供用户确认。若 Preview 受 Vercel Deployment Protection 保护，则为本次评审窗口生成限时 Shareable Link，但不得把分享绕过值写入仓库。验收 Preview 时必须验证 HTTP 200，并检查“四个视角”或“五层架构”等本次独有文案。
+
+本阶段不修改 Production 部署、稳定生产域名、飞书回调或环境变量。由于 Vercel Preview 环境未配置飞书认证变量，Preview 只用于主页视觉和内容确认；预览域名上的飞书登录不属于本阶段验收范围。
+
+仓库 harness 记录用户的持续授权：今后完成的分支只要包含用户可见的网站内容修改，就在本地验证后自动创建 Vercel Preview，并在保护开启时创建限时分享链接，把可直接评审的 URL 交给用户确认。该持续授权不扩展到 Production、生产密钥、飞书回调、GitHub 推送、PR 或合并。
+
 ## 测试与验收
 
 实现必须按 RED → GREEN → REFACTOR：

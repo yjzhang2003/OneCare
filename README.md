@@ -19,6 +19,10 @@
 
 当前生产站点：<https://onecare-loop.vercel.app>
 
+当前主页分支 Preview：<https://onecare-homepage-preview.vercel.app>
+
+Preview 受 Vercel Deployment Protection 保护，可直接访问的限时分享链接在分支交付消息中提供。Preview 未配置飞书认证变量，只用于页面内容和视觉确认；生产站点、生产密钥与飞书回调不受影响。
+
 GitHub 仓库：<https://github.com/yjzhang2003/OneCare>
 
 ## 本地运行

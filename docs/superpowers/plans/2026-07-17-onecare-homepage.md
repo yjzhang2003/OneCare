@@ -397,3 +397,56 @@ git log --oneline --decorate -5
 ```
 
 Expected: the branch is ahead of `origin/main`, the worktree is clean, and all commits are reported to the user. Do not push or open a pull request unless the user explicitly asks.
+
+### Task 6: Persist and perform the Vercel Preview handoff
+
+**Files:**
+- Modify: `docs/HARNESS_REFLECTIONS.md`
+- Modify: `AGENTS.md`
+- Modify: `docs/superpowers/specs/2026-07-17-onecare-homepage-design.md`
+- Modify: `docs/superpowers/plans/2026-07-17-onecare-homepage.md`
+- Modify: `README.md`
+
+**Interfaces:**
+- Consumes: the linked Vercel project and the user's standing Preview authorization.
+- Produces: a durable repository rule and a verified Preview URL without changing Production or Preview secrets.
+
+- [x] **Step 1: Record the harness reflection before changing `AGENTS.md`**
+
+Append evidence, the exact proposed rule, expected benefit, rollback condition, and `Status: applied` to `docs/HARNESS_REFLECTIONS.md`.
+
+- [x] **Step 2: Add the bounded Preview handoff rule**
+
+Add a `Vercel Preview Handoff` section to `AGENTS.md` requiring local validation, a non-Production deployment, HTTP 200 verification, a unique content marker, and URL reporting. Explicitly exclude Production, environment changes, secrets, Feishu callbacks, GitHub pushes, pull requests, and merges.
+
+- [x] **Step 3: Create the Vercel Preview deployment**
+
+Run:
+
+```bash
+npx --yes vercel@latest
+```
+
+Expected: exit 0 and a `https://*.vercel.app` Preview URL. Do not pass `--prod`.
+
+- [x] **Step 4: Verify the Preview and document its URL**
+
+Run:
+
+```bash
+curl -Ls -o /dev/null -w '%{http_code}\n' "$PREVIEW_URL"
+curl -Ls "$PREVIEW_URL" | rg '同一个问题，四个视角|感知—诊断—编排—服务—学习'
+```
+
+Expected: HTTP 200 and at least one unique homepage marker. Record the stable, non-secret Preview alias in `README.md` and state that Preview Feishu login is not configured. If Deployment Protection is active, create a seven-day shareable link for the handoff and do not commit its bypass value.
+
+- [x] **Step 5: Re-run repository hygiene checks and commit**
+
+Run:
+
+```bash
+git diff --check
+git status --short --branch
+```
+
+Expected: only the planned harness, specification, plan, and README changes remain before committing them with `docs: require previews for web branches`.
