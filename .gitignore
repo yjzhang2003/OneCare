@@ -5,3 +5,4 @@ node_modules/
 *.tsbuildinfo
 .env*
 !.env.example
+.vercel

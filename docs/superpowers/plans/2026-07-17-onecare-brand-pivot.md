@@ -28,6 +28,7 @@
 - `package.json`、`package-lock.json`：npm 包名。
 - `README.md`：当前实现、运行方式与新题目全文。
 - `AGENTS.md`、`docs/TECH_STACK.md`：当前产品基线和技术实现边界。
+- `.gitignore`：忽略 Vercel CLI 重新链接生成的本地 `.vercel` 元数据。
 - GitHub repository、Vercel project：远程产品名称与生产地址。
 
 ### Task 1: OneCare 展示契约
@@ -145,6 +146,7 @@ Expected: `git diff --check` exit 0，状态仅包含计划内文件。
 **Files:**
 - Modify if actual URL changes: `README.md`
 - Modify if actual URL changes: `docs/TECH_STACK.md`
+- Modify: `.gitignore`
 
 **Interfaces:**
 - Consumes: GitHub CLI 与当前已链接的 Vercel 项目。
