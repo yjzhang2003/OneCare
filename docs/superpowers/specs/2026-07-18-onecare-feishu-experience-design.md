@@ -294,6 +294,16 @@ Preview 只用于页面视觉、路由和本地模拟验收。Vercel 分享链�
 - `.env.example`：新增事件验证变量名但不含真实值；
 - 本规格与对应实施计划：记录本地、Preview 和真实飞书验收状态。
 
+## 实施与验收记录（2026-07-18）
+
+本规格对应的一版实现已完成：网站新增 `/login` 飞书体验入口、完整企业邀请二维码、三角色复用入口、OAuth 回流和 `/dashboard` 兼容重定向；Vercel Route Handler 新增经过签名、Verification Token 与 Encrypt Key 验证的单聊文本事件入口，并通过确定性无状态脚本回复。生产机器人仍未激活，不把代码存在描述为飞书内已经可用。
+
+本地自动化验证通过 23 个测试文件中的 104 个测试；生产构建运行时验证通过 4 个用例；lint、typecheck、显式生产构建和生产依赖审计均通过。Playwright 在 `1440 × 900` 与 `390 × 844` 下确认登录页无横向溢出、二维码保持 `750 × 1334` 原始比例、三个角色入口可见、四角色服务链可完整流转，且控制台无错误或警告。
+
+非 Production Preview 已部署并绑定 `https://onecare-homepage-preview.vercel.app`，部署 ID 为 `dpl_62YKiDZXoD1SsYetbQpiRqLQKwHD`。Preview 保持 Vercel Deployment Protection，另生成七天有效的分享链接供用户确认。Preview 不包含 Production OAuth 或机器人密钥；点击 OAuth 按钮会安全返回 `/login?auth_error=configuration_error`，这是预期行为。
+
+尚未完成的外部验收包括：使用真实手机扫描页面二维码、在飞书后台启用机器人能力与最小权限、配置 Production 事件订阅、发布版本、确认应用可用范围，以及由真实企业成员完成 OAuth 和机器人单聊回复。完成这些步骤之前不得宣称生产机器人可用。
+
 ## 官方参考
 
 - [飞书应用类型与机器人/网页应用能力](https://open.feishu.cn/document/home/app-types-introduction/overview)

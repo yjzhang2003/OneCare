@@ -62,7 +62,7 @@
 - Produces: `readBotEnv(source?: Readonly<Record<string, string | undefined>>): BotEnv`.
 - Adds runtime dependency `@larksuiteoapi/node-sdk@1.71.1`.
 
-- [ ] **Step 1: Write the failing environment tests**
+- [x] **Step 1: Write the failing environment tests**
 
 Extend `src/lib/env.test.ts`:
 
@@ -97,7 +97,7 @@ it("rejects missing bot verification settings without exposing values", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests and verify RED**
+- [x] **Step 2: Run the tests and verify RED**
 
 Run:
 
@@ -107,7 +107,7 @@ npx vitest run src/lib/env.test.ts
 
 Expected: FAIL because `readBotEnv` is not exported.
 
-- [ ] **Step 3: Implement the isolated bot environment reader**
+- [x] **Step 3: Implement the isolated bot environment reader**
 
 Add to `src/lib/env.ts` without changing `readAuthEnv` requirements:
 
@@ -136,7 +136,7 @@ export function readBotEnv(
 
 Expand the `readRequired` name union with both event variable names. Do not require event variables from `readAuthEnv`.
 
-- [ ] **Step 4: Add the official SDK and QR asset**
+- [x] **Step 4: Add the official SDK and QR asset**
 
 Run:
 
@@ -153,7 +153,7 @@ FEISHU_EVENT_VERIFICATION_TOKEN=replace_with_event_verification_token
 FEISHU_EVENT_ENCRYPT_KEY=replace_with_event_encrypt_key
 ```
 
-- [ ] **Step 5: Verify GREEN and asset integrity**
+- [x] **Step 5: Verify GREEN and asset integrity**
 
 Run:
 
@@ -164,7 +164,7 @@ file public/images/feishu/onecare-enterprise-invite-2026-08-29.png
 
 Expected: environment tests pass; `file` reports a readable PNG image.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add package.json package-lock.json src/lib/env.ts src/lib/env.test.ts .env.example public/images/feishu/onecare-enterprise-invite-2026-08-29.png
@@ -184,7 +184,7 @@ git commit -m "chore: add Feishu bot runtime contract"
 - Produces: `BotReply { kind: BotReplyKind; text: string }`.
 - Produces: `createBotReply(input: string): BotReply`.
 
-- [ ] **Step 1: Write the failing script tests**
+- [x] **Step 1: Write the failing script tests**
 
 Create `src/features/feishu-bot/bot-script.test.ts`:
 
@@ -231,7 +231,7 @@ describe("createBotReply", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run:
 
@@ -241,7 +241,7 @@ npx vitest run src/features/feishu-bot/bot-script.test.ts
 
 Expected: FAIL because `bot-script.ts` does not exist.
 
-- [ ] **Step 3: Implement the smallest deterministic script**
+- [x] **Step 3: Implement the smallest deterministic script**
 
 Create `src/features/feishu-bot/bot-script.ts` with normalized exact keyword sets. The reply text must include these stable contracts:
 
@@ -297,7 +297,7 @@ export function createBotReply(input: string): BotReply {
 }
 ```
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
 Run:
 
@@ -307,7 +307,7 @@ npx vitest run src/features/feishu-bot/bot-script.test.ts
 
 Expected: all bot script cases pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/feishu-bot/bot-script.ts src/features/feishu-bot/bot-script.test.ts
@@ -334,7 +334,7 @@ git commit -m "feat: add OneCare bot demo script"
 - Produces: `replyToFeishuMessage({ env, messageId, text }): Promise<void>`.
 - Produces: `createFeishuEventRoute(dependencies?): (request: Request) => Promise<Response>`.
 
-- [ ] **Step 1: Write failing event parser tests**
+- [x] **Step 1: Write failing event parser tests**
 
 Create `src/features/feishu-bot/event-handler.test.ts` using a fixed `BotEnv`. Cover:
 
@@ -366,7 +366,7 @@ it("rejects a challenge with the wrong verification token", async () => {
 
 Add signed V2 payload cases for `p2p + text`, `group`, non-text and wrong signature. Generate `x-lark-signature` inside the test with `sha256(timestamp + nonce + encryptKey + rawBody)` so the test proves the production contract.
 
-- [ ] **Step 2: Run the parser test and verify RED**
+- [x] **Step 2: Run the parser test and verify RED**
 
 Run:
 
@@ -376,7 +376,7 @@ npx vitest run src/features/feishu-bot/event-handler.test.ts
 
 Expected: FAIL because `event-handler.ts` does not exist.
 
-- [ ] **Step 3: Implement source verification and SDK dispatch**
+- [x] **Step 3: Implement source verification and SDK dispatch**
 
 Create `src/features/feishu-bot/event-handler.ts`:
 
@@ -410,7 +410,7 @@ Implementation rules:
 6. In the registered handler, accept only `message.chat_type === "p2p"` and `message.message_type === "text"`; parse `message.content` as JSON and return a non-empty `message_id` and text.
 7. Missing or mismatched token/signature returns `unauthorized`; unsupported but authentic payload returns `ignored`.
 
-- [ ] **Step 4: Verify parser GREEN**
+- [x] **Step 4: Verify parser GREEN**
 
 Run:
 
@@ -420,7 +420,7 @@ npx vitest run src/features/feishu-bot/event-handler.test.ts
 
 Expected: challenge, message, ignored and unauthorized cases all pass.
 
-- [ ] **Step 5: Write failing SDK reply adapter tests**
+- [x] **Step 5: Write failing SDK reply adapter tests**
 
 Create `src/features/feishu-bot/client.test.ts` with an injected client:
 
@@ -445,7 +445,7 @@ it("replies to the original message with text content", async () => {
 
 Also assert non-zero SDK `code` throws `FeishuBotError("reply_failed")` without preserving `msg` or secrets.
 
-- [ ] **Step 6: Implement the official SDK client adapter**
+- [x] **Step 6: Implement the official SDK client adapter**
 
 Create `src/features/feishu-bot/client.ts`:
 
@@ -484,7 +484,7 @@ export async function replyToFeishuMessage(
 
 Define a narrow structural client type so the injected fake is type-safe without asserting it as the full SDK `Client`.
 
-- [ ] **Step 7: Verify client GREEN**
+- [x] **Step 7: Verify client GREEN**
 
 Run:
 
@@ -494,7 +494,7 @@ npx vitest run src/features/feishu-bot/client.test.ts
 
 Expected: reply payload and safe failure tests pass.
 
-- [ ] **Step 8: Write failing Route Handler tests**
+- [x] **Step 8: Write failing Route Handler tests**
 
 Create `app/api/feishu/events/route.test.ts` covering:
 
@@ -513,7 +513,7 @@ const scheduled: Array<() => Promise<void>> = [];
 const schedule: Scheduler = (task) => scheduled.push(task);
 ```
 
-- [ ] **Step 9: Implement the Vercel Route Handler**
+- [x] **Step 9: Implement the Vercel Route Handler**
 
 Create `app/api/feishu/events/route.ts` with `runtime = "nodejs"`, `maxDuration = 10`, dependency injection and the production scheduler:
 
@@ -535,7 +535,7 @@ const defaultDependencies = {
 
 Read `request.text()` once. Map outcomes exactly: challenge → JSON challenge; unauthorized/configuration failure → 403/503 safe JSON; ignored → 200 empty object; message → schedule a caught reply Promise and return 200 immediately.
 
-- [ ] **Step 10: Verify the Route Handler and built runtime**
+- [x] **Step 10: Verify the Route Handler and built runtime**
 
 Run:
 
@@ -551,7 +551,7 @@ npm run test:runtime
 
 Expected: production build succeeds; challenge returns within the built Next.js runtime; existing auth smoke tests remain green.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add src/features/feishu-bot app/api/feishu/events tests/runtime/auth-routes.test.ts
@@ -579,7 +579,7 @@ git commit -m "feat: add verified Feishu bot webhook"
 - Produces: `LoginContent({ user, authError, sourceRole })`.
 - Produces: `/login` Server Component and `/dashboard` compatibility redirect.
 
-- [ ] **Step 1: Write the failing login page presentation tests**
+- [x] **Step 1: Write the failing login page presentation tests**
 
 Create `app/login/login-content.test.tsx`:
 
@@ -612,7 +612,7 @@ it("shows the verified identity without rendering a second dashboard", () => {
 
 Add a safe known-error test and a source-role test; do not render arbitrary source query text.
 
-- [ ] **Step 2: Run the login page test and verify RED**
+- [x] **Step 2: Run the login page test and verify RED**
 
 Run:
 
@@ -622,7 +622,7 @@ npx vitest run app/login/login-content.test.tsx
 
 Expected: FAIL because the login components do not exist.
 
-- [ ] **Step 3: Implement the login page components**
+- [x] **Step 3: Implement the login page components**
 
 Create `app/login/login-content.tsx` as a pure component. Reuse `OneCareLogo`; use `next/image` for the QR asset; use a real POST form for logout. Define source copy as a closed map:
 
@@ -636,7 +636,7 @@ const sourceMessages = {
 
 Create `app/login/page.tsx` to read `getCurrentSession()` and `searchParams`, map only known auth error codes and source roles, then render `LoginContent`. Unknown values become `undefined`.
 
-- [ ] **Step 4: Verify login page GREEN**
+- [x] **Step 4: Verify login page GREEN**
 
 Run:
 
@@ -646,7 +646,7 @@ npx vitest run app/login/login-content.test.tsx
 
 Expected: visitor, verified identity, safe error and source-role cases pass.
 
-- [ ] **Step 5: Write failing navigation and OAuth redirect tests**
+- [x] **Step 5: Write failing navigation and OAuth redirect tests**
 
 Update existing expectations:
 
@@ -663,7 +663,7 @@ expect(screen.getByRole("link", { name: "使用飞书体验" })).toHaveAttribute
 
 In `app/api/auth/feishu/callback/route.test.ts`, change success to `/login?auth=success`; change all callback errors to `/login?auth_error=<code>`.
 
-- [ ] **Step 6: Run targeted tests and verify RED**
+- [x] **Step 6: Run targeted tests and verify RED**
 
 Run:
 
@@ -673,7 +673,7 @@ npx vitest run app/landing-content.test.tsx app/api/auth/feishu/callback/route.t
 
 Expected: FAIL because production links still point directly to OAuth and callback still points to `/dashboard` or `/`.
 
-- [ ] **Step 7: Rewire navigation and redirects**
+- [x] **Step 7: Rewire navigation and redirects**
 
 Implement:
 
@@ -683,7 +683,7 @@ Implement:
 - `DashboardPage` contains only `redirect("/login")` and no session read.
 - Runtime expectations use `/login` for invalid callback, Dashboard and logout return destinations where applicable.
 
-- [ ] **Step 8: Verify GREEN and commit**
+- [x] **Step 8: Verify GREEN and commit**
 
 Run:
 
@@ -716,7 +716,7 @@ git commit -m "feat: add guided Feishu experience page"
 - Produces: `FeishuExperienceBanner({ role, children })`, where `role` is `"agent" | "engineer" | "operations"` and `children` is the role value statement.
 - Consumes: existing workspace shells and `/login?from=<role>`.
 
-- [ ] **Step 1: Write failing shared Banner tests**
+- [x] **Step 1: Write failing shared Banner tests**
 
 Create `feishu-experience-banner.test.tsx`:
 
@@ -737,7 +737,7 @@ it("renders a centered pill link without an arrow", () => {
 });
 ```
 
-- [ ] **Step 2: Run Banner test and verify RED**
+- [x] **Step 2: Run Banner test and verify RED**
 
 Run:
 
@@ -747,7 +747,7 @@ npx vitest run src/features/showcase/components/feishu-experience-banner.test.ts
 
 Expected: FAIL because the component does not exist.
 
-- [ ] **Step 3: Implement and connect the shared Banner**
+- [x] **Step 3: Implement and connect the shared Banner**
 
 Create one rounded Banner component with semantic text and a pill link. Insert it directly after `DemoStatusBar` in:
 
@@ -757,7 +757,7 @@ Create one rounded Banner component with semantic text and a pill link. Insert i
 
 Do not import it into `CustomerWorkspace`.
 
-- [ ] **Step 4: Extend integration assertions**
+- [x] **Step 4: Extend integration assertions**
 
 In `perspective-workspaces.test.tsx`, assert each role test id contains its copy and correct href; assert `workspace-customer` has no `计划接入飞书` text.
 
@@ -769,7 +769,7 @@ npx vitest run src/features/showcase/components/feishu-experience-banner.test.ts
 
 Expected: shared component and all four workspace boundaries pass.
 
-- [ ] **Step 5: Add login and Banner styling**
+- [x] **Step 5: Add login and Banner styling**
 
 Append focused CSS sections to `app/globals.css`:
 
@@ -783,7 +783,7 @@ Append focused CSS sections to `app/globals.css`:
 - at `max-width: 760px`, login grid becomes one column and QR remains at least 280 CSS pixels wide when the viewport allows;
 - workspace Banner stays within the existing scene and does not add page-level overflow.
 
-- [ ] **Step 6: Add CSS contract tests**
+- [x] **Step 6: Add CSS contract tests**
 
 Extend `app/fullscreen-showcase-styles.test.ts` to read `globals.css` and assert:
 
@@ -801,7 +801,7 @@ npx vitest run app/fullscreen-showcase-styles.test.ts
 
 Expected: CSS contract passes.
 
-- [ ] **Step 7: Verify all UI tests and commit**
+- [x] **Step 7: Verify all UI tests and commit**
 
 Run:
 
@@ -830,7 +830,7 @@ git commit -m "feat: add Feishu entry across service roles"
 **Interfaces:**
 - Produces: accurate repository status, external Feishu checklist, validation record and non-Production Preview URL.
 
-- [ ] **Step 1: Update repository documentation**
+- [x] **Step 1: Update repository documentation**
 
 Document exactly:
 
@@ -844,7 +844,7 @@ Document exactly:
 
 Do not claim real bot success until Production and a real Feishu member complete the flow.
 
-- [ ] **Step 2: Run targeted and complete automated validation**
+- [x] **Step 2: Run targeted and complete automated validation**
 
 Run:
 
@@ -860,7 +860,7 @@ git diff --check
 
 Expected: all commands exit 0 and audit reports 0 vulnerabilities. If `test:runtime` already performed the same build, still run the explicit final `build` required by repository completion rules.
 
-- [ ] **Step 3: Inspect QR asset and desktop/mobile layouts**
+- [x] **Step 3: Inspect QR asset and desktop/mobile layouts**
 
 Start the production build locally and use Playwright at `1440 × 900` and `390 × 844`:
 
@@ -877,17 +877,17 @@ Start the production build locally and use Playwright at `1440 × 900` and `390 
 
 Use a real phone camera or Feishu scan entry against the locally rendered or deployed page. Confirm it opens the OneCare enterprise invitation and shows the same 2026-08-29 expiry. This proves responsive scaling did not make the code unreadable.
 
-- [ ] **Step 5: Publish the non-Production Preview**
+- [x] **Step 5: Publish the non-Production Preview**
 
 Run the existing linked Vercel workflow without `--prod`, bind the fixed Preview alias `onecare-homepage-preview.vercel.app`, and create an anonymous share link if Deployment Protection requires it. Do not copy Production secrets into Preview.
 
 Re-run desktop/mobile browser checks on the deployed URL. The `/login` OAuth button may return the safe configuration error in Preview; this is expected and must not be reported as a working login.
 
-- [ ] **Step 6: Record verification and Harness reflection**
+- [x] **Step 6: Record verification and Harness reflection**
 
 Append exact command results, browser viewport results, Preview deployment ID/URL and known gap “Production bot callback not yet activated” to the spec and plan. Assess whether existing instructions caused durable repository-specific ambiguity; update `AGENTS.md` only after first recording evidence and rollback condition in `docs/HARNESS_REFLECTIONS.md`.
 
-- [ ] **Step 7: Commit final documentation**
+- [x] **Step 7: Commit final documentation**
 
 ```bash
 git add README.md docs/TECH_STACK.md docs/superpowers
@@ -905,3 +905,14 @@ Do not push, create a PR, merge or deploy Production unless the user asks after 
 - Type consistency: `BotEnv`, `BotReply`, `FeishuEventOutcome`, `parseFeishuEvent`, `replyToFeishuMessage`, `LoginContent` and `FeishuExperienceBanner` use one spelling and one producing task.
 - Security: event variables are isolated from OAuth, query source is a closed display map, raw messages and secrets are excluded from logs, and live callbacks are explicitly deferred until Production.
 - Placeholder scan: no `TBD`, `TODO`, “similar to”, unspecified error handling or missing test command remains.
+
+## Execution Record — 2026-07-18
+
+- Tasks 1–5 completed test-first and committed as `8632a48`, `ae6c67e`, `6bc460d`, `13df257` and `48e747b`.
+- The canonical experience route is `/login`; `/dashboard` redirects there, and OAuth start/callback failures also return there with a closed error code.
+- Local automated verification: `npm test` passed 23 files / 104 tests; `npm run test:runtime` passed 4 built-runtime cases; lint, typecheck, explicit production build and production dependency audit passed. The final rerun results are recorded in the delivery commit.
+- Local Playwright at `1440 × 900` and `390 × 844` found no horizontal overflow and no console errors or warnings. The QR rendered from a `750 × 1334` source with `object-fit: contain`; customer → agent → engineer → operations state transitions completed successfully.
+- Vercel Preview deployment `dpl_62YKiDZXoD1SsYetbQpiRqLQKwHD` is READY. Fixed alias: `https://onecare-homepage-preview.vercel.app`. A seven-day Vercel shareable link was generated for user review; Preview contains no Production OAuth or bot secrets.
+- Deployed Playwright confirmed `/login` at 390 px, full QR load, no horizontal overflow, no console errors/warnings, and safe return to `/login?auth_error=configuration_error` when the unconfigured Preview OAuth button is used.
+- Physical phone scanning remains a user-side acceptance check and is intentionally not marked complete. Production bot callback activation, Feishu bot permissions, event subscription, version publication, availability-scope review, OAuth re-verification and real-member bot conversation also remain external follow-up work.
+- Harness reflection: the repository instructions were clear and did not create durable ambiguity or rework, so no `AGENTS.md` or `docs/HARNESS_REFLECTIONS.md` change was warranted.
