@@ -93,3 +93,37 @@ Commit implementation and the checked plan with message `fix: keep OneCare Top B
 - [x] **Step 4: Deploy and verify Preview**
 
 Deploy without `--prod`, assign `onecare-homepage-preview.vercel.app`, and verify HTTP 200, all four navigation labels, absence of removed Hero strings, and the existing protected share link.
+
+### Task 4: Add the Chinese product name
+
+**Files:**
+- Modify: `app/landing-content.test.tsx`
+- Modify: `app/dashboard/dashboard-content.test.tsx`
+- Modify: `app/layout.tsx`
+- Modify: `app/landing-content.tsx`
+- Modify: `app/dashboard/dashboard-content.tsx`
+- Modify: `src/features/showcase/components/site-header.tsx`
+- Modify: `src/features/showcase/components/site-footer.tsx`
+- Modify: `src/features/showcase/components/perspective-tabs.tsx`
+- Modify: `src/features/showcase/components/service-blueprint.tsx`
+- Modify: `README.md`
+- Modify: `docs/TECH_STACK.md`
+
+**Interfaces:**
+- Produces: the visible “万护 OneCare” joint brand without changing technical identifiers or deployment URLs.
+
+- [ ] **Step 1: Define and verify the failing naming contract**
+
+Require “万护 ONECARE” in the homepage and dashboard wordmarks, “万护 OneCare” in homepage narrative copy, and updated accessible labels. Run the targeted tests and confirm RED before implementation.
+
+- [ ] **Step 2: Apply the joint brand to product surfaces**
+
+Update metadata, homepage, footer, dashboard, and accessible brand labels. Do not rename routes, npm package, code symbols, repositories, deployments, or OAuth callbacks.
+
+- [ ] **Step 3: Update current documentation**
+
+Introduce the product as “万护 OneCare” in README and the current technology overview; preserve historical specifications and technical identifiers.
+
+- [ ] **Step 4: Verify, commit, and refresh Preview**
+
+Run targeted and full validation, perform desktop/mobile browser QA, commit the implementation, deploy without `--prod`, repoint the stable Preview alias, and verify “万护” online.
