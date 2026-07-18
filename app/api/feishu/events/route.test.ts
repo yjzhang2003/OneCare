@@ -27,10 +27,15 @@ function dependencies(outcome: FeishuEventOutcome) {
       readEnv: vi.fn(() => env),
       parseEvent: vi.fn(async () => outcome),
       createReply: vi.fn((text: string) => ({
-        kind: "welcome" as const,
+        kind: "help" as const,
         text: `reply:${text}`,
       })),
+      createWelcome: vi.fn(() => ({
+        msgType: "interactive" as const,
+        content: JSON.stringify({ welcome: true }),
+      })),
       replyMessage: vi.fn(async () => undefined),
+      sendMessage: vi.fn(async () => undefined),
       schedule: vi.fn((task: () => Promise<void>) => scheduled.push(task)),
       reportFailure: vi.fn(),
     },
@@ -93,6 +98,34 @@ describe("POST /api/feishu/events", () => {
       messageId: "om_message",
       text: "reply:开始体验",
     });
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("acknowledges a chat entry before the welcome card is sent", async () => {
+    const setup = dependencies({
+      kind: "entered",
+      chatId: "oc_onecare_chat",
+    });
+
+    const response = await createFeishuEventRoute(setup.dependencies)(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({});
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+    expect(setup.scheduled).toHaveLength(1);
+
+    await setup.scheduled[0]();
+
+    expect(setup.dependencies.createWelcome).toHaveBeenCalledWith();
+    expect(setup.dependencies.sendMessage).toHaveBeenCalledWith({
+      env,
+      chatId: "oc_onecare_chat",
+      message: {
+        msgType: "interactive",
+        content: JSON.stringify({ welcome: true }),
+      },
+    });
+    expect(setup.dependencies.replyMessage).not.toHaveBeenCalled();
   });
 
   it("reports scheduled reply failures without leaking the exception", async () => {
@@ -102,6 +135,21 @@ describe("POST /api/feishu/events", () => {
       text: "开始体验",
     });
     setup.dependencies.replyMessage.mockRejectedValueOnce(
+      new Error("private upstream response"),
+    );
+
+    await createFeishuEventRoute(setup.dependencies)(request());
+    await setup.scheduled[0]();
+
+    expect(setup.dependencies.reportFailure).toHaveBeenCalledWith();
+  });
+
+  it("reports scheduled welcome failures without leaking the exception", async () => {
+    const setup = dependencies({
+      kind: "entered",
+      chatId: "oc_onecare_chat",
+    });
+    setup.dependencies.sendMessage.mockRejectedValueOnce(
       new Error("private upstream response"),
     );
 
