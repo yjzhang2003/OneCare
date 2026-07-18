@@ -348,11 +348,11 @@ git commit -m "style: refine OneCare customer conversation"
 - Produces: verified repository and new non-Production Preview URL。
 - Consumes: Tasks 1–3。
 
-- [ ] **Step 1: 更新文档**
+- [x] **Step 1: 更新文档**
 
 README 明确公共品牌位使用用户提供的反色 Logo，用户手机 Demo 为左右双方消息气泡；所有回复和预约仍为静态确定性模拟。Spec 记录浏览器验收，Plan 勾选已完成步骤。
 
-- [ ] **Step 2: 运行完整验证**
+- [x] **Step 2: 运行完整验证**
 
 ```bash
 npm test
@@ -366,7 +366,9 @@ git diff --check
 
 Expected: 所有命令退出码为 0，Audit 为 `0 vulnerabilities`。
 
-- [ ] **Step 3: 真实浏览器验收**
+2026-07-18 验证结果：`npm test` 通过 15 个测试文件、56 个测试；`npm run test:runtime` 通过 3 个生产运行时测试；`npm run lint`、`npm run typecheck`、`npm run build` 与 `git diff --check` 均退出码为 0；`npm audit --omit=dev` 返回 `0 vulnerabilities`。首次 `typecheck` 暴露 CSS 合约测试的 `/s` 正则标志与仓库 ES2017 编译目标不兼容，已改为等价的 `[\s\S]` 写法，并重新验证通过。
+
+- [x] **Step 3: 真实浏览器验收**
 
 在 `1440 × 900` 与 `390 × 844` 验证：顶栏、页脚、手机标题栏与 AI 头像使用正确 Logo 反色；AI 左气泡、用户右气泡、身份、时间/状态和预约确认一眼可辨；手机内容可滚动且无页面级横向溢出；减少动效下消息动画为 `none`；控制台无错误、hydration 警告或资源 404。
 
