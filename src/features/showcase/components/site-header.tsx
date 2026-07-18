@@ -5,13 +5,13 @@ import { showcasePages, type ShowcasePageId } from "../navigation";
 
 type SiteHeaderProps = {
   user: AuthUser | null;
-  activePage?: ShowcasePageId;
-  onNavigate?: (page: ShowcasePageId) => void;
+  activePage: ShowcasePageId;
+  onNavigate: (page: ShowcasePageId) => void;
 };
 
 export function SiteHeader({
   user,
-  activePage = "home",
+  activePage,
   onNavigate,
 }: SiteHeaderProps) {
   return (
@@ -33,10 +33,8 @@ export function SiteHeader({
             href={`#${page.id}`}
             key={page.id}
             onClick={(event) => {
-              if (onNavigate) {
-                event.preventDefault();
-                onNavigate(page.id);
-              }
+              event.preventDefault();
+              onNavigate(page.id);
             }}
           >
             {page.label}

@@ -12,7 +12,8 @@ import { PerspectiveTabs } from "../src/features/showcase/components/perspective
 import { SectionFrame } from "../src/features/showcase/components/section-frame";
 import { ServiceBlueprint } from "../src/features/showcase/components/service-blueprint";
 import { SiteFooter } from "../src/features/showcase/components/site-footer";
-import { SiteHeader } from "../src/features/showcase/components/site-header";
+import { ShowcaseNavigator } from "../src/features/showcase/components/showcase-navigator";
+import { ShowcasePageHeading } from "../src/features/showcase/components/showcase-page-heading";
 
 const errorMessages: Record<string, string> = {
   configuration_error: "登录服务尚未完成配置，请稍后再试。",
@@ -33,21 +34,18 @@ export function LandingContent({ user, authError }: LandingContentProps) {
 
   return (
     <div className="landing-shell" id="top">
-      <SiteHeader user={user} />
-
-      {errorMessage ? (
-        <div className="auth-notice" role="alert">
-          <span>AUTH / NOTICE</span>
-          {errorMessage}
-        </div>
-      ) : null}
-
-      <main>
-        <section className="showroom-hero">
+      <ShowcaseNavigator
+        authError={errorMessage}
+        pages={{
+          home: (
+            <section
+              aria-labelledby="home-title"
+              className="showroom-hero"
+            >
           <HeroMedia />
           <div className="showroom-hero__copy">
-            <p className="eyebrow">万护 ONECARE · AI 用户服务闭环引擎</p>
-            <h1>
+                <p className="showcase-page-kicker">00 · 首页</p>
+                <h1 data-showcase-title id="home-title" tabIndex={-1}>
               <span>让每一次服务，</span>
               <span>都比问题更早一步</span>
             </h1>
@@ -65,27 +63,26 @@ export function LandingContent({ user, authError }: LandingContentProps) {
               </a>
             </div>
           </div>
-        </section>
-
-        <section
-          className="perspectives-section"
-          id="perspectives"
-          aria-labelledby="perspectives-title"
-        >
-          <div className="showroom-section-heading">
-            <p>01 · 四个视角</p>
-            <h2 id="perspectives-title">一次问题，四种角色，同一条服务上下文</h2>
-            <p>
-              点击切换用户、客服、工程师和后台，查看同一个异常信号如何被理解、交接与闭环。
-            </p>
-          </div>
+            </section>
+          ),
+          perspectives: (
+            <div className="perspectives-section">
+              <ShowcasePageHeading
+                index="01"
+                intro="点击切换用户、客服、工程师和后台，查看同一个异常信号如何被理解、交接与闭环。"
+                label="四个视角"
+                title="一次问题，四种角色，同一条服务上下文"
+                titleId="perspectives-title"
+              />
           <PerspectiveTabs perspectives={perspectives} />
-        </section>
-
-        <SectionFrame
-          id="architecture"
+            </div>
+          ),
+          architecture: (
+            <div className="architecture-page">
+              <SectionFrame
+          id="architecture-content"
           index="02"
-          eyebrow="FIVE-LAYER ENGINE"
+                label="五层引擎"
           title="感知—诊断—编排—服务—学习"
           intro="一次服务不是五个孤立模块，而是一条从问题信号到持续改善的闭环蓝图。"
         >
@@ -97,7 +94,7 @@ export function LandingContent({ user, authError }: LandingContentProps) {
           aria-labelledby="outcome-title"
         >
           <div>
-            <p>03 / OUTCOME</p>
+                    <p>方案目标</p>
             <h2 id="outcome-title">一次就好</h2>
             <p>以下是万护 OneCare 的方案目标，不代表已经实现的生产指标。</p>
           </div>
@@ -106,11 +103,14 @@ export function LandingContent({ user, authError }: LandingContentProps) {
             本次解决 → 知识沉淀 → 下一次更早发现
           </p>
         </section>
-
-        <SectionFrame
-          id="team"
-          index="04"
-          eyebrow="TEAM CREDITS"
+            </div>
+          ),
+          team: (
+            <div className="team-page">
+              <SectionFrame
+                id="team-content"
+                index="03"
+                label="团队"
           title="三种能力，共同完成服务创新"
           intro="成员信息待补充；当前只展示参赛团队的能力互补关系。"
         >
@@ -127,9 +127,12 @@ export function LandingContent({ user, authError }: LandingContentProps) {
             ))}
           </div>
         </SectionFrame>
-      </main>
-
-      <SiteFooter />
+              <SiteFooter />
+            </div>
+          ),
+        }}
+        user={user}
+      />
     </div>
   );
 }

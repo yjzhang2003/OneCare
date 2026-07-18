@@ -35,7 +35,12 @@ export function ShowcaseNavigator({
     }
 
     if (resetScroll) {
-      pageElements.current[nextPage]?.scrollTo({ behavior: "auto", top: 0 });
+      const pageElement = pageElements.current[nextPage];
+      if (typeof pageElement?.scrollTo === "function") {
+        pageElement.scrollTo({ behavior: "auto", top: 0 });
+      } else if (pageElement) {
+        pageElement.scrollTop = 0;
+      }
     }
     activePageRef.current = nextPage;
     setActivePage(nextPage);
@@ -48,6 +53,23 @@ export function ShowcaseNavigator({
 
     window.history.pushState(null, "", `#${nextPage}`);
     activate(nextPage);
+  }
+
+  function handleInternalNavigation(event: React.MouseEvent<HTMLElement>) {
+    const link = (event.target as HTMLElement).closest<HTMLAnchorElement>(
+      'a[href^="#"]',
+    );
+    if (!link || event.button !== 0 || event.metaKey || event.ctrlKey) {
+      return;
+    }
+
+    const nextPage = parseShowcaseHash(link.hash);
+    if (link.hash !== `#${nextPage}`) {
+      return;
+    }
+
+    event.preventDefault();
+    navigate(nextPage);
   }
 
   useEffect(() => {
@@ -100,6 +122,7 @@ export function ShowcaseNavigator({
       <main
         className="showcase-viewport"
         data-ready={isReady ? "true" : "false"}
+        onClick={handleInternalNavigation}
       >
         {showcasePages.map((page, index) => {
           const isActive = page.id === activePage;
