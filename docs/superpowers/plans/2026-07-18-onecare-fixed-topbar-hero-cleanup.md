@@ -126,6 +126,6 @@ Update metadata, homepage, footer, dashboard, and accessible brand labels. Do no
 
 Introduce the product as “万护 OneCare” in README and the current technology overview; preserve historical specifications and technical identifiers.
 
-- [ ] **Step 4: Verify, commit, and refresh Preview**
+- [x] **Step 4: Verify, commit, and refresh Preview**
 
 Run targeted and full validation, perform desktop/mobile browser QA, commit the implementation, deploy without `--prod`, repoint the stable Preview alias, and verify “万护” online.
