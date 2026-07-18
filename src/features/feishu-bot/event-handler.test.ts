@@ -45,6 +45,44 @@ function messageBody(overrides?: {
   };
 }
 
+function enteredBody(chatId?: string) {
+  return {
+    schema: "2.0",
+    header: {
+      event_id: "evt_entered",
+      event_type: "im.chat.access_event.bot_p2p_chat_entered_v1",
+      create_time: "1784371200000",
+      token: env.verificationToken,
+      app_id: env.appId,
+      tenant_key: "tenant_onecare",
+    },
+    event: {
+      chat_id: chatId,
+      operator_id: { open_id: "ou_onecare" },
+      last_message_id: "om_previous",
+      last_message_create_time: "1784371100000",
+    },
+  };
+}
+
+function groupLifecycleBody() {
+  return {
+    schema: "2.0",
+    header: {
+      event_id: "evt_group_disbanded",
+      event_type: "im.chat.disbanded_v1",
+      create_time: "1784371200000",
+      token: env.verificationToken,
+      app_id: env.appId,
+      tenant_key: "tenant_onecare",
+    },
+    event: {
+      chat_id: "oc_group_chat",
+      operator_id: { open_id: "ou_onecare" },
+    },
+  };
+}
+
 function signedHeaders(rawBody: string, valid = true): Headers {
   const timestamp = "1784371200";
   const nonce = "onecare-nonce";
@@ -96,6 +134,27 @@ describe("parseFeishuEvent", () => {
     });
   });
 
+  it("accepts an authenticated bot p2p chat entry event", async () => {
+    const rawBody = JSON.stringify(enteredBody("oc_onecare_chat"));
+
+    await expect(
+      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({
+      kind: "entered",
+      chatId: "oc_onecare_chat",
+    });
+  });
+
+  it("ignores a chat entry event without a usable chat id", async () => {
+    for (const chatId of [undefined, "", "   "]) {
+      const rawBody = JSON.stringify(enteredBody(chatId));
+
+      await expect(
+        parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+      ).resolves.toEqual({ kind: "ignored" });
+    }
+  });
+
   it("rejects an event with an invalid signature or token", async () => {
     const validBody = JSON.stringify(messageBody());
     const wrongTokenBody = JSON.stringify(
@@ -129,6 +188,14 @@ describe("parseFeishuEvent", () => {
         parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
       ).resolves.toEqual({ kind: "ignored" });
     }
+  });
+
+  it("ignores authentic subscribed group lifecycle events", async () => {
+    const rawBody = JSON.stringify(groupLifecycleBody());
+
+    await expect(
+      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({ kind: "ignored" });
   });
 
   it("ignores malformed request bodies", async () => {

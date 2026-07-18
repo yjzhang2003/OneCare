@@ -11,6 +11,7 @@ import type { BotEnv } from "../../lib/env";
 export type FeishuEventOutcome =
   | Readonly<{ kind: "challenge"; challenge: string }>
   | Readonly<{ kind: "message"; messageId: string; text: string }>
+  | Readonly<{ kind: "entered"; chatId: string }>
   | Readonly<{ kind: "ignored" }>
   | Readonly<{ kind: "unauthorized" }>;
 
@@ -29,6 +30,10 @@ type ReceiveMessageEvent = {
     message_type?: string;
     content?: string;
   };
+};
+
+type BotP2pEnteredEvent = {
+  chat_id?: string;
 };
 
 function isJsonObject(value: unknown): value is JsonObject {
@@ -145,6 +150,14 @@ export async function parseFeishuEvent({
         ? ({ kind: "message", messageId: message.message_id, text } as const)
         : ({ kind: "ignored" } as const);
     },
+    "im.chat.access_event.bot_p2p_chat_entered_v1": (
+      event: BotP2pEnteredEvent,
+    ) => {
+      const chatId = event.chat_id?.trim();
+      return chatId
+        ? ({ kind: "entered", chatId } as const)
+        : ({ kind: "ignored" } as const);
+    },
   });
   const requestData = Object.assign(Object.create({ headers }), body);
   const outcome = (await dispatcher.invoke(requestData, {
@@ -152,7 +165,9 @@ export async function parseFeishuEvent({
   })) as unknown;
 
   return isJsonObject(outcome) &&
-    (outcome.kind === "message" || outcome.kind === "ignored")
+    (outcome.kind === "message" ||
+      outcome.kind === "entered" ||
+      outcome.kind === "ignored")
     ? (outcome as FeishuEventOutcome)
     : { kind: "ignored" };
 }

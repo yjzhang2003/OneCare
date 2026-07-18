@@ -4,6 +4,7 @@ import type { BotEnv } from "../../lib/env";
 import {
   FeishuBotError,
   replyToFeishuMessage,
+  sendFeishuMessage,
   type FeishuBotClient,
 } from "./client";
 
@@ -17,7 +18,8 @@ const env: BotEnv = {
 describe("replyToFeishuMessage", () => {
   it("replies to the original message with text content", async () => {
     const reply = vi.fn(async () => ({ code: 0, msg: "success" }));
-    const client: FeishuBotClient = { im: { message: { reply } } };
+    const create = vi.fn(async () => ({ code: 0, msg: "success" }));
+    const client: FeishuBotClient = { im: { message: { create, reply } } };
 
     await replyToFeishuMessage(
       { env, messageId: "om_message", text: "演示回复" },
@@ -38,7 +40,8 @@ describe("replyToFeishuMessage", () => {
       code: 999,
       msg: "upstream response containing private details",
     }));
-    const client: FeishuBotClient = { im: { message: { reply } } };
+    const create = vi.fn(async () => ({ code: 0, msg: "success" }));
+    const client: FeishuBotClient = { im: { message: { create, reply } } };
 
     await expect(
       replyToFeishuMessage(
@@ -49,6 +52,63 @@ describe("replyToFeishuMessage", () => {
     await expect(
       replyToFeishuMessage(
         { env, messageId: "om_message", text: "演示回复" },
+        () => client,
+      ),
+    ).rejects.not.toThrow("private details");
+  });
+
+  it("sends a proactive interactive message to the entered p2p chat", async () => {
+    const create = vi.fn(async () => ({ code: 0, msg: "success" }));
+    const reply = vi.fn(async () => ({ code: 0, msg: "success" }));
+    const client: FeishuBotClient = { im: { message: { create, reply } } };
+
+    await sendFeishuMessage(
+      {
+        env,
+        chatId: "oc_onecare_chat",
+        message: {
+          msgType: "interactive",
+          content: JSON.stringify({ card: true }),
+        },
+      },
+      () => client,
+    );
+
+    expect(create).toHaveBeenCalledWith({
+      params: { receive_id_type: "chat_id" },
+      data: {
+        receive_id: "oc_onecare_chat",
+        msg_type: "interactive",
+        content: JSON.stringify({ card: true }),
+      },
+    });
+  });
+
+  it("maps proactive send failures without preserving response details", async () => {
+    const create = vi.fn(async () => ({
+      code: 999,
+      msg: "upstream response containing private details",
+    }));
+    const reply = vi.fn(async () => ({ code: 0, msg: "success" }));
+    const client: FeishuBotClient = { im: { message: { create, reply } } };
+
+    await expect(
+      sendFeishuMessage(
+        {
+          env,
+          chatId: "oc_onecare_chat",
+          message: { msgType: "interactive", content: "{}" },
+        },
+        () => client,
+      ),
+    ).rejects.toEqual(new FeishuBotError("send_failed"));
+    await expect(
+      sendFeishuMessage(
+        {
+          env,
+          chatId: "oc_onecare_chat",
+          message: { msgType: "interactive", content: "{}" },
+        },
         () => client,
       ),
     ).rejects.not.toThrow("private details");
