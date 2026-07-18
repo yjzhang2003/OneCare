@@ -1,18 +1,30 @@
 "use client";
 
-import Image from "next/image";
-import { useRef, useState } from "react";
+import { useReducer, useRef, useState } from "react";
 
 import type { Perspective } from "../content";
+import {
+  initialServiceJourneyState,
+  serviceJourneyReducer,
+} from "../service-journey";
+import { AgentWorkspace } from "./agent-workspace";
+import { CustomerWorkspace } from "./customer-workspace";
+import { EngineerWorkspace } from "./engineer-workspace";
+import { OperationsWorkspace } from "./operations-workspace";
 
 type PerspectiveTabsProps = {
   perspectives: readonly Perspective[];
 };
 
+const workspaceIds = ["customer", "agent", "engineer", "operations"] as const;
+
 export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [journey, dispatch] = useReducer(
+    serviceJourneyReducer,
+    initialServiceJourneyState,
+  );
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
-  const active = perspectives[selectedIndex];
 
   function select(index: number, focus = false) {
     setSelectedIndex(index);
@@ -45,9 +57,9 @@ export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
   return (
     <section className="perspective-showcase">
       <div
+        aria-label="万护 OneCare 服务角色"
         className="perspective-tabs"
         role="tablist"
-        aria-label="万护 OneCare 服务角色"
       >
         {perspectives.map((perspective, index) => (
           <button
@@ -70,36 +82,75 @@ export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
         ))}
       </div>
 
-      <article
-        aria-labelledby={`perspective-tab-${selectedIndex}`}
-        className="perspective-panel surface-card"
-        id={`perspective-panel-${selectedIndex}`}
-        key={active.index}
-        role="tabpanel"
-      >
-        <div className="perspective-panel__media">
-          <Image
-            alt="海信智能冰箱产品示意"
-            fill
-            sizes="(max-width: 768px) 100vw, 42vw"
-            src="/images/hisense/smart-refrigerator.webp"
-          />
-          <span>{active.handoff}</span>
-        </div>
-        <div className="perspective-panel__copy">
-          <p className="perspective-panel__role">{active.title}</p>
-          <h3>{active.sceneLine}</h3>
-          <p className="perspective-panel__value">{active.value}</p>
-          <ul aria-label={`${active.title}关键能力`}>
-            {active.capabilities.map((capability, index) => (
-              <li key={capability}>
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                {capability}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </article>
+      <div className="perspective-workspace-viewport">
+        {perspectives.map((perspective, index) => {
+          const active = index === selectedIndex;
+          const position = active
+            ? "active"
+            : index < selectedIndex
+              ? "before"
+              : "after";
+
+          return (
+            <section
+              aria-hidden={active ? undefined : true}
+              aria-labelledby={`perspective-tab-${index}`}
+              className="perspective-workspace"
+              data-position={position}
+              data-testid={`workspace-${workspaceIds[index]}`}
+              id={`perspective-panel-${index}`}
+              inert={active ? undefined : true}
+              key={perspective.index}
+              role="tabpanel"
+            >
+              {index === 0 ? (
+                <CustomerWorkspace
+                  journey={journey}
+                  onAnswerDiagnosis={(reply) =>
+                    dispatch({ type: "answerDiagnosis", reply })
+                  }
+                  onMarkSelfResolved={() =>
+                    dispatch({ type: "markSelfResolved" })
+                  }
+                  onRequestHumanService={() =>
+                    dispatch({ type: "requestHumanService" })
+                  }
+                  onReset={() => dispatch({ type: "resetJourney" })}
+                />
+              ) : null}
+              {index === 1 ? (
+                <AgentWorkspace
+                  journey={journey}
+                  onCreateWorkOrder={() =>
+                    dispatch({ type: "createWorkOrder" })
+                  }
+                  onReset={() => dispatch({ type: "resetJourney" })}
+                />
+              ) : null}
+              {index === 2 ? (
+                <EngineerWorkspace
+                  journey={journey}
+                  onCompleteService={() =>
+                    dispatch({ type: "completeService" })
+                  }
+                  onConfirmParts={() => dispatch({ type: "confirmParts" })}
+                  onReset={() => dispatch({ type: "resetJourney" })}
+                />
+              ) : null}
+              {index === 3 ? (
+                <OperationsWorkspace
+                  journey={journey}
+                  key={journey.stage === "detected" ? "initial" : "active"}
+                  onCreateImprovementTask={() =>
+                    dispatch({ type: "createImprovementTask" })
+                  }
+                  onReset={() => dispatch({ type: "resetJourney" })}
+                />
+              ) : null}
+            </section>
+          );
+        })}
+      </div>
     </section>
   );
 }

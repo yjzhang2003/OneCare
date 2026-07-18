@@ -23,6 +23,14 @@ describe("LandingContent", () => {
       "万护 ONECARE",
     );
     expect(
+      screen
+        .getByLabelText("万护 OneCare 首页")
+        .querySelector('[data-tone="light"]'),
+    ).not.toBeNull();
+    expect(screen.getAllByTestId("onecare-logo").length).toBeGreaterThanOrEqual(
+      2,
+    );
+    expect(
       screen.getByText(/万护 OneCare 面向海信智能家庭场景/),
     ).toBeInTheDocument();
 
@@ -45,9 +53,14 @@ describe("LandingContent", () => {
     fireEvent.click(screen.getByRole("link", { name: "四个视角" }));
     expect(container.querySelector("#perspectives")).toContainElement(
       screen.getByRole("heading", {
-        name: "一次问题，四种角色，同一条服务上下文",
+        name: "一次问题，四种角色，一条完整服务链",
       }),
     );
+    expect(
+      screen.getByText(
+        "从 AI 自助、客服建单到工程师服务和后台改善，点击查看同一个问题如何一步步闭环。",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("01 · 四个视角")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "五层引擎" })).toHaveAttribute(
       "href",
@@ -74,12 +87,12 @@ describe("LandingContent", () => {
     const userTab = screen.getByRole("tab", { name: "用户" });
     expect(userTab).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tabpanel")).toHaveTextContent(
-      "冰箱好像不太冷了",
+      "爱家服务助手",
     );
 
     fireEvent.click(screen.getByRole("tab", { name: "客服" }));
     expect(screen.getByRole("tabpanel")).toHaveTextContent(
-      "一次理解，不再重复描述",
+      "智能服务坐席",
     );
 
     fireEvent.click(screen.getByRole("link", { name: "五层引擎" }));
@@ -125,6 +138,9 @@ describe("LandingContent", () => {
       screen.queryByText("方案原型 · 未接入真实业务数据"),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("冰箱温控异常")).not.toBeInTheDocument();
+    expect(screen.queryByText("−18°")).not.toBeInTheDocument();
+    expect(screen.queryByText("04°")).not.toBeInTheDocument();
+    expect(container.querySelector(".showroom-hero__pulse")).toBeNull();
   });
 
   it("moves between perspective tabs with the keyboard", () => {

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import type { AuthUser } from "../../auth/types";
 import { showcasePages, type ShowcasePageId } from "../navigation";
+import { OneCareLogo } from "./onecare-logo";
 
 type SiteHeaderProps = {
   user: AuthUser | null;
@@ -18,7 +19,7 @@ export function SiteHeader({
     <header className="site-header public-header">
       <Link className="wordmark" href="/" aria-label="万护 OneCare 首页">
         <span className="wordmark-mark" aria-hidden="true">
-          1C
+          <OneCareLogo decorative size={30} tone="light" />
         </span>
         <span>
           万护 ONECARE

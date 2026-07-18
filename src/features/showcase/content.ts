@@ -47,7 +47,7 @@ export const perspectives: readonly Perspective[] = [
     title: "客服视角",
     value: "一次理解用户，把复杂问题交给正确的人。",
     sceneLine: "一次理解，不再重复描述",
-    handoff: "用户声音 → 服务上下文",
+    handoff: "用户自助 → 人工服务",
     capabilities: ["诉求摘要", "知识建议", "智能路由"],
   },
   {
@@ -129,7 +129,7 @@ export const scenarioSteps: readonly ScenarioStep[] = [
   },
   {
     layer: "服务",
-    title: "带着上下文上门",
+    title: "带着诊断结果上门",
     description: "用户收到连续进度，工程师完成服务并记录结果。",
   },
   {
