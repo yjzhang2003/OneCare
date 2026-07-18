@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { AgentWorkspace } from "./agent-workspace";
 import { CustomerWorkspace } from "./customer-workspace";
 import { EngineerWorkspace } from "./engineer-workspace";
+import { OperationsWorkspace } from "./operations-workspace";
 
 afterEach(cleanup);
 
@@ -75,5 +76,24 @@ describe("perspective workspaces", () => {
     expect(
       screen.getByRole("button", { name: "完成本次服务" }),
     ).toBeDisabled();
+  });
+
+  it("lets operations inspect a VOC topic and create an improvement task", () => {
+    render(<OperationsWorkspace />);
+
+    expect(screen.getByText("VOC 闭环驾驶舱")).toBeInTheDocument();
+    expect(screen.getByText("128 条相关声音")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "安装等待时间" }));
+    expect(screen.getByText("76 条相关声音")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "创建改善任务" }));
+    expect(screen.getByRole("status")).toHaveTextContent("已进入闭环");
+    expect(screen.getByText("产品质量 × 服务运营")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "重新演示" }));
+    expect(
+      screen.getByRole("button", { name: "冷藏室温度偏高" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 });
