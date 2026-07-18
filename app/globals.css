@@ -3591,6 +3591,61 @@ a {
   font-size: 9px;
 }
 
+.customer-knowledge {
+  padding: 12px 14px;
+  color: var(--onecare-ink);
+  background: var(--onecare-white);
+  border: 1px solid #dfe4e2;
+  border-radius: 18px;
+}
+
+.customer-knowledge > span {
+  color: var(--onecare-teal-dark);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.customer-knowledge p,
+.customer-knowledge ol {
+  margin: 7px 0 0;
+}
+
+.customer-knowledge p {
+  color: #5f6e69;
+  font-size: 11px;
+}
+
+.customer-knowledge ol {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  counter-reset: knowledge-step;
+  list-style: none;
+}
+
+.customer-knowledge li {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 7px;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1.55;
+  counter-increment: knowledge-step;
+}
+
+.customer-knowledge li::before {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  color: var(--onecare-teal-dark);
+  background: #dff4f2;
+  border-radius: 50%;
+  content: counter(knowledge-step);
+  font-size: 9px;
+  font-weight: 700;
+}
+
 .customer-chat__action {
   width: 100%;
   min-height: 42px;
@@ -3617,6 +3672,17 @@ a {
   font-size: 11px;
 }
 
+.customer-resolution-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.customer-resolution-actions button {
+  width: 100%;
+  min-height: 42px;
+}
+
 .customer-chat__completion {
   display: flex;
   min-height: 42px;
@@ -3636,6 +3702,10 @@ a {
   background: var(--onecare-white);
   border: 1px solid #dfe4e2;
   border-radius: 18px;
+}
+
+.customer-service-progress .demo-timeline li::after {
+  content: none;
 }
 
 .customer-phone__footer {

@@ -91,4 +91,16 @@ describe("fullscreen showcase stylesheet", () => {
       /\.perspective-workspace-viewport\s*\{[^}]*min-height:\s*calc\(100dvh - 244px\)/,
     );
   });
+
+  it("styles the self-help guide without customer progress connector lines", () => {
+    expect(css).toMatch(
+      /\.customer-service-progress \.demo-timeline li::after\s*\{[\s\S]*?content:\s*none;/,
+    );
+    expect(css).toMatch(
+      /\.customer-resolution-actions\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/,
+    );
+    expect(css).toMatch(
+      /\.customer-knowledge\s*\{[\s\S]*?border-radius:/,
+    );
+  });
 });
