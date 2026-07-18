@@ -128,10 +128,39 @@ describe("LandingContent", () => {
 
     fireEvent.click(screen.getByRole("link", { name: "团队" }));
     expect(screen.getByText("03 · 团队")).toBeInTheDocument();
-    expect(screen.getByText("成员 01")).toBeInTheDocument();
-    expect(screen.getByText("成员 02")).toBeInTheDocument();
-    expect(screen.getByText("成员 03")).toBeInTheDocument();
-    expect(screen.getByText(/成员信息待补充/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "从 AI 工程、安全仿真到业务产品化，三种能力共同把服务创新变成可验证的方案。",
+      ),
+    ).toBeInTheDocument();
+
+    const expectedMembers = [
+      ["张禹健", "AI 工程与系统架构"],
+      ["张睿哲", "安全仿真与算法研究"],
+      ["黄齐", "AI 产品与业务洞察"],
+    ] as const;
+
+    expectedMembers.forEach(([name, role]) => {
+      expect(screen.getByRole("heading", { name })).toBeInTheDocument();
+      expect(screen.getByText(role)).toBeInTheDocument();
+    });
+
+    [
+      "南京大学软件工程硕士研究生",
+      "南京邮电大学计算机科学与技术本科",
+      "西安电子科技大学网络与信息安全硕士研究生",
+      "南京邮电大学信息安全本科",
+      "卡内基梅隆大学人工智能系统管理硕士研究生",
+      "苏州大学物流管理本科",
+    ].forEach((education) => {
+      expect(screen.getByText(education)).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/成员信息待补充/)).not.toBeInTheDocument();
+
+    container.querySelectorAll(".team-card").forEach((card) => {
+      expect(card.querySelector("img")).toBeNull();
+    });
 
     expect(
       screen.getByText(/当前为万护 OneCare 方案原型/),

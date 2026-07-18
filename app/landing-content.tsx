@@ -107,7 +107,7 @@ export function LandingContent({ user, authError }: LandingContentProps) {
                 index="03"
                 label="团队"
           title="三种能力，共同完成服务创新"
-          intro="成员信息待补充；当前只展示参赛团队的能力互补关系。"
+          intro="从 AI 工程、安全仿真到业务产品化，三种能力共同把服务创新变成可验证的方案。"
         >
           <div className="team-credits">
             {teamMembers.map((member) => (
@@ -115,9 +115,36 @@ export function LandingContent({ user, authError }: LandingContentProps) {
                 className="team-card surface-card"
                 key={member.index}
               >
-                <span>成员 {member.index}</span>
-                <h3>{member.title}</h3>
-                <p>{member.capabilities.join(" / ")}</p>
+                <div className="team-card__heading">
+                  <span>成员 {member.index}</span>
+                  <p>{member.role}</p>
+                </div>
+                <h3>{member.name}</h3>
+                <section
+                  aria-label={`${member.name}学历`}
+                  className="team-card__section"
+                >
+                  <h4>学历</h4>
+                  <ul>
+                    {member.education.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+                <section
+                  aria-label={`${member.name}代表经历`}
+                  className="team-card__section"
+                >
+                  <h4>代表经历</h4>
+                  <ul>
+                    {member.highlights.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+                <p className="team-card__capabilities">
+                  {member.capabilities.join(" / ")}
+                </p>
               </article>
             ))}
           </div>

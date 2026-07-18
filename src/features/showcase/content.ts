@@ -52,7 +52,10 @@ export type RolloutStage = Readonly<{
 
 export type TeamMember = Readonly<{
   index: string;
-  title: string;
+  name: string;
+  role: string;
+  education: readonly string[];
+  highlights: readonly string[];
   capabilities: readonly string[];
 }>;
 
@@ -239,17 +242,44 @@ export const rolloutStages: readonly RolloutStage[] = [
 export const teamMembers: readonly TeamMember[] = [
   {
     index: "01",
-    title: "产品策略与业务洞察",
-    capabilities: ["业务建模", "用户研究", "方案规划"],
+    name: "张禹健",
+    role: "AI 工程与系统架构",
+    education: [
+      "南京大学软件工程硕士研究生",
+      "南京邮电大学计算机科学与技术本科",
+    ],
+    highlights: [
+      "参与飞书智能伙伴 Aily 后端研发，负责用户上下文模块与 Aily CLI。",
+      "搭建企业级 AI 自动修复工作流，形成扫描、定位、修复、构建验证与提交闭环。",
+    ],
+    capabilities: ["Agent 工程", "系统架构", "工程闭环"],
   },
   {
     index: "02",
-    title: "AI 工程与系统架构",
-    capabilities: ["AI 应用", "系统设计", "工程实现"],
+    name: "张睿哲",
+    role: "安全仿真与算法研究",
+    education: [
+      "西安电子科技大学网络与信息安全硕士研究生",
+      "南京邮电大学信息安全本科",
+    ],
+    highlights: [
+      "基于 CARLA-Air 搭建无人机与地面车辆协同仿真及多模态数据采集场景。",
+      "开展三维车辆多视角仿真与可微渲染研究，并参与 Fuzzer 自动化安全测试。",
+    ],
+    capabilities: ["安全研究", "仿真建模", "算法验证"],
   },
   {
     index: "03",
-    title: "体验设计与服务创新",
-    capabilities: ["服务设计", "交互原型", "视觉表达"],
+    name: "黄齐",
+    role: "AI 产品与业务洞察",
+    education: [
+      "卡内基梅隆大学人工智能系统管理硕士研究生",
+      "苏州大学物流管理本科",
+    ],
+    highlights: [
+      "参与政务数据场景的自然语言到 SQL/DSL 智能查询系统，负责多 Agent 拆解与 RAG 检索模块。",
+      "构建多模态 RAG、事实核查 Agent 与多 Agent 调试系统，并具有供应链建模和质量分析经验。",
+    ],
+    capabilities: ["AI 产品化", "数据洞察", "业务建模"],
   },
 ] as const;
