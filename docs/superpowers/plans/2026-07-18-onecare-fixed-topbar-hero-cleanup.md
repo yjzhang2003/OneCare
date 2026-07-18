@@ -28,15 +28,15 @@
 - Consumes: `LandingContent({ user, authError })`.
 - Produces: a failing contract for removed Hero content and complete navigation.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Assert all four links exist in `navigation[aria-label="主页章节"]`; assert `.session-copy`, `.showroom-hero__case`, “方案原型 · 未接入真实业务数据”, and “冰箱温控异常” are absent. Update the signed-in test to retain `/dashboard` coverage without expecting a welcome line.
 
-- [ ] **Step 2: Run targeted tests and verify RED**
+- [x] **Step 2: Run targeted tests and verify RED**
 
 Run `npm test -- app/landing-content.test.tsx`. Expect failure because the Hero still renders both removed elements.
 
-- [ ] **Step 3: Commit the failing contract**
+- [x] **Step 3: Commit the failing contract**
 
 Commit the test with message `test: define fixed Top Bar Hero contract`.
 
@@ -50,23 +50,23 @@ Commit the test with message `test: define fixed Top Bar Hero contract`.
 - Consumes: existing `SiteHeader`, `workspaceHref`, and section IDs.
 - Produces: fixed Top Bar layout and simplified Hero markup.
 
-- [ ] **Step 1: Delete Hero status markup**
+- [x] **Step 1: Delete Hero status markup**
 
 Remove the complete `session-copy` paragraph and `showroom-hero__case` element from `LandingContent`; do not replace either with empty wrappers.
 
-- [ ] **Step 2: Delete obsolete Hero styles**
+- [x] **Step 2: Delete obsolete Hero styles**
 
 Remove `.showroom-hero__copy .session-copy`, `.showroom-hero__case`, its child selectors, and its `820px`/`640px` responsive rules.
 
-- [ ] **Step 3: Make the Top Bar fixed and right aligned**
+- [x] **Step 3: Make the Top Bar fixed and right aligned**
 
 Set `.landing-shell` to `padding-top: 64px`; set `.public-header` to `position: fixed`, `inset: 0 0 auto`, and `grid-template-columns: auto minmax(0, 1fr) auto`; set `.public-nav` to `justify-content: flex-end` and `justify-self: end`. Remove the `1100px` rule hiding the first link.
 
-- [ ] **Step 4: Add responsive and anchor offsets**
+- [x] **Step 4: Add responsive and anchor offsets**
 
 At `640px`, set `.landing-shell { padding-top: 118px; }` and preserve the two-row header while right-aligning its navigation. Set `scroll-margin-top: 80px` on desktop section targets and `134px` on mobile targets.
 
-- [ ] **Step 5: Verify GREEN**
+- [x] **Step 5: Verify GREEN**
 
 Run `npm test -- app/landing-content.test.tsx`, `npm run lint`, `npm run typecheck`, and `git diff --check`; all must pass.
 
@@ -78,15 +78,15 @@ Run `npm test -- app/landing-content.test.tsx`, `npm run lint`, `npm run typeche
 **Interfaces:**
 - Produces: browser evidence, complete validation, refreshed Preview, and checked plan.
 
-- [ ] **Step 1: Run full verification**
+- [x] **Step 1: Run full verification**
 
 Run `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:runtime`, `npm audit --omit=dev`, and `git diff --check`.
 
-- [ ] **Step 2: Perform browser QA**
+- [x] **Step 2: Perform browser QA**
 
 At `1440 × 900` and `390 × 844`, verify fixed position at the top before and after scrolling, four visible section links, right-aligned navigation, correct Hero start position, no removed Hero elements, anchor-title clearance, no overflow, and a clean console.
 
-- [ ] **Step 3: Commit implementation**
+- [x] **Step 3: Commit implementation**
 
 Commit implementation and the checked plan with message `fix: keep OneCare Top Bar visible`.
 

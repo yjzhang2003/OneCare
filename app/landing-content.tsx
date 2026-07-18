@@ -64,16 +64,6 @@ export function LandingContent({ user, authError }: LandingContentProps) {
                 {user ? "进入工作台" : "使用飞书登录"}
               </a>
             </div>
-            <p className="session-copy">
-              {user
-                ? `${user.name}，欢迎回来`
-                : "方案原型 · 未接入真实业务数据"}
-            </p>
-          </div>
-          <div className="showroom-hero__case" aria-hidden="true">
-            <span>服务信号 001</span>
-            <strong>冰箱温控异常</strong>
-            <small>已识别 · 待预诊</small>
           </div>
         </section>
 
