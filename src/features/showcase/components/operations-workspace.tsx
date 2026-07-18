@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   serviceCase,
@@ -35,12 +35,6 @@ export function OperationsWorkspace({
   const topic = vocTopics.find((item) => item.id === selectedTopic) ?? vocTopics[0];
   const serviceCompleted = journeyHasCompletedService(journey);
   const taskCreated = journeyHasImprovementTask(journey);
-
-  useEffect(() => {
-    if (journey.stage === "detected") {
-      setSelectedTopic("temperature");
-    }
-  }, [journey.stage]);
 
   function reset() {
     setSelectedTopic("temperature");

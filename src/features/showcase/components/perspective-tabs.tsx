@@ -140,6 +140,7 @@ export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
               {index === 3 ? (
                 <OperationsWorkspace
                   journey={journey}
+                  key={journey.stage === "detected" ? "initial" : "active"}
                   onCreateImprovementTask={() =>
                     dispatch({ type: "createImprovementTask" })
                   }
