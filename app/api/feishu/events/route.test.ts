@@ -40,7 +40,7 @@ function dependencies(outcome: FeishuEventOutcome) {
       })),
       replyMessage: vi.fn(async () => undefined),
       sendMessage: vi.fn(async () => undefined),
-      resolveAction: vi.fn((_action): CardActionResult => ({
+      resolveAction: vi.fn((): CardActionResult => ({
         kind: "navigate" as const,
         message: {
           msgType: "interactive" as const,
