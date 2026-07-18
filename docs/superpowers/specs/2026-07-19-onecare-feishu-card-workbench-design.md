@@ -2,7 +2,7 @@
 
 ## 状态
 
-本规格记录 2026-07-19 已确认的飞书机器人卡片化重构。用户要求机器人不再返回纯文字信息；欢迎、帮助、八条员工菜单回复、未知输入兜底、查询结果和操作结果全部使用飞书 Card 2.0。菜单仍可向机器人发送文字作为触发输入，“打开网页演示”仍可直接跳转网站，但机器人的所有可见业务输出必须是卡片。
+本规格记录 2026-07-19 已确认并已在功能分支完成实现的飞书机器人卡片化重构。用户要求机器人不再返回纯文字信息；欢迎、帮助、八条员工菜单回复、未知输入兜底、查询结果和操作结果全部使用飞书 Card 2.0。菜单仍可向机器人发送文字作为触发输入，“打开网页演示”仍可直接跳转网站，但机器人的所有可见业务输出必须是卡片。Production 部署、`card.action.trigger` 后台配置、应用版本发布与真实成员验收仍未执行，因此不能把该实现描述为线上已启用。
 
 当前生产回调已能接收进入会话与菜单消息。开通 `im:message:send_as_bot` 后，2026-07-19 的三次生产回调均返回 HTTP 200 且未再记录发送权限错误；这只证明现有消息发送权限生效，不代表本规格中的卡片按钮回调已经配置或验收。
 
@@ -233,8 +233,6 @@ type FeishuEventOutcome =
   | { kind: "entered"; chatId: string }
   | {
       kind: "card_action";
-      eventId: string;
-      tenantKey: string;
       chatId: string;
       messageId: string;
       action: OneCareCardAction;
@@ -244,7 +242,7 @@ type FeishuEventOutcome =
   | { kind: "unauthorized" };
 ```
 
-Card callback 必须通过签名、Verification Token 与 Encrypt Key 验证；必须具有由验证后 Header 得到的 `event_id`、`tenant_key`、应用 ID、`context.open_chat_id` 和 `context.open_message_id`。缺少可信 tenant context 时默认无访问。操作者 Open ID 不参与 MVP 岗位判断、不持久化、不记录。
+Card callback 必须通过签名、Verification Token 与 Encrypt Key 验证；必须具有由验证后 Header 得到的非空 `event_id`、`tenant_key`、匹配的应用 ID、`context.open_chat_id` 和 `context.open_message_id`。缺少可信 tenant context 时默认无访问。当前单企业演示只在解析边界验证 event 和 tenant 上下文，不把它们继续暴露给无状态 Route；操作者 Open ID 不参与 MVP 岗位判断、不持久化、不记录。
 
 使用官方 Node SDK 的 `CardActionHandler` 或等价的官方验证能力解析新版回调，不自行猜测旧版 payload。现有事件解析继续由官方 SDK `EventDispatcher` 承担。
 
