@@ -395,3 +395,215 @@ git log -8 --oneline
 ```
 
 Expected: 工作树干净，分支为 `codex/onecare-perspective-workspaces`，本批次只包含 Logo、用户对话、测试、文档与 Preview 记录。
+
+---
+
+### Task 5: 固定消息元信息与对话操作槽
+
+**Files:**
+- Modify: `src/features/showcase/components/customer-chat-message.tsx`
+- Modify: `src/features/showcase/components/customer-workspace.tsx`
+- Modify: `src/features/showcase/components/perspective-workspaces.test.tsx`
+
+**Interfaces:**
+- Produces: `.customer-message__body`，统一包裹消息气泡与元信息。
+- Produces: 始终存在的 `aria-label="对话快捷操作"` 操作槽。
+- Consumes: 现有 `CustomerStage` 与 `customerPrompts`，不增加新状态或网络行为。
+
+- [ ] **Step 1: 写消息正文与固定操作槽失败测试**
+
+在用户视角测试中增加：
+
+```tsx
+const meta = screen.getByText("刚刚");
+expect(meta.parentElement).toHaveClass("customer-message__body");
+expect(
+  meta.parentElement?.querySelector(".customer-message__bubble"),
+).not.toBeNull();
+
+const controls = screen.getByLabelText("对话快捷操作");
+expect(within(controls).getAllByRole("button")).toHaveLength(3);
+
+fireEvent.click(screen.getByRole("button", { name: "饮料不够凉" }));
+expect(screen.getByLabelText("对话快捷操作")).toBe(controls);
+expect(
+  within(controls).getByRole("button", { name: "继续安排服务" }),
+).toBeInTheDocument();
+
+fireEvent.click(screen.getByRole("button", { name: "继续安排服务" }));
+expect(screen.getByLabelText("对话快捷操作")).toBe(controls);
+expect(within(controls).getByText("服务已提交")).toBeInTheDocument();
+```
+
+同时从 `@testing-library/react` 导入 `within`。
+
+- [ ] **Step 2: 确认 RED**
+
+Run:
+
+```bash
+npx vitest run src/features/showcase/components/perspective-workspaces.test.tsx -t "customer"
+```
+
+Expected: FAIL，因为元信息仍是气泡的兄弟节点，且快捷回复没有持久操作槽。
+
+- [ ] **Step 3: 写最小结构实现**
+
+`CustomerChatMessage` 将气泡与元信息包装为：
+
+```tsx
+<div className="customer-message__body">
+  <div className="customer-message__bubble">{children}</div>
+  <small className="customer-message__meta">{meta}</small>
+</div>
+```
+
+`CustomerWorkspace` 在设备摘要之后增加 `.customer-conversation`，内部固定为可滚动 `.customer-chat` 和始终存在的 `.customer-chat-controls`。快捷回复和“继续安排服务”从消息流移入操作槽；预约阶段渲染：
+
+```tsx
+<div className="customer-chat__completion">服务已提交</div>
+```
+
+`customer-service-progress` 保留原有条件，但移动到 `.customer-chat` 内部，使其只参与内部滚动。
+
+- [ ] **Step 4: 确认 GREEN 并提交**
+
+Run:
+
+```bash
+npx vitest run src/features/showcase/components/perspective-workspaces.test.tsx
+```
+
+Expected: 4 个角色工作台测试全部通过。
+
+```bash
+git add src/features/showcase/components/customer-chat-message.tsx src/features/showcase/components/customer-workspace.tsx src/features/showcase/components/perspective-workspaces.test.tsx
+git commit -m "fix: stabilize customer chat controls"
+```
+
+---
+
+### Task 6: 锁定手机几何尺寸与底部三列按钮
+
+**Files:**
+- Modify: `app/fullscreen-showcase-styles.test.ts`
+- Modify: `app/globals.css`
+
+**Interfaces:**
+- Consumes: Task 5 的 `.customer-message__body`、`.customer-conversation` 与 `.customer-chat-controls`。
+- Produces: 固定场景/手机几何、内部消息滚动和三列等宽药丸布局。
+
+- [ ] **Step 1: 写稳定几何与操作槽 CSS 失败测试**
+
+增加以下合约：
+
+```ts
+expect(css).toMatch(/\.customer-scene\s*\{[\s\S]*?height:\s*100%/);
+expect(css).toMatch(/\.customer-scene\s*\{[\s\S]*?min-height:\s*0/);
+expect(css).toMatch(/\.customer-phone\s*\{[\s\S]*?max-height:\s*calc\(100% - 16px\)/);
+expect(css).toMatch(/\.customer-phone__content\s*\{[\s\S]*?overflow:\s*hidden/);
+expect(css).toMatch(/\.customer-chat\s*\{[\s\S]*?overflow-y:\s*auto/);
+expect(css).toMatch(/\.customer-message__body\s*\{[\s\S]*?max-width:\s*78%/);
+expect(css).toMatch(/\.customer-message__meta\s*\{[\s\S]*?align-self:\s*flex-end/);
+expect(css).toMatch(/\.customer-prompts\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
+```
+
+- [ ] **Step 2: 确认 RED**
+
+Run:
+
+```bash
+npx vitest run app/fullscreen-showcase-styles.test.ts
+```
+
+Expected: FAIL，因为场景会被内容撑高，消息区不独立滚动，快捷回复仍使用 flex 与左缩进。
+
+- [ ] **Step 3: 写最小 CSS 实现**
+
+关键规则：
+
+```css
+.customer-scene { height: 100%; min-height: 0; max-height: 100%; }
+.customer-phone { min-height: 0; max-height: calc(100% - 16px); }
+.customer-phone__content { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 14px; overflow: hidden; }
+.customer-conversation { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 12px; min-height: 0; }
+.customer-chat { min-height: 0; margin-top: 0; overflow-y: auto; }
+.customer-message__body { display: flex; width: fit-content; max-width: 78%; flex-direction: column; }
+.customer-message__bubble { max-width: none; }
+.customer-message__meta { align-self: flex-end; }
+.customer-chat-controls { display: grid; min-height: 44px; align-items: center; }
+.customer-prompts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 0; }
+.customer-prompts button { width: 100%; padding: 0 8px; }
+.customer-chat__action { width: 100%; }
+```
+
+移动端覆盖 `.customer-phone { max-height: none; }`，继续让手机占满角色工作台；所有变量内容必须留在 `.customer-chat` 内部滚动。
+
+- [ ] **Step 4: 确认 GREEN 并提交**
+
+Run:
+
+```bash
+npx vitest run app/fullscreen-showcase-styles.test.ts src/features/showcase/components/perspective-workspaces.test.tsx
+```
+
+Expected: CSS 合约和四角色交互测试全部通过。
+
+```bash
+git add app/fullscreen-showcase-styles.test.ts app/globals.css
+git commit -m "style: lock customer phone geometry"
+```
+
+---
+
+### Task 7: 浏览器几何验收、完整验证与 Preview 更新
+
+**Files:**
+- Modify: `README.md`
+- Modify: `docs/superpowers/specs/2026-07-18-onecare-logo-chat-design.md`
+- Modify: `docs/superpowers/plans/2026-07-18-onecare-logo-chat.md`
+
+**Interfaces:**
+- Consumes: Tasks 5–6 的稳定聊天布局。
+- Produces: 通过验证的新非 Production Preview 与同一固定别名。
+
+- [ ] **Step 1: 本地真实浏览器验收**
+
+在 `1440 × 900` 与 `390 × 844` 逐次进入 `invitation`、`diagnosed`、`scheduled`，读取 `.customer-scene` 与 `.customer-phone` 的 `getBoundingClientRect()`。每个元素的 `y`、`height` 三态极差必须 `<= 1px`；初始三个按钮同一行、等宽，消息区 `scrollHeight >= clientHeight` 时仅内部滚动；控制台 0 错误、0 警告。
+
+- [ ] **Step 2: 运行完整验证**
+
+```bash
+npm test
+npm run test:runtime
+npm run lint
+npm run typecheck
+npm run build
+npm audit --omit=dev
+git diff --check
+```
+
+Expected: 所有命令退出码为 0，Audit 为 `0 vulnerabilities`。
+
+- [ ] **Step 3: 更新文档并提交**
+
+README 记录固定底部操作槽与稳定手机高度；Spec 和 Plan 写入实际几何验收结果与命令结果。
+
+```bash
+git add README.md docs/superpowers/specs/2026-07-18-onecare-logo-chat-design.md docs/superpowers/plans/2026-07-18-onecare-logo-chat.md
+git commit -m "docs: record stable customer chat verification"
+```
+
+- [ ] **Step 4: 更新同一 Preview**
+
+运行 `vercel deploy --yes`，等待 Ready 后将 `onecare-homepage-preview.vercel.app` 重新指向新部署；不得使用 `--prod`。复用或重建限时 Share Link，并用未登录浏览器重复三态几何与控制台检查。Share secret 只出现在交付消息，不写入仓库。
+
+- [ ] **Step 5: 最终状态检查**
+
+```bash
+git status --short --branch
+git log -10 --oneline
+git diff --check
+```
+
+Expected: 工作树干净，仍在 `codex/onecare-perspective-workspaces`，本次只增加布局稳定性相关规格、测试、实现、文档和 Preview 记录。
