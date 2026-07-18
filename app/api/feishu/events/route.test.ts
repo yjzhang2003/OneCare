@@ -27,7 +27,7 @@ function dependencies(outcome: FeishuEventOutcome) {
       readEnv: vi.fn(() => env),
       parseEvent: vi.fn(async () => outcome),
       createReply: vi.fn((text: string) => ({
-        kind: "welcome" as const,
+        kind: "help" as const,
         text: `reply:${text}`,
       })),
       replyMessage: vi.fn(async () => undefined),
