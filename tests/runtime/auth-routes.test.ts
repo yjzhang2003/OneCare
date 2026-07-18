@@ -70,6 +70,8 @@ beforeAll(async () => {
         FEISHU_APP_ID: "cli_runtime_smoke",
         FEISHU_APP_SECRET: "runtime-smoke-server-only-secret",
         FEISHU_REDIRECT_URI: `${baseUrl}/api/auth/feishu/callback`,
+        FEISHU_EVENT_VERIFICATION_TOKEN: "runtime-verification-token",
+        FEISHU_EVENT_ENCRYPT_KEY: "12345678901234567890123456789012",
         SESSION_SECRET: "0123456789abcdef0123456789abcdef",
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -98,7 +100,7 @@ describe("built Next.js authentication routes", () => {
 
     expect(response.status).toBe(302);
     const errorLocation = new URL(response.headers.get("location")!);
-    expect(errorLocation.pathname).toBe("/");
+    expect(errorLocation.pathname).toBe("/login");
     expect(errorLocation.searchParams.get("auth_error")).toBe("invalid_state");
     expect(response.headers.get("set-cookie")).toContain(
       "auto_insight_oauth_state=;",
@@ -136,11 +138,30 @@ describe("built Next.js authentication routes", () => {
     });
 
     expect(dashboard.status).toBe(307);
-    expect(dashboard.headers.get("location")).toBe("/");
+    expect(
+      new URL(dashboard.headers.get("location")!, baseUrl).pathname,
+    ).toBe("/login");
     expect(logout.status).toBe(302);
-    expect(new URL(logout.headers.get("location")!).pathname).toBe("/");
+    expect(new URL(logout.headers.get("location")!).pathname).toBe("/login");
     expect(logout.headers.get("set-cookie")).toContain(
       "auto_insight_session=;",
     );
+  });
+
+  it("answers Feishu URL verification in the built runtime", async () => {
+    const response = await fetch(`${baseUrl}/api/feishu/events`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        type: "url_verification",
+        token: "runtime-verification-token",
+        challenge: "runtime-challenge",
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      challenge: "runtime-challenge",
+    });
   });
 });

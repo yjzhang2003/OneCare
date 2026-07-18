@@ -2,9 +2,9 @@
 
 ## Status
 
-The 万护 OneCare TypeScript web baseline and Feishu custom-app login were implemented on 2026-07-17. The current application is a single-enterprise demonstration; IoT and VOC data, service-system integrations, AI analysis, persistence, and the Feishu agent remain unimplemented.
+The 万护 OneCare TypeScript web baseline and Feishu custom-app login were implemented on 2026-07-17. A guided Feishu experience page and a stateless single-chat text bot webhook were added on 2026-07-18. The current application remains a single-enterprise demonstration; IoT and VOC data, service-system integrations, AI analysis, persistence, and production Feishu bot activation remain unimplemented.
 
-The production deployment is available at `https://onecare-loop.vercel.app`. Vercel Production is configured for the current enterprise custom application and the exact callback `https://onecare-loop.vercel.app/api/auth/feishu/callback`; the new enterprise application still requires that redirect URL to be saved in the Feishu developer console before the real login flow can be re-verified.
+The production deployment is available at `https://onecare-loop.vercel.app`. The canonical OAuth callback is `https://onecare-loop.vercel.app/api/auth/feishu/callback`, and the planned bot event callback is `https://onecare-loop.vercel.app/api/feishu/events`. The production bot is not considered active until its server secrets, minimum permissions, event subscription, published application version, availability scope, and real-member acceptance test are complete.
 
 ## Implemented Baseline
 
@@ -13,8 +13,9 @@ The production deployment is available at `https://onecare-loop.vercel.app`. Ver
 - Node.js 24 LTS;
 - Next.js 16 App Router;
 - React Server Components by default;
-- Route Handlers for OAuth endpoints;
+- Route Handlers for OAuth and verified Feishu event endpoints;
 - signed, database-free HTTP-only website sessions;
+- the official `@larksuiteoapi/node-sdk` for event dispatch and message replies;
 - Vitest and React Testing Library;
 - Vercel as the selected web host.
 
@@ -24,9 +25,9 @@ This is the smallest deployable shape that supports a real website login while p
 
 ## Repository Shape
 
-The repository contains one deployable Next.js project. Authentication protocol code lives under `src/features/auth`; HTTP orchestration lives under `app/api/auth`; pages remain responsible only for presentation and session-aware navigation.
+The repository contains one deployable Next.js project. Authentication protocol code lives under `src/features/auth`; deterministic bot behavior, event verification, and reply adapters live under `src/features/feishu-bot`; HTTP orchestration lives under `app/api/auth` and `app/api/feishu/events`; pages remain responsible only for presentation and session-aware navigation.
 
-A separate TypeScript worker is deferred until real asynchronous bot or AI workloads require independent scaling. If later AI infrastructure exposes an external API, the website will consume it through a typed TypeScript adapter.
+A separate TypeScript worker is deferred until real asynchronous bot or AI workloads require independent scaling. The current short deterministic reply uses Next.js `after()` after the event acknowledgement. If later AI infrastructure exposes an external API, the website will consume it through a typed TypeScript adapter and slow durable work must move to a queue or worker.
 
 ## Current Feishu Login
 
@@ -41,6 +42,8 @@ The server creates a 10-minute, single-use OAuth `state` Cookie and rejects miss
 The App Secret, user access token, and session secret remain server-side. Feishu access tokens are used for one request chain and are not persisted. Email and mobile are neither requested nor used as identity keys.
 
 Because this is a custom application, only users in the owning enterprise and in the application's availability scope can log in.
+
+`/login` is the canonical website experience gateway. It presents the OneCare enterprise invitation QR, the OAuth identity check, and the instructions for finding the bot in Feishu. `/dashboard` is retained only as a compatibility redirect to `/login`; login does not reveal a second website dashboard.
 
 ## Future Multi-Enterprise Model
 
@@ -64,22 +67,24 @@ The current build has no database and stores no device, VOC, service, refresh-to
 
 PostgreSQL and Drizzle remain the intended system-of-record stack when persistence begins. At that point every tenant-owned row must carry an internal tenant identifier derived from validated Feishu installation or identity data. Missing tenant context defaults to no access. PostgreSQL row-level security may be added as defense in depth after the first schema is specified.
 
-## Feishu Events and Agent
+## Feishu Events and Bot
 
-No event endpoint or Feishu agent is implemented yet.
+`POST /api/feishu/events` implements the HTTP surface for a lightweight demonstration bot. It validates the raw-body signature, Verification Token, and Encrypt Key; supports URL Verification; accepts only authenticated `im.message.receive_v1` events whose message is `p2p` text; acknowledges accepted events before scheduling a short reply with Next.js `after()`; and uses the official Node SDK to reply to the original message.
 
-For the future store application, events must use a verified public HTTP callback. The endpoint must verify requests, deduplicate events, persist or enqueue accepted work, and acknowledge within three seconds. AI inference and other slow work execute asynchronously after acknowledgement. Queue technology remains deferred until that workload is specified.
+The bot script is deterministic and stateless. It offers a welcome menu, fixed knowledge-base troubleshooting, an “已解决” result, a clearly simulated “转人工” summary, and restart. It does not call an LLM, retrieve a knowledge base, read IoT data, create a work order, or persist message text, user identifiers, tokens, or event IDs. Without durable event-ID storage, an extreme Feishu retry can produce a duplicate demonstration reply. This is acceptable only for the current prototype and must be replaced with deduplication before real service operations.
+
+The endpoint code does not by itself activate a production bot. Activation still requires a stable public Production callback, matching server secrets, minimum message permissions, `im.message.receive_v1` subscription, a published application version, the correct availability scope, and acceptance testing by a real enterprise member. A Vercel Preview protected by Deployment Protection cannot be configured as the live callback.
 
 ## Testing Baseline
 
-- Vitest covers environment validation, OAuth state, signed sessions, Feishu adapters, and Route Handlers.
-- A separate built-runtime Vitest suite starts the output of `next build` with `next start` and exercises the authentication routes across the real Next.js production boundary.
-- React Testing Library covers the landing page and dashboard presentation contracts.
+- Vitest covers environment validation, OAuth state, signed sessions, Feishu OAuth adapters, deterministic bot scripts, event verification, SDK reply adapters, and Route Handlers.
+- A separate built-runtime Vitest suite starts the output of `next build` with `next start` and exercises authentication routes, login redirects, and the Feishu URL Verification challenge across the real Next.js production boundary.
+- React Testing Library covers the landing page, guided login page, reusable Feishu role banner, and role-workspace presentation contracts.
 - External Feishu calls are injected in tests and never reach the network.
 - Production behavior is implemented test-first.
 - A production build, dependency audit, secret scan, and live deployment smoke test are required before release.
 
-Playwright browser tests remain deferred until a persistent non-personal test identity is available. The current production flow has been manually verified in Edge with a real enterprise member after publishing the Feishu redirect URL.
+Playwright browser checks cover the public experience page and role-entry layout at desktop and mobile widths. A persistent non-personal enterprise identity is still required to automate the real OAuth and bot-conversation path; those external acceptance checks remain manual.
 
 ## Deferred Decisions
 

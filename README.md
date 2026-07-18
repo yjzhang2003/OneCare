@@ -9,9 +9,10 @@
 - 可点击和键盘切换的四套沉浸式角色 Demo：带左右双方消息气泡的手机尺寸用户 AI 服务助手、客服智能坐席、工程师一次上门工作台与后台 VOC 闭环驾驶舱；
 - “感知—诊断—编排—服务—学习”五层服务蓝图与冰箱温控异常案例；
 - 三位成员能力的圆角卡片占位；
-- 飞书企业自建应用 OAuth 授权码登录；
+- 独立 `/login` 飞书体验入口，展示加入 OneCare 企业的邀请二维码、身份验证和机器人体验步骤；
+- 飞书企业自建应用 OAuth 授权码登录，登录成功后留在体验入口，不再进入重复的网站工作台；
 - 服务端签名的 8 小时网站会话；
-- 仅登录用户可访问的服务闭环工作台静态预览；
+- 面向企业成员单聊文本的轻量飞书机器人 Webhook，提供确定性的知识库自助与模拟转人工脚本；
 - Vercel 生产部署。
 
 当前版本用于呈现万护 OneCare 的产品方向与服务闭环故事。四个角色共享同一份浏览器内案例状态：用户先接受 AI 预诊和知识库自助建议，自助失败后才转客服建单；客服建单会解锁工程师任务，工程师完成服务会解锁后台改善，任意角色重置都会恢复整条流程。案例固定为 `OC-240718-037`，所有回复、设备信号、知识建议、工单、配件、指标和状态变化均为确定性模拟，尚未接入真实 IoT、知识库、VOC、客服、工单、配件、回访或 AI 服务。
@@ -19,6 +20,10 @@
 当前网站采用参考海信官网的黑白品牌展厅视觉：顶部和页尾为黑色，主体为白色，使用 MiSans、海信官方大场景图、海信智能冰箱产品图、药丸形文字按钮、圆形图标按钮与白色圆角内容卡。用户提供的万护反色 Logo 已封装为统一品牌组件：黑色顶栏、页脚和 AI 头像使用白色图形，手机白色标题栏使用黑色图形。一级页面标题统一使用中文，Top Bar 切换会保留 URL Hash、浏览器前进后退和深链恢复。图片与字体来源及处理记录见 `public/images/hisense/SOURCES.md`。所有业务结果仍是方案目标，不是生产指标。
 
 四个角色当前位于“四个视角”一级页面内，通过二级全屏横向切换演示一条完整服务链。用户端在桌面保持手机尺寸，在移动端直接适配设备宽度；对话通过左侧“万护助手”和右侧“我”的身份、头像、气泡、时间与状态呈现主动提醒、用户回答、AI 预诊、知识库自助和后续服务结果。消息时间或状态与对应气泡组合对齐，初始三枚快捷回复及自助阶段的两个分支按钮固定在等宽底部操作槽中；跨角色状态更新只改变手机内部消息滚动，不改变手机外壳和操作槽高度。客服、工程师和后台使用共享工作台外壳与角色专属布局。自由文本 AI、真实身份权限、刷新后状态持久化和真实业务系统集成仍属于后续阶段。
+
+飞书体验页位于 `/login`。未加入组织的访客可扫描页面上的邀请二维码；该二维码仅支持 `+86` 手机号，有效期至 2026 年 8 月 29 日，加入申请可能需要管理员审核。当前应用是 OneCare 企业自建应用，因此只有已加入该企业、且处于应用可用范围内的成员能够完成 OAuth 和使用机器人。客服、工程师和后台工作台均提供同一个飞书体验入口，用户手机 Demo 不显示该入口。
+
+机器人代码只处理 `im.message.receive_v1` 的单聊文本消息，支持开始、知识库建议、已解决、模拟转人工和重新开始。脚本无状态且不保存消息、身份或事件 ID；它不会调用真实 AI、知识库、IoT、工单或服务系统，也不会创建真实工单。极端事件重推可能产生重复演示回复。代码已提供事件回调能力，但真实机器人是否可搜索和回复仍取决于 Production 环境变量、飞书权限、事件订阅、版本发布与应用可用范围配置。
 
 当前生产站点：<https://onecare-loop.vercel.app>
 
@@ -43,13 +48,15 @@ npm run dev
 - `FEISHU_APP_ID`：企业自建应用的 App ID；
 - `FEISHU_APP_SECRET`：企业自建应用的 App Secret；
 - `FEISHU_REDIRECT_URI`：本地或线上完整 OAuth 回调 URL；
-- `SESSION_SECRET`：至少 32 字节的随机会话密钥，可用 `openssl rand -base64 48` 生成。
+- `SESSION_SECRET`：至少 32 字节的随机会话密钥，可用 `openssl rand -base64 48` 生成；
+- `FEISHU_EVENT_VERIFICATION_TOKEN`：飞书事件订阅的 Verification Token；
+- `FEISHU_EVENT_ENCRYPT_KEY`：飞书事件订阅的 Encrypt Key。
 
 真实密钥不得提交到 Git。仓库会忽略 `.env*`，只保留无敏感值的 `.env.example`。
 
 ## 飞书后台配置
 
-在飞书开发者后台打开对应企业自建应用：
+在飞书开发者后台打开对应企业自建应用，先完成网站登录配置：
 
 1. 确认应用已启用，登录成员位于应用可用范围内；
 2. 进入“开发配置 → 安全设置 → 重定向 URL”；
@@ -63,6 +70,18 @@ npm run dev
 ```text
 https://onecare-loop.vercel.app/api/auth/feishu/callback
 ```
+
+要让飞书内的轻量机器人真正可用，还需在同一个应用中完成：
+
+1. 添加机器人能力并设置名称、图标；
+2. 申请读取用户发给机器人的单聊消息、以应用身份发送或回复消息所需的最小权限；
+3. 订阅 `im.message.receive_v1`；
+4. 将事件请求 URL 配置为 `https://onecare-loop.vercel.app/api/feishu/events`；
+5. 在 Vercel Production 配置与飞书后台一致的 Verification Token 与 Encrypt Key；
+6. 发布新版本，并把应用可用范围覆盖所有允许体验的成员；
+7. 使用真实企业成员完成 OAuth、机器人搜索、单聊和回复验收。
+
+事件接口会验证请求签名、Verification Token 和 Encrypt Key，只处理单聊文本，并在三秒响应要求内先确认事件，再通过 Next.js `after()` 完成短回复任务。Vercel Preview 受 Deployment Protection 保护，不能用作飞书事件回调地址；分享链接只用于页面确认。
 
 ## 验证
 
@@ -80,12 +99,12 @@ npm audit --omit=dev
 首次部署采用两阶段流程，因为飞书回调地址依赖最终生产域名：
 
 1. `vercel link` 链接或创建项目；
-2. 在 Vercel Production 环境设置 `FEISHU_APP_ID`、`FEISHU_APP_SECRET`、`FEISHU_REDIRECT_URI` 和 `SESSION_SECRET`；
+2. 在 Vercel Production 环境设置 `FEISHU_APP_ID`、`FEISHU_APP_SECRET`、`FEISHU_REDIRECT_URI`、`SESSION_SECRET`、`FEISHU_EVENT_VERIFICATION_TOKEN` 和 `FEISHU_EVENT_ENCRYPT_KEY`；
 3. 运行 `vercel --prod` 获得生产域名；
 4. 将精确生产回调地址加入飞书安全设置；
 5. 更新 Vercel 的 `FEISHU_REDIRECT_URI` 后再次生产部署。
 
-`FEISHU_APP_SECRET` 和 `SESSION_SECRET` 应在 Vercel 标记为 Sensitive。环境变量更新只对后续部署生效。
+`FEISHU_APP_SECRET`、`SESSION_SECRET`、`FEISHU_EVENT_VERIFICATION_TOKEN` 和 `FEISHU_EVENT_ENCRYPT_KEY` 应在 Vercel 标记为 Sensitive。环境变量更新只对后续部署生效。Preview 不复制 Production 密钥；页面仍可用于视觉验收，但 OAuth 和机器人回调会显示安全配置错误或保持不可用。
 
 `npm run test:runtime` 会先执行生产构建，再在本地启动 `next start` 验证认证 Route Handlers。该检查用于捕获只在 Next.js 生产 Bundle 中出现、普通模块单测无法复现的运行时兼容问题。
 

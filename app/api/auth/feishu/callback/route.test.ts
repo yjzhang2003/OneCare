@@ -45,7 +45,7 @@ describe("GET /api/auth/feishu/callback", () => {
 
       expect(response.status).toBe(302);
       expect(response.headers.get("location")).toBe(
-        "https://auto-insight.example/?auth_error=invalid_state",
+        "https://auto-insight.example/login?auth_error=invalid_state",
       );
       expect(response.headers.get("set-cookie")).toContain(
         "auto_insight_oauth_state=;",
@@ -61,7 +61,7 @@ describe("GET /api/auth/feishu/callback", () => {
     );
 
     expect(response.headers.get("location")).toBe(
-      "https://auto-insight.example/?auth_error=access_denied",
+      "https://auto-insight.example/login?auth_error=access_denied",
     );
     expect(response.headers.get("set-cookie")).toContain(
       "auto_insight_oauth_state=;",
@@ -77,7 +77,7 @@ describe("GET /api/auth/feishu/callback", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "https://auto-insight.example/dashboard",
+      "https://auto-insight.example/login?auth=success",
     );
     expect(deps.exchangeCode).toHaveBeenCalledWith({ code: "oauth-code", env });
     expect(deps.fetchUser).toHaveBeenCalledWith("user-access-token");

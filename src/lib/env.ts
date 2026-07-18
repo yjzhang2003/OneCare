@@ -5,9 +5,24 @@ export type AuthEnv = {
   sessionSecret: string;
 };
 
+export type BotEnv = {
+  appId: string;
+  appSecret: string;
+  verificationToken: string;
+  encryptKey: string;
+};
+
+type ServerEnvironmentName =
+  | "FEISHU_APP_ID"
+  | "FEISHU_APP_SECRET"
+  | "FEISHU_REDIRECT_URI"
+  | "SESSION_SECRET"
+  | "FEISHU_EVENT_VERIFICATION_TOKEN"
+  | "FEISHU_EVENT_ENCRYPT_KEY";
+
 function readRequired(
   source: Readonly<Record<string, string | undefined>>,
-  name: "FEISHU_APP_ID" | "FEISHU_APP_SECRET" | "FEISHU_REDIRECT_URI" | "SESSION_SECRET",
+  name: ServerEnvironmentName,
 ): string {
   const value = source[name]?.trim();
 
@@ -31,4 +46,18 @@ export function readAuthEnv(
   }
 
   return { appId, appSecret, redirectUri, sessionSecret };
+}
+
+export function readBotEnv(
+  source: Readonly<Record<string, string | undefined>> = process.env,
+): BotEnv {
+  return {
+    appId: readRequired(source, "FEISHU_APP_ID"),
+    appSecret: readRequired(source, "FEISHU_APP_SECRET"),
+    verificationToken: readRequired(
+      source,
+      "FEISHU_EVENT_VERIFICATION_TOKEN",
+    ),
+    encryptKey: readRequired(source, "FEISHU_EVENT_ENCRYPT_KEY"),
+  };
 }

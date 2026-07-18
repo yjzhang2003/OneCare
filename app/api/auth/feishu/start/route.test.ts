@@ -49,7 +49,7 @@ describe("GET /api/auth/feishu/start", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "https://auto-insight.example/?auth_error=configuration_error",
+      "https://auto-insight.example/login?auth_error=configuration_error",
     );
     expect(await response.text()).not.toContain("secret value");
   });

@@ -11,7 +11,6 @@ type SiteHeaderProps = {
 };
 
 export function SiteHeader({
-  user,
   activePage,
   onNavigate,
 }: SiteHeaderProps) {
@@ -45,9 +44,9 @@ export function SiteHeader({
 
       <a
         className="header-cta"
-        href={user ? "/dashboard" : "/api/auth/feishu/start"}
+        href="/login"
       >
-        {user ? "工作台" : "飞书登录"}
+        飞书体验
       </a>
     </header>
   );
