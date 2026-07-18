@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { initialServiceJourneyState } from "../service-journey";
 import { AgentWorkspace } from "./agent-workspace";
 import { CustomerWorkspace } from "./customer-workspace";
 import { EngineerWorkspace } from "./engineer-workspace";
@@ -33,14 +34,26 @@ afterEach(() => {
 });
 
 describe("perspective workspaces", () => {
-  it("lets the customer complete and reset the phone service demo", () => {
+  it("lets the customer choose AI self-help or request a human", () => {
     const scrollTo = vi.fn();
+    const onAnswerDiagnosis = vi.fn();
+    const onMarkSelfResolved = vi.fn();
+    const onRequestHumanService = vi.fn();
+    const onReset = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollTo", {
       configurable: true,
       value: scrollTo,
     });
 
-    render(<CustomerWorkspace />);
+    const { rerender } = render(
+      <CustomerWorkspace
+        journey={initialServiceJourneyState}
+        onAnswerDiagnosis={onAnswerDiagnosis}
+        onMarkSelfResolved={onMarkSelfResolved}
+        onRequestHumanService={onRequestHumanService}
+        onReset={onReset}
+      />,
+    );
     scrollTo.mockClear();
 
     expect(screen.getByText("爱家服务助手")).toBeInTheDocument();
@@ -66,14 +79,27 @@ describe("perspective workspaces", () => {
     expect(within(controls).getAllByRole("button")).toHaveLength(3);
 
     fireEvent.click(screen.getByRole("button", { name: "饮料不够凉" }));
+    expect(onAnswerDiagnosis).toHaveBeenCalledWith("饮料不够凉");
 
+    rerender(
+      <CustomerWorkspace
+        journey={{ customerReply: "饮料不够凉", stage: "selfHelp" }}
+        onAnswerDiagnosis={onAnswerDiagnosis}
+        onMarkSelfResolved={onMarkSelfResolved}
+        onRequestHumanService={onRequestHumanService}
+        onReset={onReset}
+      />,
+    );
     expect(scrollTo).toHaveBeenLastCalledWith({
       behavior: "auto",
       top: expect.any(Number),
     });
     expect(screen.getByLabelText("对话快捷操作")).toBe(controls);
     expect(
-      within(controls).getByRole("button", { name: "继续安排服务" }),
+      within(controls).getByRole("button", { name: "问题已解决" }),
+    ).toBeInTheDocument();
+    expect(
+      within(controls).getByRole("button", { name: "仍需人工服务" }),
     ).toBeInTheDocument();
 
     const customerMessage = screen.getByText("饮料不够凉").closest("article");
@@ -85,26 +111,15 @@ describe("perspective workspaces", () => {
     expect(customerMessage).toHaveAttribute("data-sender", "customer");
     expect(assistantDiagnosis).toHaveAttribute("data-sender", "assistant");
     expect(screen.getByText("已送达")).toBeInTheDocument();
+    expect(screen.getByText("知识库建议")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "继续安排服务" }));
-    expect(scrollTo).toHaveBeenLastCalledWith({
-      behavior: "auto",
-      top: expect.any(Number),
-    });
-    expect(screen.getByLabelText("对话快捷操作")).toBe(controls);
-    expect(within(controls).getByText("服务已提交")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("等待客服确认");
-    expect(
-      screen.getByText(/已为你提交 14:30–15:30 上门服务/),
-    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "问题已解决" }));
+    expect(onMarkSelfResolved).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "仍需人工服务" }));
+    expect(onRequestHumanService).toHaveBeenCalledOnce();
 
     fireEvent.click(screen.getByRole("button", { name: "重新演示" }));
-    expect(screen.getByRole("status")).not.toHaveTextContent(
-      "等待客服确认",
-    );
-    expect(
-      screen.getByRole("button", { name: "饮料不够凉" }),
-    ).toBeInTheDocument();
+    expect(onReset).toHaveBeenCalledOnce();
   });
 
   it("lets the service agent create and reset a routed work order", () => {

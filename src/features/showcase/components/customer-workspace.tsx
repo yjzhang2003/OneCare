@@ -1,38 +1,88 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import { customerDemo, serviceCase } from "../perspective-demo-data";
 import {
-  DemoMetric,
-  DemoTimeline,
-} from "./perspective-workspace-ui";
+  journeyHasCompletedService,
+  journeyHasWorkOrder,
+  type ServiceJourneyState,
+} from "../service-journey";
 import { CustomerChatMessage } from "./customer-chat-message";
 import { OneCareLogo } from "./onecare-logo";
+import { DemoMetric, DemoTimeline } from "./perspective-workspace-ui";
 
-type CustomerStage = "invitation" | "diagnosed" | "scheduled";
+type CustomerWorkspaceProps = Readonly<{
+  journey: ServiceJourneyState;
+  onAnswerDiagnosis: (reply: string) => void;
+  onMarkSelfResolved: () => void;
+  onRequestHumanService: () => void;
+  onReset: () => void;
+}>;
 
 const customerPrompts = ["饮料不够凉", "刚才开始", "没有异响"] as const;
 
-export function CustomerWorkspace() {
-  const [stage, setStage] = useState<CustomerStage>("invitation");
+export function CustomerWorkspace({
+  journey,
+  onAnswerDiagnosis,
+  onMarkSelfResolved,
+  onRequestHumanService,
+  onReset,
+}: CustomerWorkspaceProps) {
   const chatRef = useRef<HTMLElement>(null);
-  const stageStatus =
-    stage === "scheduled"
-      ? "等待客服确认"
-      : stage === "diagnosed"
-        ? "已生成服务建议"
-        : "主动关怀中";
+  const { stage } = journey;
+  const hasDiagnosis = stage !== "detected";
+  const hasWorkOrder = journeyHasWorkOrder(journey);
+  const serviceCompleted = journeyHasCompletedService(journey);
+  const stageStatus = serviceCompleted
+    ? "服务已完成"
+    : hasWorkOrder
+      ? "客服已建单"
+      : stage === "serviceRequested"
+        ? "等待客服建单"
+        : stage === "selfResolved"
+          ? "问题已解决"
+          : stage === "selfHelp"
+            ? "AI 自助排查中"
+            : "主动关怀中";
 
-  const timeline = customerDemo.progress.map((label, index) => ({
-    label,
-    state:
-      index === 0 || (stage !== "invitation" && index === 1)
+  const timeline = customerDemo.progress.map((label, index) => {
+    if (index === 0) {
+      return { label, state: "complete" as const };
+    }
+
+    if (index === 1) {
+      return {
+        label,
+        state:
+          stage === "selfHelp"
+            ? ("active" as const)
+            : hasDiagnosis
+              ? ("complete" as const)
+              : ("pending" as const),
+      };
+    }
+
+    if (index === 2) {
+      return {
+        label,
+        state: hasWorkOrder
+          ? ("complete" as const)
+          : stage === "serviceRequested"
+            ? ("active" as const)
+            : ("pending" as const),
+      };
+    }
+
+    return {
+      label,
+      state: serviceCompleted
         ? ("complete" as const)
-        : stage === "scheduled" && index === 2
+        : hasWorkOrder
           ? ("active" as const)
           : ("pending" as const),
-  }));
+    };
+  });
 
   useEffect(() => {
     const chat = chatRef.current;
@@ -89,10 +139,10 @@ export function CustomerWorkspace() {
                 {customerDemo.greeting}
               </CustomerChatMessage>
 
-              {stage !== "invitation" ? (
+              {hasDiagnosis ? (
                 <>
                   <CustomerChatMessage meta="已送达" sender="customer">
-                    {customerDemo.prompt}
+                    {journey.customerReply}
                   </CustomerChatMessage>
                   <CustomerChatMessage
                     meta="设备数据已同步"
@@ -103,16 +153,46 @@ export function CustomerWorkspace() {
                     </span>
                     <strong>{customerDemo.diagnosis}</strong>
                   </CustomerChatMessage>
+                  <section
+                    aria-label="知识库建议"
+                    className="customer-knowledge"
+                  >
+                    <span>知识库建议</span>
+                    <p>{customerDemo.knowledgeIntro}</p>
+                    <ol>
+                      {customerDemo.knowledgeSteps.map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ol>
+                  </section>
                 </>
               ) : null}
 
-              {stage === "scheduled" ? (
-                <CustomerChatMessage meta="等待客服确认" sender="assistant">
-                  {customerDemo.confirmation}
+              {stage === "selfResolved" ? (
+                <CustomerChatMessage meta="已解决" sender="assistant">
+                  {customerDemo.selfResolved}
                 </CustomerChatMessage>
               ) : null}
 
-              {stage !== "invitation" ? (
+              {stage === "serviceRequested" ? (
+                <CustomerChatMessage meta="等待客服建单" sender="assistant">
+                  {customerDemo.serviceRequested}
+                </CustomerChatMessage>
+              ) : null}
+
+              {hasWorkOrder ? (
+                <CustomerChatMessage meta="客服已建单" sender="assistant">
+                  {customerDemo.workOrderConfirmation}
+                </CustomerChatMessage>
+              ) : null}
+
+              {serviceCompleted ? (
+                <CustomerChatMessage meta="服务已完成" sender="assistant">
+                  {customerDemo.serviceCompleted}
+                </CustomerChatMessage>
+              ) : null}
+
+              {hasDiagnosis ? (
                 <section className="customer-service-progress">
                   <DemoTimeline label="本次服务进度" steps={timeline} />
                 </section>
@@ -123,12 +203,12 @@ export function CustomerWorkspace() {
               aria-label="对话快捷操作"
               className="customer-chat-controls"
             >
-              {stage === "invitation" ? (
+              {stage === "detected" ? (
                 <div className="customer-prompts" aria-label="快捷回复">
                   {customerPrompts.map((prompt) => (
                     <button
                       key={prompt}
-                      onClick={() => setStage("diagnosed")}
+                      onClick={() => onAnswerDiagnosis(prompt)}
                       type="button"
                     >
                       {prompt}
@@ -137,18 +217,27 @@ export function CustomerWorkspace() {
                 </div>
               ) : null}
 
-              {stage === "diagnosed" ? (
-                <button
-                  className="demo-primary-button customer-chat__action"
-                  onClick={() => setStage("scheduled")}
-                  type="button"
-                >
-                  继续安排服务
-                </button>
+              {stage === "selfHelp" ? (
+                <div className="customer-resolution-actions">
+                  <button
+                    className="demo-secondary-button"
+                    onClick={onMarkSelfResolved}
+                    type="button"
+                  >
+                    问题已解决
+                  </button>
+                  <button
+                    className="demo-primary-button"
+                    onClick={onRequestHumanService}
+                    type="button"
+                  >
+                    仍需人工服务
+                  </button>
+                </div>
               ) : null}
 
-              {stage === "scheduled" ? (
-                <div className="customer-chat__completion">服务已提交</div>
+              {stage !== "detected" && stage !== "selfHelp" ? (
+                <div className="customer-chat__completion">{stageStatus}</div>
               ) : null}
             </div>
           </div>
@@ -158,10 +247,10 @@ export function CustomerWorkspace() {
           <div aria-live="polite" role="status">
             {stageStatus}
           </div>
-          {stage !== "invitation" ? (
+          {stage !== "detected" ? (
             <button
               className="demo-reset-button"
-              onClick={() => setStage("invitation")}
+              onClick={onReset}
               type="button"
             >
               重新演示

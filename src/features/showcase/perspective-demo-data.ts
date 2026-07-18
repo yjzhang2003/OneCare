@@ -9,16 +9,6 @@ export const serviceCase = {
   address: "青岛市崂山区 · 已脱敏",
 } as const;
 
-export const customerDemo = {
-  caseId: serviceCase.id,
-  prompt: "饮料不够凉",
-  greeting: "检测到冷藏室温度持续偏高，需要我帮你一起确认吗？",
-  reading: "正在读取设备运行数据…",
-  diagnosis: "结合温度曲线，可能与冷藏温度传感器或风道密封有关。",
-  confirmation: `已为你提交 ${serviceCase.visitWindow} 上门服务，客服确认后我会第一时间通知你。`,
-  progress: ["发现异常", "完成预诊", "客服确认", "预约上门"],
-} as const;
-
 export const agentDemo = {
   caseId: serviceCase.id,
   confidence: 87,
@@ -27,6 +17,25 @@ export const agentDemo = {
   suggestedPart: "冷藏温度传感器",
   workOrderId: "OC-WO-037",
   summary: "用户反馈饮料不够凉；设备连续 26 分钟高于目标温度，无需重复询问型号与异常时长。",
+} as const;
+
+export const customerDemo = {
+  caseId: serviceCase.id,
+  prompt: "饮料不够凉",
+  greeting: "检测到冷藏室温度持续偏高，需要我帮你一起确认吗？",
+  reading: "正在读取设备运行数据…",
+  diagnosis: "结合温度曲线，可能与冷藏温度传感器或风道密封有关。",
+  knowledgeIntro: "先按知识库建议做一次快速排查：",
+  knowledgeSteps: [
+    "确认冰箱门体已完全闭合",
+    "保持冷藏室出风口无遮挡",
+    "减少开门并等待十分钟后复查",
+  ],
+  selfResolved: "本次问题已通过 AI 指引解决，我会继续关注设备状态。",
+  serviceRequested: "自助排查仍未解决，已把设备数据和排查记录提交给客服。",
+  workOrderConfirmation: `客服已创建 ${agentDemo.workOrderId}，${agentDemo.engineer} 将在 ${serviceCase.visitWindow} 上门。`,
+  serviceCompleted: "本次服务已完成，设备状态将继续由万护关注。",
+  progress: ["发现异常", "AI 自助", "客服建单", "服务完成"],
 } as const;
 
 export const engineerDemo = {

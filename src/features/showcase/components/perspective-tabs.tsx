@@ -1,8 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useReducer, useRef, useState } from "react";
 
 import type { Perspective } from "../content";
+import {
+  initialServiceJourneyState,
+  serviceJourneyReducer,
+} from "../service-journey";
 import { AgentWorkspace } from "./agent-workspace";
 import { CustomerWorkspace } from "./customer-workspace";
 import { EngineerWorkspace } from "./engineer-workspace";
@@ -16,6 +20,10 @@ const workspaceIds = ["customer", "agent", "engineer", "operations"] as const;
 
 export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [journey, dispatch] = useReducer(
+    serviceJourneyReducer,
+    initialServiceJourneyState,
+  );
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
 
   function select(index: number, focus = false) {
@@ -95,7 +103,21 @@ export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
               key={perspective.index}
               role="tabpanel"
             >
-              {index === 0 ? <CustomerWorkspace /> : null}
+              {index === 0 ? (
+                <CustomerWorkspace
+                  journey={journey}
+                  onAnswerDiagnosis={(reply) =>
+                    dispatch({ type: "answerDiagnosis", reply })
+                  }
+                  onMarkSelfResolved={() =>
+                    dispatch({ type: "markSelfResolved" })
+                  }
+                  onRequestHumanService={() =>
+                    dispatch({ type: "requestHumanService" })
+                  }
+                  onReset={() => dispatch({ type: "resetJourney" })}
+                />
+              ) : null}
               {index === 1 ? <AgentWorkspace /> : null}
               {index === 2 ? <EngineerWorkspace /> : null}
               {index === 3 ? <OperationsWorkspace /> : null}
