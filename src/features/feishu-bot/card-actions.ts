@@ -17,8 +17,10 @@ export type CardActionResult =
       response: FeishuCardCallbackResponse;
     }>;
 
+type NavigationCardAction = Extract<OneCareCardAction, `open_${string}`>;
+
 const navigationViews: Readonly<
-  Partial<Record<OneCareCardAction, OneCareCardView>>
+  Record<NavigationCardAction, OneCareCardView>
 > = {
   open_pending: "pending",
   open_tasks: "tasks",
@@ -28,7 +30,7 @@ const navigationViews: Readonly<
   open_result: "result",
 };
 
-const navigationLabels: Readonly<Partial<Record<OneCareCardAction, string>>> = {
+const navigationLabels: Readonly<Record<NavigationCardAction, string>> = {
   open_pending: "待确认服务",
   open_tasks: "今日任务",
   open_operations: "运营后台",
@@ -36,6 +38,12 @@ const navigationLabels: Readonly<Partial<Record<OneCareCardAction, string>>> = {
   open_progress: "服务进度",
   open_result: "服务结果",
 };
+
+function isNavigationAction(
+  action: OneCareCardAction,
+): action is NavigationCardAction {
+  return action in navigationViews;
+}
 
 function updateResponse(view: OneCareCardView): CardActionResult {
   return {
@@ -48,12 +56,12 @@ function updateResponse(view: OneCareCardView): CardActionResult {
 }
 
 export function resolveCardAction(action: OneCareCardAction): CardActionResult {
-  const view = navigationViews[action];
-  if (view) {
+  if (isNavigationAction(action)) {
+    const view = navigationViews[action];
     return {
       kind: "navigate",
       message: createCardMessage(view),
-      toast: `已打开${navigationLabels[action] ?? "工作台"}`,
+      toast: `已打开${navigationLabels[action]}`,
     };
   }
 

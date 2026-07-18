@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { BotEnv } from "../../../../src/lib/env";
 import type { FeishuEventOutcome } from "../../../../src/features/feishu-bot/event-handler";
+import type { CardActionResult } from "../../../../src/features/feishu-bot/card-actions";
 import { createFeishuEventRoute } from "./route";
 
 const env: BotEnv = {
@@ -39,7 +40,7 @@ function dependencies(outcome: FeishuEventOutcome) {
       })),
       replyMessage: vi.fn(async () => undefined),
       sendMessage: vi.fn(async () => undefined),
-      resolveAction: vi.fn(() => ({
+      resolveAction: vi.fn((_action): CardActionResult => ({
         kind: "navigate" as const,
         message: {
           msgType: "interactive" as const,
