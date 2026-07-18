@@ -112,7 +112,14 @@ export function createFeishuEventRoute(
       }
 
       if (outcome.kind === "card_action") {
-        const result = dependencies.resolveAction(outcome.action);
+        let result: CardActionResult;
+        try {
+          result = dependencies.resolveAction(outcome.action);
+        } catch {
+          return json({
+            toast: { type: "error", content: "操作未完成，请稍后重试" },
+          });
+        }
         if (result.kind === "update") {
           return json(result.response);
         }

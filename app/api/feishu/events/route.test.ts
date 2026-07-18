@@ -249,4 +249,25 @@ describe("POST /api/feishu/events", () => {
     expect(setup.dependencies.schedule).not.toHaveBeenCalled();
     expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
   });
+
+  it("returns a safe toast when card construction fails", async () => {
+    const setup = dependencies({
+      kind: "card_action",
+      action: "open_pending",
+      chatId: "oc_onecare_chat",
+      messageId: "om_onecare_card",
+    });
+    setup.dependencies.resolveAction.mockImplementationOnce(() => {
+      throw new Error("private card construction details");
+    });
+
+    const response = await createFeishuEventRoute(setup.dependencies)(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      toast: { type: "error", content: "操作未完成，请稍后重试" },
+    });
+    expect(setup.dependencies.schedule).not.toHaveBeenCalled();
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+  });
 });
