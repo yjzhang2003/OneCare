@@ -656,11 +656,13 @@ git add README.md docs/superpowers/specs/2026-07-18-onecare-logo-chat-design.md 
 git commit -m "docs: record stable customer chat verification"
 ```
 
-- [ ] **Step 4: 更新同一 Preview**
+- [x] **Step 4: 更新同一 Preview**
 
 运行 `vercel deploy --yes`，等待 Ready 后将 `onecare-homepage-preview.vercel.app` 重新指向新部署；不得使用 `--prod`。复用或重建限时 Share Link，并用未登录浏览器重复三态几何与控制台检查。Share secret 只出现在交付消息，不写入仓库。
 
-- [ ] **Step 5: 最终状态检查**
+2026-07-18 已发布非 Production 部署 `dpl_Fj3EfvGEVdRosFexE26ifuskLxGE`，状态为 Ready；固定域名已重新指向该部署。匿名 Share Link 可访问，线上 `1440 × 900` 与 `390 × 844` 三态几何、按钮等宽、内部自动滚动和最新消息可见性均与本地结果一致，控制台为 0 错误、0 警告。Share secret 不写入仓库，仅在交付消息中提供。
+
+- [x] **Step 5: 最终状态检查**
 
 ```bash
 git status --short --branch
