@@ -537,7 +537,7 @@ Expected: FAIL，因为场景会被内容撑高，消息区不独立滚动，快
 .customer-chat__action { width: 100%; }
 ```
 
-移动端覆盖 `.customer-phone { max-height: none; }`，继续让手机占满角色工作台；所有变量内容必须留在 `.customer-chat` 内部滚动。
+移动端将 `.perspective-workspace-viewport` 的最小高度校准为 `calc(100dvh - 244px)`，并覆盖 `.customer-phone { min-height: 0; max-height: none; }`，让手机占满剩余角色工作台且底部不超出视口；移动端页脚固定 `min-height: 62px`，为 44px 的“重新演示”按钮预留完整高度。所有变量内容必须留在 `.customer-chat` 内部滚动。
 
 - [x] **Step 4: 确认 GREEN 并提交**
 
@@ -556,6 +556,64 @@ git commit -m "style: lock customer phone geometry"
 
 ---
 
+### Task 6A: 让内部消息区跟随最新回复
+
+**Files:**
+- Modify: `src/features/showcase/components/customer-workspace.tsx`
+- Modify: `src/features/showcase/components/perspective-workspaces.test.tsx`
+
+**Interfaces:**
+- Consumes: 固定高度的 `.customer-chat` 滚动容器。
+- Produces: 每次 `CustomerStage` 改变后仅把 `.customer-chat` 滚动到自身底部。
+
+- [x] **Step 1: 写内部自动滚动失败测试**
+
+在用户视角测试中为 `HTMLElement.prototype.scrollTo` 设置 `vi.fn()`，首次渲染后清空调用；点击“饮料不够凉”和“继续安排服务”后分别断言：
+
+```tsx
+expect(scrollTo).toHaveBeenLastCalledWith({
+  behavior: "auto",
+  top: expect.any(Number),
+});
+```
+
+- [x] **Step 2: 确认 RED**
+
+Run:
+
+```bash
+npx vitest run src/features/showcase/components/perspective-workspaces.test.tsx -t "customer"
+```
+
+Expected: FAIL，因为状态切换尚未操作 `.customer-chat` 的内部滚动位置。
+
+- [x] **Step 3: 写最小自动滚动实现**
+
+`CustomerWorkspace` 增加指向消息 `<section>` 的 `useRef<HTMLElement>`，并在 `[stage]` 变化后执行：
+
+```tsx
+chat.scrollTo?.({ behavior: "auto", top: chat.scrollHeight });
+```
+
+不得调用 `window.scrollTo` 或 `scrollIntoView`。
+
+- [x] **Step 4: 确认 GREEN 并提交**
+
+Run:
+
+```bash
+npx vitest run src/features/showcase/components/perspective-workspaces.test.tsx app/fullscreen-showcase-styles.test.ts
+```
+
+Expected: 组件交互与固定布局合约全部通过。
+
+```bash
+git add src/features/showcase/components/customer-workspace.tsx src/features/showcase/components/perspective-workspaces.test.tsx app/fullscreen-showcase-styles.test.ts app/globals.css docs/superpowers/specs/2026-07-18-onecare-logo-chat-design.md docs/superpowers/plans/2026-07-18-onecare-logo-chat.md
+git commit -m "fix: keep latest customer reply visible"
+```
+
+---
+
 ### Task 7: 浏览器几何验收、完整验证与 Preview 更新
 
 **Files:**
@@ -569,7 +627,7 @@ git commit -m "style: lock customer phone geometry"
 
 - [ ] **Step 1: 本地真实浏览器验收**
 
-在 `1440 × 900` 与 `390 × 844` 逐次进入 `invitation`、`diagnosed`、`scheduled`，读取 `.customer-scene` 与 `.customer-phone` 的 `getBoundingClientRect()`。每个元素的 `y`、`height` 三态极差必须 `<= 1px`；初始三个按钮同一行、等宽，消息区 `scrollHeight >= clientHeight` 时仅内部滚动；控制台 0 错误、0 警告。
+在 `1440 × 900` 与 `390 × 844` 逐次进入 `invitation`、`diagnosed`、`scheduled`，读取 `.customer-scene`、`.customer-phone` 与 `.customer-chat-controls` 的 `getBoundingClientRect()`。每个元素的 `y`、`height` 三态极差必须 `<= 1px`；初始三个按钮同一行、等宽，手机底部不被裁切，消息区 `scrollHeight >= clientHeight` 时仅内部滚动；控制台 0 错误、0 警告。
 
 - [ ] **Step 2: 运行完整验证**
 

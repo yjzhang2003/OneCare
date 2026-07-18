@@ -5,18 +5,43 @@ import {
   screen,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AgentWorkspace } from "./agent-workspace";
 import { CustomerWorkspace } from "./customer-workspace";
 import { EngineerWorkspace } from "./engineer-workspace";
 import { OperationsWorkspace } from "./operations-workspace";
 
-afterEach(cleanup);
+const scrollToDescriptor = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "scrollTo",
+);
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+
+  if (scrollToDescriptor) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "scrollTo",
+      scrollToDescriptor,
+    );
+  } else {
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
+  }
+});
 
 describe("perspective workspaces", () => {
   it("lets the customer complete and reset the phone service demo", () => {
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollTo,
+    });
+
     render(<CustomerWorkspace />);
+    scrollTo.mockClear();
 
     expect(screen.getByText("爱家服务助手")).toBeInTheDocument();
     expect(screen.getByText("静态交互 Demo")).toBeInTheDocument();
@@ -42,6 +67,10 @@ describe("perspective workspaces", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "饮料不够凉" }));
 
+    expect(scrollTo).toHaveBeenLastCalledWith({
+      behavior: "auto",
+      top: expect.any(Number),
+    });
     expect(screen.getByLabelText("对话快捷操作")).toBe(controls);
     expect(
       within(controls).getByRole("button", { name: "继续安排服务" }),
@@ -58,6 +87,10 @@ describe("perspective workspaces", () => {
     expect(screen.getByText("已送达")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "继续安排服务" }));
+    expect(scrollTo).toHaveBeenLastCalledWith({
+      behavior: "auto",
+      top: expect.any(Number),
+    });
     expect(screen.getByLabelText("对话快捷操作")).toBe(controls);
     expect(within(controls).getByText("服务已提交")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("等待客服确认");

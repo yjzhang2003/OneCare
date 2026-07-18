@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { customerDemo, serviceCase } from "../perspective-demo-data";
 import {
@@ -16,6 +16,7 @@ const customerPrompts = ["饮料不够凉", "刚才开始", "没有异响"] as c
 
 export function CustomerWorkspace() {
   const [stage, setStage] = useState<CustomerStage>("invitation");
+  const chatRef = useRef<HTMLElement>(null);
   const stageStatus =
     stage === "scheduled"
       ? "等待客服确认"
@@ -32,6 +33,16 @@ export function CustomerWorkspace() {
           ? ("active" as const)
           : ("pending" as const),
   }));
+
+  useEffect(() => {
+    const chat = chatRef.current;
+
+    if (!chat) {
+      return;
+    }
+
+    chat.scrollTo?.({ behavior: "auto", top: chat.scrollHeight });
+  }, [stage]);
 
   return (
     <div className="customer-scene">
@@ -72,6 +83,7 @@ export function CustomerWorkspace() {
               aria-label="AI 服务对话"
               aria-live="polite"
               className="customer-chat"
+              ref={chatRef}
             >
               <CustomerChatMessage meta="刚刚" sender="assistant">
                 {customerDemo.greeting}

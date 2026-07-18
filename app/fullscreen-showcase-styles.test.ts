@@ -76,5 +76,19 @@ describe("fullscreen showcase stylesheet", () => {
     expect(css).toMatch(
       /\.customer-prompts\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
     );
+
+    const mobileStyles = css.slice(
+      css.lastIndexOf("@media (max-width: 640px)"),
+      css.lastIndexOf("@media (prefers-reduced-motion: reduce)"),
+    );
+    expect(mobileStyles).toMatch(
+      /\.customer-phone\s*\{[^}]*min-height:\s*0[^}]*max-height:\s*none/,
+    );
+    expect(mobileStyles).toMatch(
+      /\.customer-phone__footer\s*\{[^}]*min-height:\s*62px/,
+    );
+    expect(mobileStyles).toMatch(
+      /\.perspective-workspace-viewport\s*\{[^}]*min-height:\s*calc\(100dvh - 244px\)/,
+    );
   });
 });
