@@ -711,7 +711,7 @@ git add README.md docs/superpowers/specs/2026-07-18-onecare-team-members-design.
 git commit -m "docs: record team and brand polish"
 ```
 
-- [ ] **Step 6: 发布并验证非 Production Preview**
+- [x] **Step 6: 发布并验证非 Production Preview**
 
 从当前分支运行：
 
@@ -721,7 +721,7 @@ vercel deploy --yes
 
 等待状态为 `Ready`。如果 Deployment Protection 开启，创建限时分享链接。验证 Preview 返回 HTTP `200`，并确认页面包含 `张禹健`、`张睿哲`、`黄齐` 和 `AI 用户服务全链路闭环引擎`。不得使用 `--prod`，不得修改环境变量或飞书回调。
 
-- [ ] **Step 7: 最终状态检查**
+- [x] **Step 7: 最终状态检查**
 
 Run:
 
@@ -745,4 +745,4 @@ Expected: 工作树干净，当前分支为 `codex/member-page-team`，提交只
 - Playwright `390 × 844`: 单列成员卡与 Footer 自然堆叠，`scrollWidth` 与 `clientWidth` 均为 `390`；
 - 浏览器控制台：`0` errors、`0` warnings；
 - favicon：页面实际加载 `/icon.png`，测试确认其字节与 `ONECARE_LOGO_DARK_SRC` 一致；
-- Preview：待发布与验证。
+- Preview：`onecare-cxtz09c06-yjzhang2003s-projects.vercel.app` 已进入 `Ready`；Deployment Protection 保持开启，并创建 7 天有效的限时评审链接（绕过值未写入仓库）。Playwright 通过该链接确认最终响应 HTTP `200`，页面包含张禹健、张睿哲、黄齐和 `AI 用户服务全链路闭环引擎`，并加载 `/icon.png`，控制台 `0` errors、`0` warnings。

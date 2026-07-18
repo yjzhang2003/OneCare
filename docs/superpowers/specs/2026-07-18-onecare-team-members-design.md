@@ -150,4 +150,4 @@ favicon 应使用其中的万护图形，裁切为紧凑正方形安全区，并
 - 浏览器在 `1440 × 900` 和 `390 × 844` 下完成检查，成员卡与 Footer 无裁切、重叠或横向溢出；
 - 真实页面加载 `/icon.png`，浏览器控制台为 `0` errors、`0` warnings；
 - 自动化验证结果为 26 个测试文件、108 个测试与 4 个生产运行时测试全部通过，Lint、类型检查、生产构建、依赖审计和 `git diff --check` 均通过；
-- 非 Production Vercel Preview 尚待发布与验证。
+- 非 Production Vercel Preview 已发布至 `onecare-cxtz09c06-yjzhang2003s-projects.vercel.app`；Deployment Protection 保持开启，并创建了 7 天有效的限时评审链接（绕过值未写入仓库）。Playwright 通过该链接确认最终页面 HTTP `200`，三位姓名、新 Footer 标记和 `/icon.png` 均存在，控制台为 `0` errors、`0` warnings。
