@@ -4033,16 +4033,22 @@ a {
   }
 
   .perspective-tabs {
-    width: calc(100% + 14px);
+    width: 100%;
+    gap: 8px;
     margin: 0 0 10px;
-    padding-right: 14px;
+    padding: 0;
   }
 
   .perspective-tabs button {
-    min-width: 116px;
+    min-width: 84px;
     min-height: 44px;
-    padding: 0 16px;
+    flex: 1 0 84px;
+    padding: 0 8px;
     font-size: 16px;
+  }
+
+  .perspective-tabs button span {
+    display: none;
   }
 
   .perspective-workspace-viewport {

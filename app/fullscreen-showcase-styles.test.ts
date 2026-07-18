@@ -41,5 +41,8 @@ describe("fullscreen showcase stylesheet", () => {
     expect(css).toMatch(
       /prefers-reduced-motion: reduce[\s\S]*?\.perspective-workspace[\s\S]*?transition: none/,
     );
+    expect(css).toMatch(
+      /max-width:\s*640px[\s\S]*?\.perspective-tabs button\s*\{[\s\S]*?min-width:\s*84px/,
+    );
   });
 });
