@@ -625,11 +625,13 @@ git commit -m "fix: keep latest customer reply visible"
 - Consumes: Tasks 5–6 的稳定聊天布局。
 - Produces: 通过验证的新非 Production Preview 与同一固定别名。
 
-- [ ] **Step 1: 本地真实浏览器验收**
+- [x] **Step 1: 本地真实浏览器验收**
 
 在 `1440 × 900` 与 `390 × 844` 逐次进入 `invitation`、`diagnosed`、`scheduled`，读取 `.customer-scene`、`.customer-phone` 与 `.customer-chat-controls` 的 `getBoundingClientRect()`。每个元素的 `y`、`height` 三态极差必须 `<= 1px`；初始三个按钮同一行、等宽，手机底部不被裁切，消息区 `scrollHeight >= clientHeight` 时仅内部滚动；控制台 0 错误、0 警告。
 
-- [ ] **Step 2: 运行完整验证**
+2026-07-18 验收结果：桌面端三阶段的场景、手机和操作槽 `y` 分别稳定为 `193.765625 / 213.765625 / 759px`，高度为 `706.234375 / 666.234375 / 44px`，三态极差为 `0px`。移动端场景与手机 `y=244.140625px`、`height=575.859375px` 不变，操作槽 `y=702 / 701 / 701px`、`height=44px`，三态极差不超过 `1px`；三个按钮宽度为 `118.921875 / 118.921875 / 118.9375px`，手机底部 `820px < 844px`。诊断与预约阶段仅内部消息区滚动，`scrollTop=155 / 282px`，最新回复保持可见；页面无横向溢出，控制台 0 错误、0 警告。
+
+- [x] **Step 2: 运行完整验证**
 
 ```bash
 npm test
@@ -643,7 +645,9 @@ git diff --check
 
 Expected: 所有命令退出码为 0，Audit 为 `0 vulnerabilities`。
 
-- [ ] **Step 3: 更新文档并提交**
+2026-07-18 验证结果：`npm test` 通过 15 个测试文件、57 个测试；`npm run test:runtime` 完成生产构建并通过 3 个运行时测试；`npm run lint`、`npm run typecheck`、独立的 `npm run build` 与 `git diff --check` 均退出码为 0；`npm audit --omit=dev` 返回 `0 vulnerabilities`。
+
+- [x] **Step 3: 更新文档并提交**
 
 README 记录固定底部操作槽与稳定手机高度；Spec 和 Plan 写入实际几何验收结果与命令结果。
 

@@ -180,8 +180,11 @@ Logo 资产由用户提供，不调用网络图片，不增加第三方运行时
 
 - 两端均无页面级横向溢出，移动端手机外框按规格取消；
 - 助手与用户气泡方向、身份、状态和预约确认清晰可辨；
+- 桌面端三阶段的场景、手机和操作槽分别固定为 `y=193.765625 / 213.765625 / 759px`，高度固定为 `706.234375 / 666.234375 / 44px`，三态极差均为 `0px`；
+- 移动端三阶段的场景与手机固定为 `y=244.140625px`、`height=575.859375px`，操作槽 `y` 为 `702 / 701 / 701px`、高度固定为 `44px`，三态极差不超过 `1px`；手机底部为 `820px`，未超出 `844px` 视口；
+- 移动端三个快捷回复宽度为 `118.921875 / 118.921875 / 118.9375px`，保持等宽单行；诊断和预约阶段消息区的 `scrollTop` 分别为 `155px` 与 `282px`，最新回复均位于消息区可视范围内；
 - 顶栏、页脚、手机标题栏与 AI 头像使用正确的 Logo 明暗版本；
 - `prefers-reduced-motion: reduce` 下消息动画计算值为 `none`；
 - 浏览器控制台无错误、警告、hydration 异常或资源 404。
 
-完整自动化验证和 Vercel Preview 部署结果记录在实施计划中。非 Production 部署 `dpl_Qt7BFWTie98Vh3UNqf74NtzNgEbJ` 已 Ready，并已重新绑定 `onecare-homepage-preview.vercel.app`；限时 Share Link 只在交付消息中提供，不写入仓库。
+完整自动化验证和 Vercel Preview 部署结果记录在实施计划中。上一版非 Production 部署 `dpl_Qt7BFWTie98Vh3UNqf74NtzNgEbJ` 已 Ready 并绑定 `onecare-homepage-preview.vercel.app`；本批稳定布局的部署记录将在 Preview 更新后补充。限时 Share Link 只在交付消息中提供，不写入仓库。
