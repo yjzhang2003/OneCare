@@ -277,7 +277,7 @@ git commit -m "feat: build customer service conversation"
 - Produces: `.onecare-logo`、`.wordmark-brand`、`.customer-message*` 与其响应式视觉。
 - Consumes: Tasks 1–2 的语义类名和 `data-sender`。
 
-- [ ] **Step 1: 写 CSS 合约失败测试**
+- [x] **Step 1: 写 CSS 合约失败测试**
 
 ```ts
 expect(styles).toMatch(/\.onecare-logo\s*\{[^}]*object-fit:\s*contain/s);
@@ -287,7 +287,7 @@ expect(styles).toMatch(/\.customer-message__bubble\s*\{[^}]*max-width:\s*78%/s);
 expect(styles).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*\.customer-message[^{]*\{[^}]*animation:\s*none/s);
 ```
 
-- [ ] **Step 2: 确认 RED**
+- [x] **Step 2: 确认 RED**
 
 Run:
 
@@ -297,7 +297,7 @@ npx vitest run app/fullscreen-showcase-styles.test.ts
 
 Expected: FAIL，因为新 Logo 和消息类尚无视觉契约。
 
-- [ ] **Step 3: 写最小视觉实现**
+- [x] **Step 3: 写最小视觉实现**
 
 关键规则：
 
@@ -320,7 +320,7 @@ AI 身份行使用 24px 黑底白色 Logo 头像；用户身份与元信息右�
 .customer-message { animation: none; }
 ```
 
-- [ ] **Step 4: 确认 GREEN 并提交**
+- [x] **Step 4: 确认 GREEN 并提交**
 
 Run:
 

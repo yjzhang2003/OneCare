@@ -45,4 +45,20 @@ describe("fullscreen showcase stylesheet", () => {
       /max-width:\s*640px[\s\S]*?\.perspective-tabs button\s*\{[\s\S]*?min-width:\s*84px/,
     );
   });
+
+  it("distinguishes adaptive logos and both sides of the customer chat", () => {
+    expect(css).toMatch(/\.onecare-logo\s*\{[^}]*object-fit:\s*contain/s);
+    expect(css).toMatch(
+      /\.customer-message\[data-sender="assistant"\][^{]*\{[^}]*align-self:\s*flex-start/s,
+    );
+    expect(css).toMatch(
+      /\.customer-message\[data-sender="customer"\][^{]*\{[^}]*align-self:\s*flex-end/s,
+    );
+    expect(css).toMatch(
+      /\.customer-message__bubble\s*\{[^}]*max-width:\s*78%/s,
+    );
+    expect(css).toMatch(
+      /prefers-reduced-motion:\s*reduce[\s\S]*\.customer-message\s*\{[^}]*animation:\s*none/s,
+    );
+  });
 });
