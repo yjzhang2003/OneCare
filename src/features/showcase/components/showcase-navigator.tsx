@@ -77,12 +77,20 @@ export function ShowcaseNavigator({
       activate(parseShowcaseHash(window.location.hash));
     };
 
-    syncFromLocation();
-    setIsReady(true);
     window.addEventListener("hashchange", syncFromLocation);
     window.addEventListener("popstate", syncFromLocation);
 
+    let readyFrame: number | undefined;
+    const restoreTimer = window.setTimeout(() => {
+      syncFromLocation();
+      readyFrame = window.requestAnimationFrame(() => setIsReady(true));
+    }, 0);
+
     return () => {
+      window.clearTimeout(restoreTimer);
+      if (readyFrame !== undefined) {
+        window.cancelAnimationFrame(readyFrame);
+      }
       window.removeEventListener("hashchange", syncFromLocation);
       window.removeEventListener("popstate", syncFromLocation);
     };
