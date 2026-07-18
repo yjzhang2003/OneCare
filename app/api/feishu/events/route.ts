@@ -2,10 +2,17 @@ import { after } from "next/server";
 
 import {
   createBotReply,
-  createWelcomeMessage,
   type BotReply,
-  type FeishuOutboundMessage,
 } from "../../../../src/features/feishu-bot/bot-script";
+import {
+  resolveCardAction,
+  type CardActionResult,
+} from "../../../../src/features/feishu-bot/card-actions";
+import type {
+  FeishuOutboundMessage,
+  OneCareCardAction,
+} from "../../../../src/features/feishu-bot/card-types";
+import { createWelcomeMessage } from "../../../../src/features/feishu-bot/cards";
 import {
   replyToFeishuMessage,
   sendFeishuMessage,
@@ -33,13 +40,14 @@ type FeishuEventRouteDependencies = {
   replyMessage: (input: {
     env: BotEnv;
     messageId: string;
-    text: string;
+    message: FeishuOutboundMessage;
   }) => Promise<void>;
   sendMessage: (input: {
     env: BotEnv;
     chatId: string;
     message: FeishuOutboundMessage;
   }) => Promise<void>;
+  resolveAction: (action: OneCareCardAction) => CardActionResult;
   schedule: Scheduler;
   reportFailure: () => void;
 };
@@ -51,6 +59,7 @@ const defaultDependencies: FeishuEventRouteDependencies = {
   createWelcome: createWelcomeMessage,
   replyMessage: replyToFeishuMessage,
   sendMessage: sendFeishuMessage,
+  resolveAction: resolveCardAction,
   schedule: (task) => after(task),
   reportFailure: () => console.error("[onecare-bot] reply_failed"),
 };
@@ -81,6 +90,11 @@ export function createFeishuEventRoute(
       if (outcome.kind === "ignored") {
         return json({});
       }
+      if (outcome.kind === "invalid_card_action") {
+        return json({
+          toast: { type: "info", content: "暂不支持该操作" },
+        });
+      }
 
       if (outcome.kind === "entered") {
         dependencies.schedule(async () => {
@@ -97,13 +111,33 @@ export function createFeishuEventRoute(
         return json({});
       }
 
+      if (outcome.kind === "card_action") {
+        const result = dependencies.resolveAction(outcome.action);
+        if (result.kind === "update") {
+          return json(result.response);
+        }
+
+        dependencies.schedule(async () => {
+          try {
+            await dependencies.sendMessage({
+              env,
+              chatId: outcome.chatId,
+              message: result.message,
+            });
+          } catch {
+            dependencies.reportFailure();
+          }
+        });
+        return json({ toast: { type: "info", content: result.toast } });
+      }
+
       const reply = dependencies.createReply(outcome.text);
       dependencies.schedule(async () => {
         try {
           await dependencies.replyMessage({
             env,
             messageId: outcome.messageId,
-            text: reply.text,
+            message: reply.message,
           });
         } catch {
           dependencies.reportFailure();

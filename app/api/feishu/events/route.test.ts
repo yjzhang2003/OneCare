@@ -28,7 +28,10 @@ function dependencies(outcome: FeishuEventOutcome) {
       parseEvent: vi.fn(async () => outcome),
       createReply: vi.fn((text: string) => ({
         kind: "help" as const,
-        text: `reply:${text}`,
+        message: {
+          msgType: "interactive" as const,
+          content: JSON.stringify({ schema: "2.0", reply: text }),
+        },
       })),
       createWelcome: vi.fn(() => ({
         msgType: "interactive" as const,
@@ -36,6 +39,14 @@ function dependencies(outcome: FeishuEventOutcome) {
       })),
       replyMessage: vi.fn(async () => undefined),
       sendMessage: vi.fn(async () => undefined),
+      resolveAction: vi.fn(() => ({
+        kind: "navigate" as const,
+        message: {
+          msgType: "interactive" as const,
+          content: JSON.stringify({ schema: "2.0", view: "pending" }),
+        },
+        toast: "已打开待确认服务",
+      })),
       schedule: vi.fn((task: () => Promise<void>) => scheduled.push(task)),
       reportFailure: vi.fn(),
     },
@@ -96,7 +107,10 @@ describe("POST /api/feishu/events", () => {
     expect(setup.dependencies.replyMessage).toHaveBeenCalledWith({
       env,
       messageId: "om_message",
-      text: "reply:开始体验",
+      message: {
+        msgType: "interactive",
+        content: JSON.stringify({ schema: "2.0", reply: "开始体验" }),
+      },
     });
     expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
   });
@@ -157,5 +171,82 @@ describe("POST /api/feishu/events", () => {
     await setup.scheduled[0]();
 
     expect(setup.dependencies.reportFailure).toHaveBeenCalledWith();
+  });
+
+  it("acknowledges a navigation button before sending the next card", async () => {
+    const setup = dependencies({
+      kind: "card_action",
+      action: "open_pending",
+      chatId: "oc_onecare_chat",
+      messageId: "om_onecare_card",
+    });
+
+    const response = await createFeishuEventRoute(setup.dependencies)(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      toast: { type: "info", content: "已打开待确认服务" },
+    });
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+    expect(setup.scheduled).toHaveLength(1);
+
+    await setup.scheduled[0]();
+
+    expect(setup.dependencies.resolveAction).toHaveBeenCalledWith(
+      "open_pending",
+    );
+    expect(setup.dependencies.sendMessage).toHaveBeenCalledWith({
+      env,
+      chatId: "oc_onecare_chat",
+      message: {
+        msgType: "interactive",
+        content: JSON.stringify({ schema: "2.0", view: "pending" }),
+      },
+    });
+  });
+
+  it("updates the clicked card synchronously for state actions", async () => {
+    const setup = dependencies({
+      kind: "card_action",
+      action: "create_ticket",
+      chatId: "oc_onecare_chat",
+      messageId: "om_onecare_card",
+    });
+    setup.dependencies.resolveAction.mockReturnValueOnce({
+      kind: "update",
+      response: {
+        toast: { type: "success", content: "操作已记录（演示）" },
+        card: {
+          type: "raw",
+          data: { schema: "2.0", completed: true },
+        },
+      },
+    });
+
+    const response = await createFeishuEventRoute(setup.dependencies)(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      toast: { type: "success", content: "操作已记录（演示）" },
+      card: {
+        type: "raw",
+        data: { schema: "2.0", completed: true },
+      },
+    });
+    expect(setup.dependencies.schedule).not.toHaveBeenCalled();
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("returns a neutral toast for a verified unsupported button", async () => {
+    const setup = dependencies({ kind: "invalid_card_action" });
+
+    const response = await createFeishuEventRoute(setup.dependencies)(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      toast: { type: "info", content: "暂不支持该操作" },
+    });
+    expect(setup.dependencies.schedule).not.toHaveBeenCalled();
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
   });
 });
