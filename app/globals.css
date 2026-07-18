@@ -2332,6 +2332,7 @@ a {
   min-height: 300px;
   flex-direction: column;
   gap: 44px;
+  align-items: stretch;
   padding: 64px clamp(24px, 5vw, 76px) 40px;
   color: rgba(255, 255, 255, 0.72);
   background: var(--onecare-black);
