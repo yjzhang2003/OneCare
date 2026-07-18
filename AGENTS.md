@@ -4,7 +4,7 @@ Read this file before changing the repository. Keep work scoped, evidence-based,
 
 ## Project Baseline
 
-- Product: OneCare, an AI-assisted end-to-end user-service loop concept for Hisense smart-home scenarios.
+- Product: 万护 OneCare, an AI-assisted end-to-end user-service loop concept for Hisense smart-home scenarios.
 - Repository: GitHub `https://github.com/yjzhang2003/OneCare.git`.
 - Default branch: `main`.
 - Language boundary: TypeScript only. Do not add Python code or Python tooling.
@@ -63,6 +63,20 @@ If a test-first exception is necessary, document why and record replacement veri
 - Do not discard, reset, or overwrite unrelated changes.
 - Do not push, open pull requests, merge, or alter remote state unless the user asks.
 - Report every commit, known failure, and unverified assumption.
+
+## Vercel Preview Handoff
+
+The user has granted standing authority to create a Vercel Preview deployment when a completed branch changes user-visible website content.
+
+Before handing off such a branch:
+
+1. Complete the planned local tests, static checks, production build, and `git diff --check`.
+2. Deploy the current branch to the repository's linked Vercel project without `--prod`.
+3. If Deployment Protection is active, create a time-limited shareable link for the review window; never persist its bypass value in the repository.
+4. Verify that the Preview returns HTTP 200 and contains a marker unique to the requested change.
+5. Give the shareable Preview URL to the user for visual confirmation and state any Preview-only limitation.
+
+This standing authority does not include Production deployment, environment-variable changes, copying Production secrets into Preview, Feishu redirect changes, GitHub pushes, pull requests, or merges. Preview authentication is not assumed to work unless its environment and redirect URL are separately configured and authorized.
 
 ## Harness Reflection
 

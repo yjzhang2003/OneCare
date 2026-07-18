@@ -17,6 +17,9 @@ describe("DashboardContent", () => {
 
     expect(screen.getByText("服务运营员")).toBeInTheDocument();
     expect(screen.getByText("飞书身份已验证")).toBeInTheDocument();
+    expect(screen.getByLabelText("万护 OneCare 首页")).toHaveTextContent(
+      "万护 ONECARE",
+    );
     expect(
       screen.getByRole("heading", { name: "服务闭环指挥台" }),
     ).toBeInTheDocument();

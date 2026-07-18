@@ -1,14 +1,14 @@
-# OneCare Technology Stack
+# 万护 OneCare Technology Stack
 
 ## Status
 
-The TypeScript web baseline and Feishu custom-app login were implemented on 2026-07-17. The current application is a single-enterprise demonstration; IoT and VOC data, service-system integrations, AI analysis, persistence, and the Feishu agent remain unimplemented.
+The 万护 OneCare TypeScript web baseline and Feishu custom-app login were implemented on 2026-07-17. The current application is a single-enterprise demonstration; IoT and VOC data, service-system integrations, AI analysis, persistence, and the Feishu agent remain unimplemented.
 
 The production deployment is available at `https://onecare-loop.vercel.app`. Vercel Production is configured for the current enterprise custom application and the exact callback `https://onecare-loop.vercel.app/api/auth/feishu/callback`; the new enterprise application still requires that redirect URL to be saved in the Feishu developer console before the real login flow can be re-verified.
 
 ## Implemented Baseline
 
-OneCare uses one TypeScript modular monolith:
+万护 OneCare uses one TypeScript modular monolith:
 
 - Node.js 24 LTS;
 - Next.js 16 App Router;

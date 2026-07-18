@@ -1,33 +1,18 @@
-import Link from "next/link";
-
 import type { AuthUser } from "../src/features/auth/types";
-
-const capabilities = [
-  {
-    index: "01",
-    title: "VOC 智能分析",
-    description: "汇聚客服、服务与用户反馈中的声音，识别高频问题和改善机会。",
-    marker: "LISTEN / LEARN",
-  },
-  {
-    index: "02",
-    title: "智能预诊",
-    description: "结合 IoT 设备运行信号预判故障，让工程师上门前更接近正确答案。",
-    marker: "PREDICT / PREPARE",
-  },
-  {
-    index: "03",
-    title: "协同调度",
-    description: "把客服、工程师、配件与回访角色放进同一条可追踪的服务链路。",
-    marker: "DISPATCH / ALIGN",
-  },
-  {
-    index: "04",
-    title: "闭环追踪",
-    description: "持续监控服务进度，自动触发回访与评价，让每个问题都有结果。",
-    marker: "CLOSE / IMPROVE",
-  },
-] as const;
+import {
+  outcomes,
+  perspectives,
+  scenarioSteps,
+  serviceLayers,
+  teamMembers,
+} from "../src/features/showcase/content";
+import { HeroMedia } from "../src/features/showcase/components/hero-media";
+import { OutcomeStatement } from "../src/features/showcase/components/outcome-statement";
+import { PerspectiveTabs } from "../src/features/showcase/components/perspective-tabs";
+import { SectionFrame } from "../src/features/showcase/components/section-frame";
+import { ServiceBlueprint } from "../src/features/showcase/components/service-blueprint";
+import { SiteFooter } from "../src/features/showcase/components/site-footer";
+import { SiteHeader } from "../src/features/showcase/components/site-header";
 
 const errorMessages: Record<string, string> = {
   configuration_error: "登录服务尚未完成配置，请稍后再试。",
@@ -44,24 +29,11 @@ type LandingContentProps = {
 
 export function LandingContent({ user, authError }: LandingContentProps) {
   const errorMessage = authError ? errorMessages[authError] : undefined;
+  const workspaceHref = user ? "/dashboard" : "/api/auth/feishu/start";
 
   return (
-    <div className="landing-shell">
-      <header className="site-header">
-        <Link className="wordmark" href="/" aria-label="OneCare 首页">
-          <span className="wordmark-mark" aria-hidden="true">
-            1C
-          </span>
-          <span>
-            ONECARE
-            <small>AI 用户服务闭环引擎</small>
-          </span>
-        </Link>
-        <div className="header-status">
-          <span className="status-light" aria-hidden="true" />
-          ENTERPRISE DEMO · 01
-        </div>
-      </header>
+    <div className="landing-shell" id="top">
+      <SiteHeader user={user} />
 
       {errorMessage ? (
         <div className="auth-notice" role="alert">
@@ -71,98 +43,93 @@ export function LandingContent({ user, authError }: LandingContentProps) {
       ) : null}
 
       <main>
-        <section className="hero">
-          <div className="hero-copy">
-            <p className="eyebrow">AI SERVICE LOOP ENGINE</p>
-            <h1>让每一次服务，都比问题更早一步</h1>
+        <section className="showroom-hero">
+          <HeroMedia />
+          <div className="showroom-hero__copy">
+            <p className="eyebrow">万护 ONECARE · AI 用户服务闭环引擎</p>
+            <h1>
+              <span>让每一次服务，</span>
+              <span>都比问题更早一步</span>
+            </h1>
             <p className="hero-intro">
-              OneCare 面向海信智能家庭场景，把用户声音、设备信号与服务协同
-              串成一条有感知、有响应、有结果的服务闭环。
+              万护 OneCare 面向海信智能家庭场景，把用户声音、设备信号与服务协同
+              串成一条有感知、有判断、有行动、会学习的服务闭环。
             </p>
 
             <div className="hero-actions">
-              <a
-                className="primary-action"
-                href={user ? "/dashboard" : "/api/auth/feishu/start"}
-              >
-                <span>{user ? "进入工作台" : "使用飞书登录"}</span>
-                <span className="action-arrow" aria-hidden="true">
-                  ↗
-                </span>
+              <a className="primary-action" href="#perspectives">
+                查看四个视角
               </a>
-              <p className="session-copy">
-                {user ? `${user.name}，欢迎回来` : "FEISHU VERIFIED ACCESS"}
-              </p>
-            </div>
-          </div>
-
-          <div className="signal-stage" aria-hidden="true">
-            <div className="stage-index">00—01</div>
-            <div className="orbit orbit-one" />
-            <div className="orbit orbit-two" />
-            <div className="signal-core">
-              <span>ONE</span>
-              <strong>CARE</strong>
-              <span>LOOP</span>
-            </div>
-            <div className="stage-caption">
-              <span>LISTEN</span>
-              <span>PREDICT</span>
-              <span>DISPATCH</span>
-              <span>CLOSE</span>
+              <a className="secondary-action" href={workspaceHref}>
+                {user ? "进入工作台" : "使用飞书登录"}
+              </a>
             </div>
           </div>
         </section>
 
-        <section className="metric-rail" aria-label="产品目标">
-          <div>
-            <strong>更短</strong>
-            <span>服务周期目标</span>
+        <section
+          className="perspectives-section"
+          id="perspectives"
+          aria-labelledby="perspectives-title"
+        >
+          <div className="showroom-section-heading">
+            <p>01 · 四个视角</p>
+            <h2 id="perspectives-title">一次问题，四种角色，同一条服务上下文</h2>
+            <p>
+              点击切换用户、客服、工程师和后台，查看同一个异常信号如何被理解、交接与闭环。
+            </p>
           </div>
-          <div>
-            <strong>更低</strong>
-            <span>重复上门目标</span>
-          </div>
-          <div>
-            <strong>更高</strong>
-            <span>用户满意目标</span>
-          </div>
-          <p>从“用户报修”走向“服务先行”</p>
+          <PerspectiveTabs perspectives={perspectives} />
         </section>
 
-        <section className="capability-section" aria-labelledby="capability-title">
-          <div className="section-heading">
-            <p>SERVICE LOOP / 01—04</p>
-            <h2 id="capability-title">从发现问题，到确认问题真正解决</h2>
+        <SectionFrame
+          id="architecture"
+          index="02"
+          eyebrow="FIVE-LAYER ENGINE"
+          title="感知—诊断—编排—服务—学习"
+          intro="一次服务不是五个孤立模块，而是一条从问题信号到持续改善的闭环蓝图。"
+        >
+          <ServiceBlueprint layers={serviceLayers} events={scenarioSteps} />
+        </SectionFrame>
+
+        <section
+          className="outcome-section"
+          aria-labelledby="outcome-title"
+        >
+          <div>
+            <p>03 / OUTCOME</p>
+            <h2 id="outcome-title">一次就好</h2>
+            <p>以下是万护 OneCare 的方案目标，不代表已经实现的生产指标。</p>
           </div>
-          <div className="capability-grid">
-            {capabilities.map((capability) => (
-              <article className="capability-card" key={capability.index}>
-                <div className="card-topline">
-                  <span>{capability.index}</span>
-                  <span>{capability.marker}</span>
-                </div>
-                <h3>{capability.title}</h3>
-                <p>{capability.description}</p>
-                <div className="card-scanline" aria-hidden="true" />
+          <OutcomeStatement outcomes={outcomes} />
+          <p className="outcome-loop">
+            本次解决 → 知识沉淀 → 下一次更早发现
+          </p>
+        </section>
+
+        <SectionFrame
+          id="team"
+          index="04"
+          eyebrow="TEAM CREDITS"
+          title="三种能力，共同完成服务创新"
+          intro="成员信息待补充；当前只展示参赛团队的能力互补关系。"
+        >
+          <div className="team-credits">
+            {teamMembers.map((member) => (
+              <article
+                className="team-card surface-card"
+                key={member.index}
+              >
+                <span>成员 {member.index}</span>
+                <h3>{member.title}</h3>
+                <p>{member.capabilities.join(" / ")}</p>
               </article>
             ))}
           </div>
-        </section>
-
-        <aside className="trust-boundary">
-          <span>PROTOTYPE BOUNDARY</span>
-          <p>
-            当前为 OneCare 方案原型，仅开放给应用所属企业成员。页面展示服务闭环构想，
-            尚未接入真实业务数据或 AI 服务。
-          </p>
-        </aside>
+        </SectionFrame>
       </main>
 
-      <footer className="site-footer">
-        <span>ONECARE / 2026</span>
-        <span>AI × SERVICE × HUMAN WARMTH</span>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
