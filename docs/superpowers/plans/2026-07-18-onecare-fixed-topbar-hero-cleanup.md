@@ -90,6 +90,6 @@ At `1440 × 900` and `390 × 844`, verify fixed position at the top before and a
 
 Commit implementation and the checked plan with message `fix: keep OneCare Top Bar visible`.
 
-- [ ] **Step 4: Deploy and verify Preview**
+- [x] **Step 4: Deploy and verify Preview**
 
 Deploy without `--prod`, assign `onecare-homepage-preview.vercel.app`, and verify HTTP 200, all four navigation labels, absence of removed Hero strings, and the existing protected share link.
