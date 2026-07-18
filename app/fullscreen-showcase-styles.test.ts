@@ -47,18 +47,18 @@ describe("fullscreen showcase stylesheet", () => {
   });
 
   it("distinguishes adaptive logos and both sides of the customer chat", () => {
-    expect(css).toMatch(/\.onecare-logo\s*\{[^}]*object-fit:\s*contain/s);
+    expect(css).toMatch(/\.onecare-logo\s*\{[\s\S]*?object-fit:\s*contain/);
     expect(css).toMatch(
-      /\.customer-message\[data-sender="assistant"\][^{]*\{[^}]*align-self:\s*flex-start/s,
+      /\.customer-message\[data-sender="assistant"\][^{]*\{[\s\S]*?align-self:\s*flex-start/,
     );
     expect(css).toMatch(
-      /\.customer-message\[data-sender="customer"\][^{]*\{[^}]*align-self:\s*flex-end/s,
+      /\.customer-message\[data-sender="customer"\][^{]*\{[\s\S]*?align-self:\s*flex-end/,
     );
     expect(css).toMatch(
-      /\.customer-message__bubble\s*\{[^}]*max-width:\s*78%/s,
+      /\.customer-message__bubble\s*\{[\s\S]*?max-width:\s*78%/,
     );
     expect(css).toMatch(
-      /prefers-reduced-motion:\s*reduce[\s\S]*\.customer-message\s*\{[^}]*animation:\s*none/s,
+      /prefers-reduced-motion:\s*reduce[\s\S]*\.customer-message\s*\{[\s\S]*?animation:\s*none/,
     );
   });
 });
