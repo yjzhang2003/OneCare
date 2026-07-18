@@ -159,7 +159,7 @@ git commit -m "feat: add adaptive OneCare logo"
 - Produces: `CustomerChatMessage({ sender, children, meta })`。
 - Consumes: `OneCareLogo`、`customerDemo`、`serviceCase.visitWindow`。
 
-- [ ] **Step 1: 写双向会话失败测试**
+- [x] **Step 1: 写双向会话失败测试**
 
 将用户测试扩展为：
 
@@ -189,7 +189,7 @@ expect(
 ).toBeInTheDocument();
 ```
 
-- [ ] **Step 2: 确认 RED**
+- [x] **Step 2: 确认 RED**
 
 Run:
 
@@ -199,7 +199,7 @@ npx vitest run src/features/showcase/components/perspective-workspaces.test.tsx 
 
 Expected: FAIL，因为现有消息没有发送方容器、AI 身份、时间/状态和预约确认消息。
 
-- [ ] **Step 3: 增加确定性文案和消息组件**
+- [x] **Step 3: 增加确定性文案和消息组件**
 
 在 `customerDemo` 增加：
 
@@ -220,7 +220,7 @@ type CustomerChatMessageProps = Readonly<{
 
 根元素为 `<article className="customer-message" data-sender={sender}>`；AI 消息渲染 `OneCareLogo decorative size={24} tone="light"` 和“万护助手”，用户消息显示“我”。气泡使用 `.customer-message__bubble`，元信息使用 `.customer-message__meta`。
 
-- [ ] **Step 4: 重组三阶段消息流**
+- [x] **Step 4: 重组三阶段消息流**
 
 `CustomerWorkspace` 保留现有状态类型，消息顺序固定为：
 
@@ -250,7 +250,7 @@ type CustomerChatMessageProps = Readonly<{
 
 消息区增加 `aria-live="polite"`。快捷回复仅在 `invitation` 显示；“继续安排服务”作为诊断消息后的独立药丸按钮；服务进度保持在对话区之后。
 
-- [ ] **Step 5: 确认 GREEN 并提交**
+- [x] **Step 5: 确认 GREEN 并提交**
 
 Run:
 

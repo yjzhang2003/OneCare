@@ -5,9 +5,10 @@ import { useState } from "react";
 import { customerDemo, serviceCase } from "../perspective-demo-data";
 import {
   DemoMetric,
-  DemoStatusBar,
   DemoTimeline,
 } from "./perspective-workspace-ui";
+import { CustomerChatMessage } from "./customer-chat-message";
+import { OneCareLogo } from "./onecare-logo";
 
 type CustomerStage = "invitation" | "diagnosed" | "scheduled";
 
@@ -41,12 +42,17 @@ export function CustomerWorkspace() {
       </div>
 
       <div className="customer-phone">
-        <DemoStatusBar
-          caseId={serviceCase.id}
-          product={serviceCase.product}
-          status="设备在线"
-          title="爱家服务助手"
-        />
+        <header className="customer-phone__header">
+          <OneCareLogo decorative size={32} tone="dark" />
+          <div>
+            <span className="demo-label">静态交互 Demo</span>
+            <strong>爱家服务助手</strong>
+          </div>
+          <div className="customer-phone__header-status">
+            <span>AI 在线</span>
+            <small>{serviceCase.id}</small>
+          </div>
+        </header>
 
         <main className="customer-phone__content">
           <section className="customer-device" aria-label="冰箱设备状态">
@@ -61,10 +67,14 @@ export function CustomerWorkspace() {
             />
           </section>
 
-          <section className="customer-chat" aria-label="AI 服务对话">
-            <p className="chat-message chat-message--assistant">
+          <section
+            aria-label="AI 服务对话"
+            aria-live="polite"
+            className="customer-chat"
+          >
+            <CustomerChatMessage meta="刚刚" sender="assistant">
               {customerDemo.greeting}
-            </p>
+            </CustomerChatMessage>
 
             {stage === "invitation" ? (
               <div className="customer-prompts" aria-label="快捷回复">
@@ -80,28 +90,41 @@ export function CustomerWorkspace() {
               </div>
             ) : (
               <>
-                <p className="chat-message chat-message--customer">
+                <CustomerChatMessage meta="已送达" sender="customer">
                   {customerDemo.prompt}
-                </p>
-                <p className="chat-message chat-message--assistant">
-                  {customerDemo.diagnosis}
-                </p>
+                </CustomerChatMessage>
+                <CustomerChatMessage
+                  meta="设备数据已同步"
+                  sender="assistant"
+                >
+                  <span className="customer-message__reading">
+                    {customerDemo.reading}
+                  </span>
+                  <strong>{customerDemo.diagnosis}</strong>
+                </CustomerChatMessage>
               </>
             )}
+
+            {stage === "scheduled" ? (
+              <CustomerChatMessage meta="等待客服确认" sender="assistant">
+                {customerDemo.confirmation}
+              </CustomerChatMessage>
+            ) : null}
+
+            {stage === "diagnosed" ? (
+              <button
+                className="demo-primary-button customer-chat__action"
+                onClick={() => setStage("scheduled")}
+                type="button"
+              >
+                继续安排服务
+              </button>
+            ) : null}
           </section>
 
           {stage !== "invitation" ? (
             <section className="customer-service-progress">
               <DemoTimeline label="本次服务进度" steps={timeline} />
-              {stage === "diagnosed" ? (
-                <button
-                  className="demo-primary-button"
-                  onClick={() => setStage("scheduled")}
-                  type="button"
-                >
-                  继续安排服务
-                </button>
-              ) : null}
             </section>
           ) : null}
         </main>

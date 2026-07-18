@@ -19,17 +19,30 @@ describe("perspective workspaces", () => {
         "检测到冷藏室温度持续偏高，需要我帮你一起确认吗？",
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText("万护助手")).toBeInTheDocument();
+    expect(screen.getByText("刚刚")).toBeInTheDocument();
+    expect(screen.getByLabelText("AI 服务对话")).toHaveAttribute(
+      "aria-live",
+      "polite",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "饮料不够凉" }));
 
-    expect(
-      screen.getByText(
+    const customerMessage = screen.getByText("饮料不够凉").closest("article");
+    const assistantDiagnosis = screen
+      .getByText(
         "结合温度曲线，可能与冷藏温度传感器或风道密封有关。",
-      ),
-    ).toBeInTheDocument();
+      )
+      .closest("article");
+    expect(customerMessage).toHaveAttribute("data-sender", "customer");
+    expect(assistantDiagnosis).toHaveAttribute("data-sender", "assistant");
+    expect(screen.getByText("已送达")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "继续安排服务" }));
     expect(screen.getByRole("status")).toHaveTextContent("等待客服确认");
+    expect(
+      screen.getByText(/已为你提交 14:30–15:30 上门服务/),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "重新演示" }));
     expect(screen.getByRole("status")).not.toHaveTextContent(
