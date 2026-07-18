@@ -53,7 +53,7 @@
 - Produces: `serviceCase`, `customerDemo`, `agentDemo`, `engineerDemo`, `vocTopics`, `VocTopicId`。
 - Consumes: no runtime dependencies。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```tsx
 expect(screen.queryByText("−18°")).not.toBeInTheDocument();
@@ -71,13 +71,13 @@ expect(engineerDemo.caseId).toBe(serviceCase.id);
 expect(vocTopics[0].relatedCaseId).toBe(serviceCase.id);
 ```
 
-- [ ] **Step 2: 确认 RED**
+- [x] **Step 2: 确认 RED**
 
 Run: `npx vitest run app/landing-content.test.tsx src/features/showcase/perspective-demo-data.test.ts`
 
 Expected: pulse 仍存在且数据模块不存在。
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 `HeroMedia` 只保留 `Image` 与 shade。数据模块至少导出：
 
@@ -123,7 +123,7 @@ export const vocTopics = [
 export type VocTopicId = (typeof vocTopics)[number]["id"];
 ```
 
-- [ ] **Step 4: 确认 GREEN 并提交**
+- [x] **Step 4: 确认 GREEN 并提交**
 
 Run: `npx vitest run app/landing-content.test.tsx src/features/showcase/perspective-demo-data.test.ts`
 
@@ -145,7 +145,7 @@ git commit -m "feat: establish OneCare service demo case"
 - Produces: `PerspectiveTabs`, `DemoStatusBar`, `DemoMetric`, `DemoTimeline`。
 - Consumes: existing `Perspective[]` and role components。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```tsx
 const { container } = render(<PerspectiveTabs perspectives={perspectives} />);
@@ -160,13 +160,13 @@ expect(container.querySelectorAll('[role="tabpanel"]')).toHaveLength(4);
 
 保留 `ArrowRight`、`ArrowLeft`、`Home`、`End` 与焦点断言。
 
-- [ ] **Step 2: 确认 RED**
+- [x] **Step 2: 确认 RED**
 
 Run: `npx vitest run src/features/showcase/components/perspective-tabs.test.tsx`
 
 Expected: 现有组件只有一个 panel。
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 每个 panel 使用：
 
@@ -196,7 +196,7 @@ type DemoTimelineProps = Readonly<{
 }>;
 ```
 
-- [ ] **Step 4: 确认 GREEN 并提交**
+- [x] **Step 4: 确认 GREEN 并提交**
 
 Run: `npx vitest run src/features/showcase/components/perspective-tabs.test.tsx app/landing-content.test.tsx`
 
@@ -218,7 +218,7 @@ git commit -m "feat: add fullscreen perspective workspace switcher"
 - Produces: `CustomerWorkspace()`。
 - Consumes: unified data and shared UI components。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```tsx
 render(<CustomerWorkspace />);
@@ -232,13 +232,13 @@ fireEvent.click(screen.getByRole("button", { name: "重新演示" }));
 expect(screen.queryByText("等待客服确认")).not.toBeInTheDocument();
 ```
 
-- [ ] **Step 2: 确认 RED**
+- [x] **Step 2: 确认 RED**
 
 Run: `npx vitest run src/features/showcase/components/perspective-workspaces.test.tsx`
 
 Expected: `CustomerWorkspace` 不存在。
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 ```ts
 type CustomerStage = "invitation" | "diagnosed" | "scheduled";
@@ -246,7 +246,7 @@ type CustomerStage = "invitation" | "diagnosed" | "scheduled";
 
 点击预设问题进入 `diagnosed`，继续安排进入 `scheduled`，重新演示回到 `invitation`。根节点为 `customer-scene`，手机容器为 `customer-phone`；所有交互内容只能出现在手机容器内。
 
-- [ ] **Step 4: 确认 GREEN 并提交**
+- [x] **Step 4: 确认 GREEN 并提交**
 
 Run: `npx vitest run src/features/showcase/components/perspective-workspaces.test.tsx src/features/showcase/components/perspective-tabs.test.tsx`
 
@@ -269,7 +269,7 @@ git commit -m "feat: add customer phone service demo"
 - Produces: `AgentWorkspace()`, `EngineerWorkspace()`。
 - Consumes: unified data and shared UI components。
 
-- [ ] **Step 1: 写客服失败测试**
+- [x] **Step 1: 写客服失败测试**
 
 ```tsx
 render(<AgentWorkspace />);
@@ -281,13 +281,13 @@ fireEvent.click(screen.getByRole("button", { name: "重新演示" }));
 expect(screen.getByRole("button", { name: "生成服务工单" })).toBeEnabled();
 ```
 
-- [ ] **Step 2: 确认客服 RED，写最小状态并确认 GREEN**
+- [x] **Step 2: 确认客服 RED，写最小状态并确认 GREEN**
 
 Run: `npx vitest run src/features/showcase/components/perspective-workspaces.test.tsx -t "客服"`
 
 使用 `const [created, setCreated] = useState(false)`；生成后显示 `OC-WO-037`、周启明和“等待工程师接单”。重复运行上方命令，Expected: PASS。
 
-- [ ] **Step 3: 写工程师失败测试**
+- [x] **Step 3: 写工程师失败测试**
 
 ```tsx
 render(<EngineerWorkspace />);
@@ -300,13 +300,13 @@ fireEvent.click(complete);
 expect(screen.getByRole("status")).toHaveTextContent("首次上门完成");
 ```
 
-- [ ] **Step 4: 确认工程师 RED，写最小状态并确认 GREEN**
+- [x] **Step 4: 确认工程师 RED，写最小状态并确认 GREEN**
 
 Run: `npx vitest run src/features/showcase/components/perspective-workspaces.test.tsx -t "工程师"`
 
 使用 `type EngineerStage = "review" | "ready" | "complete"`；确认携件进入 `ready`，完成服务进入 `complete`，重置回 `review`。重复运行完整工作台测试，Expected: PASS。
 
-- [ ] **Step 5: 提交 Task 4**
+- [x] **Step 5: 提交 Task 4**
 
 ```bash
 git add src/features/showcase/components/agent-workspace.tsx src/features/showcase/components/engineer-workspace.tsx src/features/showcase/components/perspective-workspaces.test.tsx src/features/showcase/components/perspective-tabs.tsx
@@ -326,7 +326,7 @@ git commit -m "feat: add service agent and engineer demos"
 - Produces: `OperationsWorkspace()`。
 - Consumes: `vocTopics`, `VocTopicId`, shared UI components。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```tsx
 render(<OperationsWorkspace />);
@@ -338,13 +338,13 @@ expect(screen.getByRole("status")).toHaveTextContent("已进入闭环");
 expect(screen.getByText("产品质量 × 服务运营")).toBeInTheDocument();
 ```
 
-- [ ] **Step 2: 确认 RED**
+- [x] **Step 2: 确认 RED**
 
 Run: `npx vitest run src/features/showcase/components/perspective-workspaces.test.tsx -t "后台"`
 
 Expected: `OperationsWorkspace` 不存在。
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 ```ts
 const [selectedTopic, setSelectedTopic] = useState<VocTopicId>("temperature");
@@ -353,7 +353,7 @@ const [taskTopic, setTaskTopic] = useState<VocTopicId | null>(null);
 
 主题按钮使用 `aria-pressed`；切换主题更新详情；创建任务记录当前主题；重新演示恢复 `temperature` 和 `null`。
 
-- [ ] **Step 4: 确认 GREEN 并提交**
+- [x] **Step 4: 确认 GREEN 并提交**
 
 Run: `npx vitest run src/features/showcase/components/perspective-workspaces.test.tsx src/features/showcase/components/perspective-tabs.test.tsx`
 
@@ -375,7 +375,7 @@ git commit -m "feat: add VOC operations workspace demo"
 - Produces: `.perspectives-section`, `.perspective-workspace-viewport`, `.perspective-workspace`, `.customer-phone` and role grids。
 - Consumes: Tasks 2–5 semantic class names。
 
-- [ ] **Step 1: 写 CSS 合约失败测试**
+- [x] **Step 1: 写 CSS 合约失败测试**
 
 ```ts
 expect(styles).not.toContain(".showroom-hero__pulse {");
@@ -385,13 +385,13 @@ expect(styles).toMatch(/\.perspective-workspace\[data-position="before"\][^{]*\{
 expect(styles).toMatch(/\.customer-phone\s*\{[^}]*width:\s*min\(390px,\s*100%\)/s);
 ```
 
-- [ ] **Step 2: 确认 RED**
+- [x] **Step 2: 确认 RED**
 
 Run: `npx vitest run app/fullscreen-showcase-styles.test.ts`
 
 Expected: 旧 CSS 仍包含 pulse 和 `.perspective-panel`。
 
-- [ ] **Step 3: 写最小布局**
+- [x] **Step 3: 写最小布局**
 
 ```css
 .perspectives-section {
@@ -416,7 +416,7 @@ Expected: 旧 CSS 仍包含 pulse 和 `.perspective-panel`。
 
 删除 `.perspective-panel*` 与 `.showroom-hero__pulse*`。桌面客服三栏、工程师主区加侧栏、后台指标带加双栏；`max-width: 900px` 改为单列；`max-width: 640px` 移除用户手机外壳。
 
-- [ ] **Step 4: 确认 GREEN 并提交**
+- [x] **Step 4: 确认 GREEN 并提交**
 
 Run: `npx vitest run app/fullscreen-showcase-styles.test.ts app/landing-content.test.tsx src/features/showcase/components/perspective-tabs.test.tsx src/features/showcase/components/perspective-workspaces.test.tsx`
 
@@ -438,11 +438,11 @@ git commit -m "style: build fullscreen role workspaces"
 - Produces: verified repository and non-Production Preview URL。
 - Consumes: all completed tasks。
 
-- [ ] **Step 1: 更新文档**
+- [x] **Step 1: 更新文档**
 
 README 明确用户视角是手机尺寸 AI 对话 Demo，其他三个是全屏模拟工作台；所有回复、设备、工单、配件和 VOC 数据均为静态模拟。同步勾选计划并把浏览器结果写回 spec。
 
-- [ ] **Step 2: 运行完整验证**
+- [x] **Step 2: 运行完整验证**
 
 ```bash
 npm test
@@ -456,11 +456,11 @@ git diff --check
 
 Expected: 全部退出码为 0，Audit 为 `0 vulnerabilities`。
 
-- [ ] **Step 3: 真实浏览器验收**
+- [x] **Step 3: 真实浏览器验收**
 
 在 `1440 × 900`、`1024 × 768`、`390 × 844` 验证首页无温度脉冲；用户手机桌面不超过约 `390 × 720px` 且移动端无双重外框；四个工作台切换、状态保持、重置、独立滚动和全部核心交互正确；减少动效无横移；无横向溢出、控制台错误、hydration 警告或 404。
 
-- [ ] **Step 4: 提交文档**
+- [x] **Step 4: 提交文档**
 
 ```bash
 git add README.md docs/superpowers/specs/2026-07-18-onecare-perspective-workspaces-design.md docs/superpowers/plans/2026-07-18-onecare-perspective-workspaces.md
