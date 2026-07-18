@@ -219,3 +219,9 @@ Reducer 对不满足前置阶段的动作返回原状态，避免通过单个角
 - 移动端初始三个按钮宽度均为 `118px`；自助、转人工和最终阶段消息区 `scrollTop` 分别为 `311 / 438 / 566px`，最新内容均位于内部可视范围；
 - 完整链路结束后，用户显示“服务已完成”；重置后客服建单、工程师携件和后台改善按钮重新禁用，默认 VOC 主题恢复；
 - 两种视口均无页面级横向溢出，控制台为 0 错误、0 警告。
+
+## Preview 验收记录
+
+2026-07-18 已发布非 Production Vercel Preview：部署 ID `dpl_FERAJ91jqNGBR7a7TEgCzmK4Rj87`，状态 `Ready`，固定别名为 `https://onecare-homepage-preview.vercel.app`。部署未使用 `--prod`，Share secret 未写入仓库。
+
+新的匿名 Playwright 会话在 `1440 × 900` 和 `390 × 844` 下分别完成“用户选择饮料不够凉 → AI 知识库自助 → 仍需人工服务 → 客服生成工单 → 工程师确认携件并完成服务 → 后台创建改善任务 → 用户显示服务已完成”的完整路径。跨视角状态均在切换后立即更新，两端控制台均为 0 错误、0 警告。移动端 `documentElement.scrollWidth = 390px`，最终阶段场景与手机为 `y=244.140625px / height=575.859375px / bottom=820px`，操作槽为 `y=701px / height=44px`，最新完成消息位于手机内部滚动区。

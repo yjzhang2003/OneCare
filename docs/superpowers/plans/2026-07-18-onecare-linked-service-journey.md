@@ -892,7 +892,7 @@ git add README.md docs/superpowers/specs/2026-07-18-onecare-linked-service-journ
 git commit -m "docs: verify linked service journey"
 ```
 
-- [ ] **Step 5: 发布并匿名验收 Preview**
+- [x] **Step 5: 发布并匿名验收 Preview**
 
 Run:
 
@@ -904,7 +904,9 @@ npx vercel alias set "$PREVIEW_URL" onecare-homepage-preview.vercel.app
 
 Do not use `--prod`. Reuse or regenerate an expiring Vercel Share Link without writing its secret to the repository. In a new anonymous Playwright session, repeat the complete four-role path at desktop and mobile sizes and confirm the title, controls, shared updates, reset, no horizontal overflow, and 0 console errors/warnings.
 
-- [ ] **Step 6: 记录部署并最终检查**
+2026-07-18 已发布非 Production Preview，并将固定别名重新绑定到该部署。匿名 Playwright 会话在 `1440 × 900` 与 `390 × 844` 下均完整跑通用户自助、转人工、客服建单、工程师携件确认与完工、后台创建改善任务、用户完成态及全局重置。两端标题正确、跨角色状态即时更新、控制台为 0 错误和 0 警告；移动端 `documentElement.scrollWidth = 390px`，无页面级横向溢出，最终阶段手机和场景均为 `y=244.140625px / height=575.859375px / bottom=820px`，操作槽为 `y=701px / height=44px`，内部对话滚动至最新消息。
+
+- [x] **Step 6: 记录部署并最终检查**
 
 Record only the deployment ID, Ready status and alias in the spec/plan; keep the Share secret only in the final delivery message.
 
@@ -917,3 +919,5 @@ git log -12 --oneline
 ```
 
 Expected: working tree clean, branch remains `codex/onecare-perspective-workspaces`, and commits are limited to this spec, plan, shared state, four workspaces, tests, styles, docs and Preview records.
+
+2026-07-18 Preview 记录：部署 ID `dpl_FERAJ91jqNGBR7a7TEgCzmK4Rj87`，状态 `Ready`，非 Production 部署地址为 `https://onecare-9tfsdddr9-yjzhang2003s-projects.vercel.app`，固定别名为 `https://onecare-homepage-preview.vercel.app`。Share secret 未写入仓库。
