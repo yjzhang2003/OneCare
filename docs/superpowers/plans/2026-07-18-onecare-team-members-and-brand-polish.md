@@ -452,7 +452,9 @@ git commit -m "refactor: organize OneCare footer content"
 
 ```ts
 expect(css).toMatch(/\.team-card__section\s+ul\s*\{/);
-expect(css).toMatch(/\.footer-top\s*\{[\s\S]*?grid-template-columns:/);
+expect(css).toMatch(
+  /\.landing-shell \.footer-top,\s*\.landing-shell \.footer-bottom\s*\{[\s\S]*?grid-template-columns:/,
+);
 expect(css).toMatch(/\.footer-bottom\s*\{[\s\S]*?border-top:/);
 expect(css).toMatch(
   /@media \(max-width: 640px\)[\s\S]*?\.landing-shell \.footer-top[\s\S]*?grid-template-columns:\s*1fr/,
