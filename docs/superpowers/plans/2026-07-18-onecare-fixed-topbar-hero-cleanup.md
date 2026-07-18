@@ -112,7 +112,7 @@ Deploy without `--prod`, assign `onecare-homepage-preview.vercel.app`, and verif
 **Interfaces:**
 - Produces: the visible “万护 OneCare” joint brand without changing technical identifiers or deployment URLs.
 
-- [ ] **Step 1: Define and verify the failing naming contract**
+- [x] **Step 1: Define and verify the failing naming contract**
 
 Require “万护 ONECARE” in the homepage and dashboard wordmarks, “万护 OneCare” in homepage narrative copy, and updated accessible labels. Run the targeted tests and confirm RED before implementation.
 

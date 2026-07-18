@@ -15,6 +15,13 @@ describe("LandingContent", () => {
       }),
     ).toBeInTheDocument();
 
+    expect(screen.getByLabelText("万护 OneCare 首页")).toHaveTextContent(
+      "万护 ONECARE",
+    );
+    expect(
+      screen.getByText(/万护 OneCare 面向海信智能家庭场景/),
+    ).toBeInTheDocument();
+
     expect(screen.getByRole("link", { name: "四个视角" })).toHaveAttribute(
       "href",
       "#perspectives",
@@ -43,7 +50,7 @@ describe("LandingContent", () => {
     });
 
     expect(
-      screen.getByRole("tablist", { name: "OneCare 服务角色" }),
+      screen.getByRole("tablist", { name: "万护 OneCare 服务角色" }),
     ).toBeInTheDocument();
 
     const userTab = screen.getByRole("tab", { name: "用户" });
@@ -58,7 +65,7 @@ describe("LandingContent", () => {
     );
 
     expect(
-      screen.getByRole("list", { name: "OneCare 五层服务蓝图" }),
+      screen.getByRole("list", { name: "万护 OneCare 五层服务蓝图" }),
     ).toBeInTheDocument();
     ["感知", "诊断", "编排", "服务", "学习"].forEach((name) => {
       expect(screen.getByRole("heading", { name })).toBeInTheDocument();
@@ -78,7 +85,7 @@ describe("LandingContent", () => {
     const login = screen.getByRole("link", { name: "使用飞书登录" });
     expect(login).toHaveAttribute("href", "/api/auth/feishu/start");
     expect(
-      screen.getByText(/尚未接入真实业务数据或 AI 服务/),
+      screen.getByText(/当前为万护 OneCare 方案原型/),
     ).toBeInTheDocument();
     expect(container.querySelector('a[href^="/experience/"]')).toBeNull();
     expect(container.querySelector(".role-card, .signal-flow")).toBeNull();
