@@ -50,7 +50,7 @@
 - Consumes: Vercel project `onecare`, domain `ohmyfeishu.top`, existing Production Route `POST /api/feishu/events`.
 - Produces: HTTPS endpoint `https://onecare.ohmyfeishu.top/api/feishu/events`.
 
-- [ ] **Step 1: Register the subdomain with the OneCare Vercel project**
+- [x] **Step 1: Register the subdomain with the OneCare Vercel project**
 
 Run:
 
@@ -116,6 +116,13 @@ git status --short --branch
 ```
 
 Expected: documentation contains no secret values; `git diff --check` passes.
+
+### Custom Domain Execution Evidence
+
+- Vercel attached `onecare.ohmyfeishu.top` to project `onecare` without `--force` and confirmed domain ownership in the current account scope.
+- Current authoritative nameservers remain `dns23.hichina.com` and `dns24.hichina.com`; the root domain and `www` assignment were not changed.
+- Vercel's highest-ranked required record is `CNAME onecare 58f23ec1de303fe0.vercel-dns-017.com.`
+- Domain status remains `invalid-configuration` until the user adds that CNAME in Alibaba Cloud DNS.
 
 ## Preview Evidence
 
