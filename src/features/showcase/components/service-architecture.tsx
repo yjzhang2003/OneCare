@@ -8,21 +8,22 @@ import type {
   ServiceIdentity,
 } from "../content";
 
-type ServiceArchitectureProps = Readonly<{
+type ServiceArchitectureOverviewProps = Readonly<{
   identities: readonly ServiceIdentity[];
   systems: readonly ConnectedSystem[];
   layers: readonly ArchitectureLayer[];
+}>;
+
+type ServiceLoopMechanismProps = Readonly<{
   decisions: readonly DecisionPath[];
   loopSteps: readonly ClosedLoopStep[];
 }>;
 
-export function ServiceArchitecture({
+export function ServiceArchitectureOverview({
   identities,
   systems,
   layers,
-  decisions,
-  loopSteps,
-}: ServiceArchitectureProps) {
+}: ServiceArchitectureOverviewProps) {
   return (
     <section
       aria-label="万护 OneCare 三层闭环架构"
@@ -86,7 +87,19 @@ export function ServiceArchitecture({
           ))}
         </ol>
       </div>
+    </section>
+  );
+}
 
+export function ServiceLoopMechanism({
+  decisions,
+  loopSteps,
+}: ServiceLoopMechanismProps) {
+  return (
+    <section
+      aria-label="万护 OneCare 闭环运行机制"
+      className="service-architecture-panel service-loop-panel"
+    >
       <section aria-labelledby="decision-paths-title" className="decision-section">
         <div className="architecture-section-heading">
           <p>风险分流与治理边界</p>
@@ -114,7 +127,6 @@ export function ServiceArchitecture({
               <span>{step.index}</span>
               <h4>{step.title}</h4>
               <p>{step.description}</p>
-              <i aria-hidden="true" />
             </li>
           ))}
         </ol>

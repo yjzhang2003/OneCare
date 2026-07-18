@@ -122,6 +122,44 @@ describe("fullscreen showcase stylesheet", () => {
     );
   });
 
+  it("uses open editorial groups and a continuous closed-loop rail", () => {
+    expect(css).toMatch(
+      /#architecture\.showcase-page\s*\{[^}]*overflow-y:\s*auto/,
+    );
+    expect(css).toMatch(
+      /\.architecture-chapter-tabs\s*\{[^}]*position:\s*sticky[^}]*border-radius:\s*0/,
+    );
+    expect(css).toMatch(
+      /\.architecture-chapter-section\s*\{[^}]*min-height:\s*calc\([^}]*scroll-margin-top:/,
+    );
+    expect(css).toMatch(
+      /\.architecture-chapter-tabs\s*\{[^}]*display:\s*flex/,
+    );
+    expect(css).toMatch(
+      /\.architecture-chapter-tabs button\s*\{[^}]*border-radius:\s*0/,
+    );
+    expect(css).not.toMatch(/\.architecture-chapter-panel\s*\{[^}]*overflow-y:\s*auto/);
+    expect(css).toMatch(
+      /\.service-identities\s*\{[^}]*gap:\s*clamp\([^}]*border:\s*0/,
+    );
+    expect(css).toMatch(
+      /\.architecture-layers\s*\{[^}]*gap:\s*clamp\([^}]*border:\s*0/,
+    );
+    expect(css).toMatch(
+      /\.decision-paths\s*\{[^}]*gap:\s*clamp\([^}]*border:\s*0/,
+    );
+    expect(css).toMatch(
+      /\.pilot-targets__grid\s*\{[^}]*gap:\s*clamp\([^}]*border:\s*0/,
+    );
+    expect(css).toMatch(
+      /\.closed-loop-steps\s*\{[^}]*position:\s*relative/,
+    );
+    expect(css).toMatch(
+      /\.closed-loop-steps::before\s*\{[^}]*left:\s*0[^}]*right:\s*0[^}]*height:\s*2px/,
+    );
+    expect(css).not.toMatch(/\.closed-loop-steps li:last-child > i/);
+  });
+
   it("styles the self-help guide without customer progress connector lines", () => {
     expect(css).toMatch(
       /\.customer-service-progress \.demo-timeline li::after\s*\{[\s\S]*?content:\s*none;/,

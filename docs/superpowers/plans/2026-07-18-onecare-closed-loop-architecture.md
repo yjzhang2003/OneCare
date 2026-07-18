@@ -2,7 +2,7 @@
 
 **Goal:** 将当前“02 · 五层引擎”页面重构为“02 · 闭环架构”，用统一服务事件、三层架构、风险分流、五步闭环、六个月试点目标和渐进推广路径准确呈现已审核的新方案。
 
-**Architecture:** 保留 `#architecture`、一级页面顺序和 `ShowcaseNavigator`。`content.ts` 提供新的只读架构数据；新的服务端友好展示组件负责三层架构与试点目标；`LandingContent` 只组合章节。页面不增加客户端状态、网络请求、真实集成或依赖。
+**Architecture:** 保留 `#architecture`、一级页面顺序和 `ShowcaseNavigator`。`content.ts` 提供新的只读架构数据；展示组件分别负责架构全景、闭环运行与试点落地；`ArchitectureChapters` 将三个章节放入同一全局滚动流，只维护滚动联动的当前章节状态。页面不增加网络请求、真实集成或依赖。
 
 **Tech Stack:** TypeScript、Next.js 16、React 19、CSS、Vitest、React Testing Library。
 
@@ -185,3 +185,36 @@ git diff --check
 Harness 规则清楚区分了规格、计划、测试、远端和 Vercel 权限，没有发现需要修改 `AGENTS.md` 的 durable repository-specific 问题。依赖安装仅在独立工作树生成被忽略的 `node_modules`，没有修改 `package.json` 或锁文件。未执行任何 Vercel 操作。
 
 Git 交付：功能提交为 `01912e9 feat: add OneCare closed-loop architecture`，分支 `codex/onecare-service-architecture-spec` 已推送；Pull Request 为 <https://github.com/yjzhang2003/OneCare/pull/7>，状态 `open`，基线为 `main`。PR 未合并。
+
+## 后续视觉迭代
+
+用户在首轮交付后明确要求 PR 不作为界面完成节点，需继续在同一独立工作树中迭代，直至界面达到评审目标。现有 PR 仅保留为未合并的临时评审分支；后续迭代未经用户确认不提交、不推送、不合并、不部署。
+
+2026-07-18 第一轮视觉反馈聚焦以下两项：
+
+- [x] 减少统一标识、三层架构、风险分流、试点指标和推广路径中的连续外框与单元格边框，改用留白、细分隔线和少量柔和底色，延续其他展示页面的开放式编辑布局；
+- [x] 核心闭环复用原“五层引擎”的贯穿轨道模式，使横线在 `01` 之前和 `05` 之后均保留延伸，并在窄屏下转换为贯穿首尾的纵向轨道；
+- [x] 通过新增 CSS 合约先确认旧实现失败，再完成样式与冗余装饰元素调整；
+- [x] 定向验证 3 个测试文件、15 项测试通过，`npm run typecheck` 与 `git diff --check` 通过；
+- [x] 用户继续进行了后续界面评审，本轮结果由第三轮全局滚动方案取代。
+
+2026-07-18 第二轮视觉反馈确认将 02 从长页面调整为三个内部章节：
+
+- [x] 新增“架构全景 / 闭环运行 / 试点落地”章节导航，默认显示架构全景；
+- [x] 复用 01 的 Tab 语义、左右方向键、Home、End、焦点管理和药丸控件语言，不增加二级路由或英文标签；
+- [x] 将原 `ServiceArchitecture` 局部拆分为 `ServiceArchitectureOverview` 与 `ServiceLoopMechanism`，试点页继续复用 `PilotTargets`，数据来源保持不变；
+- [x] 02 改为固定展示页，标题与章节导航位于上方，当前章节内容在独立区域滚动；移动端保持单列内容和 44px 触控高度；
+- [x] RED 阶段确认章节组件与 Tab 语义缺失；实现后定向验证 4 个文件、18 项通过，类型检查和 `git diff --check` 通过；
+- [x] 应用内浏览器可读取本地服务端结构，但开发页未完成客户端水合，无法把浏览器点击结果作为可靠验收证据；组件测试已覆盖点击与键盘切换，生产构建通过，且未为本地验证修改 Next.js 配置；
+- [x] 用户继续进行了视觉评审，本轮隐藏面板方案由第三轮全局滚动方案取代。
+
+2026-07-18 第三轮视觉反馈将隐藏 Tab 面板改为全局页面滚动：
+
+- [x] 三个章节全部进入 `#architecture` 的连续文档流，不再使用当前章节内部滚动条；
+- [x] 顶部导航改为无椭圆外框的吸顶文字导航，点击后平滑滚动至对应章节；
+- [x] 监听页面滚动位置，越过章节边界后自动更新当前高亮；左右方向键、Home、End 和减少动效行为继续保留；
+- [x] 章节导航使用 `nav`、`button`、`aria-current` 与 `aria-controls`，不再把同时可见的文档章节误标为 Tab；
+- [x] RED 阶段确认旧组件只渲染一个 `tabpanel` 且 CSS 使用嵌套滚动和椭圆容器；实现后定向验证 3 个文件、16 项通过，类型检查和 `git diff --check` 通过；
+- [x] 用户确认全局滚动版本达到当前目标，并授权提交、推送及更新现有 Pull Request。
+
+最终 PR 前验证：`npm test` 为 20 个测试文件、78 项通过；`npm run lint`、`npm run typecheck`、`npm run build`、`npm run test:runtime` 和 `git diff --check` 均通过；`npm audit --omit=dev` 为 0 vulnerabilities。审计首次在沙箱内因网络权限失败，使用获批的 npm 官方审计连接重跑后通过。未执行 Vercel 操作。

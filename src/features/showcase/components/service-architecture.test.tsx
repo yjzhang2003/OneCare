@@ -11,18 +11,19 @@ import {
   serviceIdentities,
 } from "../content";
 import { PilotTargets } from "./pilot-targets";
-import { ServiceArchitecture } from "./service-architecture";
+import {
+  ServiceArchitectureOverview,
+  ServiceLoopMechanism,
+} from "./service-architecture";
 
 afterEach(cleanup);
 
 describe("ServiceArchitecture", () => {
-  it("renders the unified event, three layers, governed decision paths, and loop", () => {
+  it("renders the unified event and three architecture layers", () => {
     render(
-      <ServiceArchitecture
-        decisions={decisionPaths}
+      <ServiceArchitectureOverview
         identities={serviceIdentities}
         layers={architectureLayers}
-        loopSteps={closedLoopSteps}
         systems={connectedSystems}
       />,
     );
@@ -37,6 +38,16 @@ describe("ServiceArchitecture", () => {
 
     const layers = screen.getByRole("list", { name: "万护 OneCare 三层架构" });
     expect(within(layers).getAllByRole("heading", { level: 4 })).toHaveLength(3);
+  });
+
+  it("renders governed decision paths and the five-step loop", () => {
+    render(
+      <ServiceLoopMechanism
+        decisions={decisionPaths}
+        loopSteps={closedLoopSteps}
+      />,
+    );
+
     expect(screen.getByText("复杂、低置信度或高风险")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "人工审核后执行" })).toBeInTheDocument();
 

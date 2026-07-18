@@ -11,10 +11,9 @@ import {
   teamMembers,
 } from "../src/features/showcase/content";
 import { HeroMedia } from "../src/features/showcase/components/hero-media";
-import { PilotTargets } from "../src/features/showcase/components/pilot-targets";
+import { ArchitectureChapters } from "../src/features/showcase/components/architecture-chapters";
 import { PerspectiveTabs } from "../src/features/showcase/components/perspective-tabs";
 import { SectionFrame } from "../src/features/showcase/components/section-frame";
-import { ServiceArchitecture } from "../src/features/showcase/components/service-architecture";
 import { SiteFooter } from "../src/features/showcase/components/site-footer";
 import { ShowcaseNavigator } from "../src/features/showcase/components/showcase-navigator";
 import { ShowcasePageHeading } from "../src/features/showcase/components/showcase-page-heading";
@@ -90,15 +89,16 @@ export function LandingContent({ user, authError }: LandingContentProps) {
           title="统一服务事件，驱动三层协同闭环"
           intro="万护拟通过统一的用户、设备与服务事件标识，轻量连接海信爱家、400 客服、IoT、工程师和备件系统，让一次问题在数据、决策和执行之间连续流转。"
         >
-          <ServiceArchitecture
+          <ArchitectureChapters
             decisions={decisionPaths}
             identities={serviceIdentities}
             layers={architectureLayers}
             loopSteps={closedLoopSteps}
+            stages={rolloutStages}
             systems={connectedSystems}
+            targets={pilotTargets}
           />
         </SectionFrame>
-              <PilotTargets stages={rolloutStages} targets={pilotTargets} />
             </div>
           ),
           team: (

@@ -98,6 +98,9 @@ describe("LandingContent", () => {
     fireEvent.click(screen.getByRole("link", { name: "闭环架构" }));
     expect(screen.getByText("02 · 闭环架构")).toBeInTheDocument();
     expect(
+      screen.getByRole("navigation", { name: "闭环架构章节" }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("region", { name: "万护 OneCare 三层闭环架构" }),
     ).toBeInTheDocument();
     ["数据与知识层", "智能编排层", "多角色应用层"].forEach((name) => {
@@ -108,6 +111,7 @@ describe("LandingContent", () => {
       expect(screen.getByText(identity)).toBeInTheDocument();
     });
     expect(screen.getByRole("heading", { name: "人工审核后执行" })).toBeInTheDocument();
+
     expect(screen.getByRole("heading", { name: "6 个月试点目标" })).toBeInTheDocument();
     expect(screen.getByText("降低 30%–50%")).toBeInTheDocument();
     expect(screen.getByText("降低 15%")).toBeInTheDocument();

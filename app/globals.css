@@ -4380,6 +4380,110 @@ a {
 
 /* OneCare closed-loop architecture */
 
+#architecture.showcase-page {
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.architecture-page {
+  width: 100%;
+  min-height: 100%;
+}
+
+.architecture-page .section-frame {
+  width: 100%;
+  min-height: 100%;
+  padding: 18px clamp(20px, 3vw, 48px) 0;
+}
+
+.architecture-page .showcase-page-heading {
+  display: grid;
+  grid-template-columns: auto minmax(280px, 0.85fr) minmax(320px, 1.15fr);
+  gap: clamp(18px, 3vw, 48px);
+  align-items: center;
+  max-width: none;
+  margin: 0 0 14px;
+}
+
+.architecture-page .showcase-page-kicker,
+.architecture-page .showcase-page-heading h2,
+.architecture-page .showcase-page-intro {
+  margin: 0;
+}
+
+.architecture-page .showcase-page-heading h2 {
+  font-size: clamp(24px, 2.1vw, 32px);
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+}
+
+.architecture-page .showcase-page-intro {
+  max-width: 620px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.architecture-chapters {
+  min-width: 0;
+}
+
+.architecture-chapter-tabs {
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  display: flex;
+  width: 100%;
+  gap: clamp(24px, 4vw, 56px);
+  margin: 0;
+  padding: 8px 0 10px;
+  overflow-x: auto;
+  background: rgba(255, 255, 255, 0.94);
+  border-bottom: 1px solid var(--onecare-line);
+  border-radius: 0;
+  backdrop-filter: blur(16px);
+  scrollbar-width: none;
+}
+
+.architecture-chapter-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.architecture-chapter-tabs button {
+  position: relative;
+  min-width: max-content;
+  min-height: 46px;
+  padding: 0 4px;
+  color: var(--onecare-muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  transition:
+    color 180ms ease,
+    border-color 180ms ease;
+}
+
+.architecture-chapter-tabs button[aria-current="true"] {
+  color: var(--onecare-teal-dark);
+  border-bottom-color: var(--onecare-teal);
+}
+
+.architecture-chapter-tabs button:focus-visible {
+  outline: 3px solid var(--onecare-teal-dark);
+  outline-offset: 2px;
+}
+
+.architecture-chapter-section {
+  position: relative;
+  min-width: 0;
+  min-height: calc(100dvh - 64px - 78px);
+  padding: 14px 0 clamp(72px, 8vw, 112px);
+  scroll-margin-top: 72px;
+}
+
 .service-architecture-panel {
   position: relative;
   overflow: hidden;
@@ -4446,15 +4550,14 @@ a {
 .service-identities {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(16px, 2vw, 28px);
   margin: 30px 0 0;
-  border-top: 1px solid var(--onecare-ink);
-  border-left: 1px solid var(--onecare-ink);
+  border: 0;
 }
 
 .service-identities div {
-  padding: 20px;
-  border-right: 1px solid var(--onecare-ink);
-  border-bottom: 1px solid var(--onecare-ink);
+  padding: 18px 0 0;
+  border-top: 2px solid var(--onecare-teal);
 }
 
 .service-identities dt {
@@ -4532,22 +4635,22 @@ a {
 .architecture-layers {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(18px, 2.5vw, 36px);
   margin: 28px 0 0;
   padding: 0;
   list-style: none;
-  border-top: 1px solid var(--onecare-ink);
-  border-left: 1px solid var(--onecare-ink);
+  border: 0;
 }
 
 .architecture-layers > li {
   min-width: 0;
-  border-right: 1px solid var(--onecare-ink);
-  border-bottom: 1px solid var(--onecare-ink);
+  border: 0;
 }
 
 .architecture-layers article {
   height: 100%;
-  padding: clamp(22px, 3vw, 34px);
+  padding: clamp(22px, 3vw, 34px) 0 0;
+  border-top: 1px solid var(--onecare-ink);
 }
 
 .architecture-layers article > span,
@@ -4598,16 +4701,17 @@ a {
 .decision-paths {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(16px, 2vw, 24px);
   margin-top: 28px;
-  border-top: 1px solid var(--onecare-ink);
-  border-left: 1px solid var(--onecare-ink);
+  border: 0;
 }
 
 .decision-paths article {
   min-width: 0;
   padding: clamp(22px, 3vw, 34px);
-  border-right: 1px solid var(--onecare-ink);
-  border-bottom: 1px solid var(--onecare-ink);
+  background: #f2faf9;
+  border: 0;
+  border-radius: 22px;
 }
 
 .decision-paths article[data-path="human-review"] {
@@ -4626,11 +4730,22 @@ a {
 }
 
 .closed-loop-steps {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   margin: 28px 0 0;
   padding: 0;
   list-style: none;
+}
+
+.closed-loop-steps::before {
+  position: absolute;
+  top: 16px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #cce5e2;
+  content: "";
 }
 
 .closed-loop-steps > li {
@@ -4639,21 +4754,13 @@ a {
   padding: 0 clamp(16px, 2vw, 24px) 22px 0;
 }
 
+.closed-loop-steps > li > span {
+  position: relative;
+  z-index: 1;
+}
+
 .closed-loop-steps h4 {
   font-size: 20px;
-}
-
-.closed-loop-steps li > i {
-  position: absolute;
-  top: 16px;
-  right: 10px;
-  left: 44px;
-  height: 2px;
-  background: #cce5e2;
-}
-
-.closed-loop-steps li:last-child > i {
-  display: none;
 }
 
 .closed-loop-note {
@@ -4689,12 +4796,18 @@ a {
   border-top: 1px solid var(--onecare-line);
 }
 
+.architecture-chapter-panel .pilot-targets {
+  padding: clamp(30px, 4vw, 52px);
+  border: 1px solid var(--onecare-line);
+  border-radius: 28px;
+}
+
 .pilot-targets__grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(18px, 2.5vw, 36px);
   margin-top: 48px;
-  border-top: 1px solid var(--onecare-ink);
-  border-left: 1px solid var(--onecare-ink);
+  border: 0;
 }
 
 .pilot-targets__grid > p {
@@ -4703,9 +4816,8 @@ a {
   flex-direction: column;
   gap: 9px;
   margin: 0;
-  padding: 26px 22px;
-  border-right: 1px solid var(--onecare-ink);
-  border-bottom: 1px solid var(--onecare-ink);
+  padding: 24px 0 0;
+  border-top: 1px solid var(--onecare-ink);
 }
 
 .pilot-targets__grid small {
@@ -4729,10 +4841,9 @@ a {
   grid-template-columns: minmax(220px, 0.55fr) minmax(0, 1.45fr);
   gap: clamp(28px, 4vw, 52px);
   margin-top: 48px;
-  padding: clamp(26px, 4vw, 42px);
-  background: #f7f9f8;
-  border: 1px solid var(--onecare-line);
-  border-radius: 28px;
+  padding: clamp(30px, 4vw, 42px) 0;
+  border-top: 1px solid var(--onecare-line);
+  border-bottom: 1px solid var(--onecare-line);
 }
 
 .rollout-path ol {
@@ -4775,20 +4886,27 @@ a {
 }
 
 @media (max-width: 1100px) {
+  .architecture-page .showcase-page-heading {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .architecture-page .showcase-page-intro {
+    display: none;
+  }
+
   .architecture-layers,
   .closed-loop-steps {
     grid-template-columns: 1fr;
   }
 
   .architecture-layers > li {
-    border-right: 1px solid var(--onecare-ink);
+    border: 0;
   }
 
   .closed-loop-steps > li {
     display: grid;
     grid-template-columns: 44px minmax(0, 1fr);
     padding: 18px 0;
-    border-bottom: 1px solid var(--onecare-line);
   }
 
   .closed-loop-steps h4,
@@ -4801,10 +4919,10 @@ a {
     margin-top: 8px;
   }
 
-  .closed-loop-steps li > i {
-    top: 52px;
+  .closed-loop-steps::before {
+    top: 0;
     right: auto;
-    bottom: -18px;
+    bottom: 0;
     left: 16px;
     width: 2px;
     height: auto;
@@ -4830,6 +4948,43 @@ a {
 }
 
 @media (max-width: 640px) {
+  .architecture-page .section-frame {
+    padding: 12px 14px 0;
+  }
+
+  .architecture-page .showcase-page-heading {
+    display: block;
+    margin-bottom: 10px;
+  }
+
+  .architecture-page .showcase-page-kicker {
+    margin-bottom: 5px;
+    font-size: 12px;
+  }
+
+  .architecture-page .showcase-page-heading h2 {
+    overflow: hidden;
+    font-size: 21px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .architecture-chapter-tabs {
+    gap: 22px;
+  }
+
+  .architecture-chapter-tabs button {
+    min-height: 44px;
+    padding: 0 2px;
+    font-size: 15px;
+  }
+
+  .architecture-chapter-section {
+    min-height: calc(100dvh - 118px - 72px);
+    padding-top: 12px;
+    scroll-margin-top: 68px;
+  }
+
   .service-event-rail,
   .architecture-stack,
   .decision-section,
@@ -4837,8 +4992,7 @@ a {
     padding: 24px 20px;
   }
 
-  .service-architecture-panel,
-  .rollout-path {
+  .service-architecture-panel {
     border-radius: 24px;
   }
 
@@ -4855,10 +5009,6 @@ a {
     border-right: 0;
   }
 
-  .decision-paths article {
-    border-right: 1px solid var(--onecare-ink);
-  }
-
   .pilot-targets {
     padding: 64px 18px;
   }
@@ -4871,6 +5021,10 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  #architecture.showcase-page {
+    scroll-behavior: auto;
+  }
+
   .architecture-signal {
     animation: none;
   }
