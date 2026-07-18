@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { createBotReply, createWelcomeMessage } from "./bot-script";
+import { createBotReply } from "./bot-script";
 
 const commandCases = [
   {
     kind: "help",
     aliases: ["使用帮助", "Help", "使用帮助 / Help"],
-    expected: "客服工作台",
+    expected: "员工协同工作台",
   },
   {
     kind: "operations",
@@ -15,7 +15,7 @@ const commandCases = [
       "Operations Center",
       "运营后台 / Operations Center",
     ],
-    expected: "闭环风险",
+    expected: "闭环提醒",
   },
   {
     kind: "pending",
@@ -24,7 +24,7 @@ const commandCases = [
       "Pending Services",
       "待确认服务 / Pending Services",
     ],
-    expected: "等待客服确认",
+    expected: "知识库辅助用户自查",
   },
   {
     kind: "ticket",
@@ -47,7 +47,7 @@ const commandCases = [
   {
     kind: "tasks",
     aliases: ["今日任务", "Today’s Tasks", "今日任务 / Today’s Tasks"],
-    expected: "今日上门任务",
+    expected: "今日上门",
   },
   {
     kind: "diagnosis",
@@ -65,7 +65,7 @@ const commandCases = [
       "Submit Result",
       "提交服务结果 / Submit Result",
     ],
-    expected: "自动回访",
+    expected: "自动触发回访",
   },
 ] as const;
 
@@ -77,8 +77,9 @@ describe("createBotReply", () => {
         const reply = createBotReply(`  ${alias}  `);
 
         expect(reply.kind).toBe(kind);
-        expect(reply.text).toContain(expected);
-        expect(reply.text).toContain("演示");
+        expect(reply.message.msgType).toBe("interactive");
+        expect(reply.message.content).toContain(expected);
+        expect(reply.message.content).toContain("演示");
       }
     },
   );
@@ -91,23 +92,8 @@ describe("createBotReply", () => {
     const reply = createBotReply("无法识别的内容");
 
     expect(reply.kind).toBe("help");
-    expect(reply.text).toContain("客服工作台");
-    expect(reply.text).not.toContain("饮料不够凉");
-  });
-});
-
-describe("createWelcomeMessage", () => {
-  it("builds the staff welcome card", () => {
-    const message = createWelcomeMessage();
-    const card = JSON.parse(message.content) as {
-      header: { title: { content: string } };
-    };
-
-    expect(message.msgType).toBe("interactive");
-    expect(card.header.title.content).toBe("万护 OneCare");
-    expect(message.content).toContain("AI 驱动的用户服务全链路协同助手");
-    expect(message.content).toContain("OC-240718-037");
-    expect(message.content).toContain("等待客服确认");
-    expect(message.content).toContain("请从下方菜单选择工作入口");
+    expect(reply.message.msgType).toBe("interactive");
+    expect(reply.message.content).toContain("员工协同工作台");
+    expect(reply.message.content).not.toContain("饮料不够凉");
   });
 });
