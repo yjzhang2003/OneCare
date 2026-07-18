@@ -47,7 +47,7 @@ export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
       <div
         className="perspective-tabs"
         role="tablist"
-        aria-label="OneCare 服务角色"
+        aria-label="万护 OneCare 服务角色"
       >
         {perspectives.map((perspective, index) => (
           <button

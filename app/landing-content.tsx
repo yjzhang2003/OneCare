@@ -46,13 +46,13 @@ export function LandingContent({ user, authError }: LandingContentProps) {
         <section className="showroom-hero">
           <HeroMedia />
           <div className="showroom-hero__copy">
-            <p className="eyebrow">ONECARE · AI 用户服务闭环引擎</p>
+            <p className="eyebrow">万护 ONECARE · AI 用户服务闭环引擎</p>
             <h1>
               <span>让每一次服务，</span>
               <span>都比问题更早一步</span>
             </h1>
             <p className="hero-intro">
-              OneCare 面向海信智能家庭场景，把用户声音、设备信号与服务协同
+              万护 OneCare 面向海信智能家庭场景，把用户声音、设备信号与服务协同
               串成一条有感知、有判断、有行动、会学习的服务闭环。
             </p>
 
@@ -99,7 +99,7 @@ export function LandingContent({ user, authError }: LandingContentProps) {
           <div>
             <p>03 / OUTCOME</p>
             <h2 id="outcome-title">一次就好</h2>
-            <p>以下是 OneCare 的方案目标，不代表已经实现的生产指标。</p>
+            <p>以下是万护 OneCare 的方案目标，不代表已经实现的生产指标。</p>
           </div>
           <OutcomeStatement outcomes={outcomes} />
           <p className="outcome-loop">

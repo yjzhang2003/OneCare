@@ -4,7 +4,7 @@ Read this file before changing the repository. Keep work scoped, evidence-based,
 
 ## Project Baseline
 
-- Product: OneCare, an AI-assisted end-to-end user-service loop concept for Hisense smart-home scenarios.
+- Product: 万护 OneCare, an AI-assisted end-to-end user-service loop concept for Hisense smart-home scenarios.
 - Repository: GitHub `https://github.com/yjzhang2003/OneCare.git`.
 - Default branch: `main`.
 - Language boundary: TypeScript only. Do not add Python code or Python tooling.

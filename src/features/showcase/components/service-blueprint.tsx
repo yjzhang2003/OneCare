@@ -8,7 +8,7 @@ type ServiceBlueprintProps = {
 export function ServiceBlueprint({ layers, events }: ServiceBlueprintProps) {
   return (
     <div className="blueprint-wrap">
-      <ol className="service-blueprint" aria-label="OneCare 五层服务蓝图">
+      <ol className="service-blueprint" aria-label="万护 OneCare 五层服务蓝图">
         {layers.map((layer, index) => (
           <li className="blueprint-layer" key={layer.index}>
             <div className="blueprint-layer__node" aria-hidden="true">

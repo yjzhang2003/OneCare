@@ -12,12 +12,12 @@ const navigation = [
 export function SiteHeader({ user }: { user: AuthUser | null }) {
   return (
     <header className="site-header public-header">
-      <Link className="wordmark" href="/" aria-label="OneCare 首页">
+      <Link className="wordmark" href="/" aria-label="万护 OneCare 首页">
         <span className="wordmark-mark" aria-hidden="true">
           1C
         </span>
         <span>
-          ONECARE
+          万护 ONECARE
           <small>AI 用户服务闭环引擎</small>
         </span>
       </Link>

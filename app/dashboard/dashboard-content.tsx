@@ -35,11 +35,15 @@ export function DashboardContent({ user }: { user: AuthUser }) {
   return (
     <div className="dashboard-shell">
       <header className="dashboard-header">
-        <Link className="wordmark compact-wordmark" href="/">
+        <Link
+          aria-label="万护 OneCare 首页"
+          className="wordmark compact-wordmark"
+          href="/"
+        >
           <span className="wordmark-mark" aria-hidden="true">
             1C
           </span>
-          <span>ONECARE</span>
+          <span>万护 ONECARE</span>
         </Link>
 
         <div className="identity-cluster">
@@ -136,7 +140,7 @@ export function DashboardContent({ user }: { user: AuthUser }) {
 
         <section className="module-section" aria-labelledby="module-title">
           <div className="module-heading">
-            <p>ONECARE MODULES</p>
+            <p>万护 / ONECARE MODULES</p>
             <h2 id="module-title">服务全链路</h2>
           </div>
           <div className="module-grid">

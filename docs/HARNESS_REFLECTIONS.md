@@ -53,3 +53,13 @@ The reflection log was initialized on 2026-07-16. Append new dated entries below
 - Expected benefit: Every completed visual branch becomes directly reviewable without risking the stable production site or requiring repeated deployment instructions.
 - Rollback condition: Append a superseding reflection and remove or narrow the rule if Preview deployments create material cost, expose content that should remain local, conflict with a new hosting workflow, or the user withdraws standing authority.
 - Status: applied
+
+### 2026-07-18 — Record the Chinese product name
+
+- Task: Add the user-confirmed Chinese scheme name “万护” to the current OneCare website and documentation.
+- Evidence: The user explicitly set the Chinese name to “万护” and instructed this branch to add it wherever appropriate while retaining the existing OneCare product and deployment identity.
+- Problem: `AGENTS.md` would continue to describe the product only as OneCare, so future contributors could omit the approved Chinese name from new user-facing work.
+- `AGENTS.md` change: Update the product baseline name to “万护 OneCare” without changing repository, technology, security, testing, Feishu, or deployment rules.
+- Expected benefit: Future specifications and interface work consistently start from the approved bilingual brand name.
+- Rollback condition: Append a superseding reflection and revise the baseline if the user changes or withdraws the Chinese product name.
+- Status: applied

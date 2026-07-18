@@ -108,6 +108,8 @@ Deploy without `--prod`, assign `onecare-homepage-preview.vercel.app`, and verif
 - Modify: `src/features/showcase/components/service-blueprint.tsx`
 - Modify: `README.md`
 - Modify: `docs/TECH_STACK.md`
+- Modify: `AGENTS.md`
+- Modify: `docs/HARNESS_REFLECTIONS.md`
 
 **Interfaces:**
 - Produces: the visible “万护 OneCare” joint brand without changing technical identifiers or deployment URLs.
@@ -116,11 +118,11 @@ Deploy without `--prod`, assign `onecare-homepage-preview.vercel.app`, and verif
 
 Require “万护 ONECARE” in the homepage and dashboard wordmarks, “万护 OneCare” in homepage narrative copy, and updated accessible labels. Run the targeted tests and confirm RED before implementation.
 
-- [ ] **Step 2: Apply the joint brand to product surfaces**
+- [x] **Step 2: Apply the joint brand to product surfaces**
 
 Update metadata, homepage, footer, dashboard, and accessible brand labels. Do not rename routes, npm package, code symbols, repositories, deployments, or OAuth callbacks.
 
-- [ ] **Step 3: Update current documentation**
+- [x] **Step 3: Update current documentation**
 
 Introduce the product as “万护 OneCare” in README and the current technology overview; preserve historical specifications and technical identifiers.
 
