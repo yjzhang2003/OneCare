@@ -162,11 +162,11 @@ git diff --check
 
 ### Task 6: Git 与 Pull Request 交付
 
-- [ ] 复核只包含本规格范围的文件，报告所有已知失败和未验证假设。
-- [ ] 创建聚焦提交，不带入原工作树的 `next-env.d.ts`。
-- [ ] 推送 `codex/onecare-service-architecture-spec`。
-- [ ] 创建以 `main` 为基线的 Pull Request，摘要明确“静态方案展示、无真实集成、无 Vercel 操作”。
-- [ ] 返回提交、PR URL、验证结果和剩余人工确认项；不合并 PR。
+- [x] 复核只包含本规格范围的文件，报告所有已知失败和未验证假设。
+- [x] 创建聚焦提交，不带入原工作树的 `next-env.d.ts`。
+- [x] 推送 `codex/onecare-service-architecture-spec`。
+- [x] 创建以 `main` 为基线的 Pull Request，摘要明确“静态方案展示、无真实集成、无 Vercel 操作”。
+- [x] 返回提交、PR URL、验证结果和剩余人工确认项；不合并 PR。
 
 ## 实施验证记录
 
@@ -183,3 +183,5 @@ git diff --check
 本地开发服务返回 HTTP 200，服务端 HTML 包含“统一服务事件，驱动三层协同闭环”、海信爱家标识路径和试点口径声明，且不包含“五层引擎”。应用内浏览器运行环境因本机 `AppData` 读取权限失败，未能完成 `1440 × 900`、`1024 × 768` 和 `390 × 844` 的交互式视觉验收；该项保持未勾选，并作为 PR 已知验证缺口报告。未使用其他浏览器控制方式绕过技能约束。
 
 Harness 规则清楚区分了规格、计划、测试、远端和 Vercel 权限，没有发现需要修改 `AGENTS.md` 的 durable repository-specific 问题。依赖安装仅在独立工作树生成被忽略的 `node_modules`，没有修改 `package.json` 或锁文件。未执行任何 Vercel 操作。
+
+Git 交付：功能提交为 `01912e9 feat: add OneCare closed-loop architecture`，分支 `codex/onecare-service-architecture-spec` 已推送；Pull Request 为 <https://github.com/yjzhang2003/OneCare/pull/7>，状态 `open`，基线为 `main`。PR 未合并。
