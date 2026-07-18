@@ -61,7 +61,7 @@ npx vercel@latest domains inspect onecare.ohmyfeishu.top
 
 Expected: Vercel assigns `onecare.ohmyfeishu.top` only to project `onecare` and prints the exact required CNAME record. Do not use `--force`.
 
-- [ ] **Step 2: Hand off the exact Aliyun DNS record**
+- [x] **Step 2: Hand off the exact Aliyun DNS record**
 
 Report these fields without changing DNS on the user's behalf:
 
@@ -74,7 +74,7 @@ TTL: default / 600 seconds
 
 Expected: user adds the record in the Alibaba Cloud DNS zone for `ohmyfeishu.top` and confirms completion.
 
-- [ ] **Step 3: Verify authoritative DNS and Vercel TLS readiness**
+- [x] **Step 3: Verify authoritative DNS and Vercel TLS readiness**
 
 Run after user confirmation:
 
@@ -122,7 +122,10 @@ Expected: documentation contains no secret values; `git diff --check` passes.
 - Vercel attached `onecare.ohmyfeishu.top` to project `onecare` without `--force` and confirmed domain ownership in the current account scope.
 - Current authoritative nameservers remain `dns23.hichina.com` and `dns24.hichina.com`; the root domain and `www` assignment were not changed.
 - Vercel's highest-ranked required record is `CNAME onecare 58f23ec1de303fe0.vercel-dns-017.com.`
-- Domain status remains `invalid-configuration` until the user adds that CNAME in Alibaba Cloud DNS.
+- The user added the CNAME. Both Alibaba Cloud authoritative nameservers, Alibaba Public DNS, and Cloudflare DNS return the same target.
+- Vercel reports `configured-correctly` and confirmed the domain is attached only to project `onecare`.
+- Automatic TLS was not yet present immediately after DNS verification, so Vercel certificate issuance was triggered explicitly. The resulting Let's Encrypt certificate covers `onecare.ohmyfeishu.top` and is valid through 2026-10-16.
+- HTTPS probe returns the expected 403 without redirect in approximately 1.71 seconds; `x-vercel-id` confirms execution in `hkg1`.
 
 ## Preview Evidence
 
