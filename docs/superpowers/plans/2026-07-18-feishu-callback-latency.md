@@ -1,8 +1,23 @@
 # OneCare Feishu Callback Latency Implementation Plan
 
-**Goal:** 将飞书事件 Route 从 Vercel 默认美国区域迁到香港，满足三秒回调窗口。
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Architecture:** 使用 Vercel 每函数区域配置，只改变 `app/api/feishu/events/route.ts` 的计算区域；不改事件解析、认证和机器人业务逻辑。
+**Goal:** 让飞书事件 Route 通过香港函数和自定义域名 `onecare.ohmyfeishu.top` 满足三秒回调窗口。
+
+**Architecture:** 使用 Vercel 每函数区域配置，只改变 `app/api/feishu/events/route.ts` 的计算区域；再把独立子域名直接绑定到同一个 Vercel Production 项目，绕开中国大陆对 `*.vercel.app` 的潜在阻断。不改事件解析、认证、OAuth 或机器人业务逻辑。
+
+**Tech Stack:** Vercel CLI 56、Vercel Domains、阿里云云解析 DNS、Node.js 24、Next.js 16、飞书 HTTP 事件订阅。
+
+## Global Constraints
+
+- 只使用 `onecare.ohmyfeishu.top`；不迁移或覆盖 `ohmyfeishu.top` 与 `www.ohmyfeishu.top`。
+- 现有生产网站 `https://onecare-loop.vercel.app` 和 OAuth Redirect URI 保持不变。
+- CNAME 记录值必须使用 Vercel 实际返回值，不凭记忆填写。
+- DNS 与 HTTPS 未就绪前不在飞书后台反复验证。
+- 不输出 App Secret、Verification Token、Encrypt Key 或任何访问令牌。
+- 飞书 URL Verification 成功前不宣称回调已经打通。
+
+---
 
 ## Task 1: Lock the regional deployment contract
 
@@ -24,6 +39,83 @@
 
 - [x] 更新飞书体验规格与技术栈文档，记录香港区域和三秒回调要求。
 - [x] 记录验证结果、仍需飞书后台完成的真实验证以及 Harness Reflection。
+
+### Task 4: Bind and verify the custom callback domain
+
+**Files:**
+- Modify: `docs/superpowers/plans/2026-07-18-feishu-callback-latency.md`
+- No application code changes.
+
+**Interfaces:**
+- Consumes: Vercel project `onecare`, domain `ohmyfeishu.top`, existing Production Route `POST /api/feishu/events`.
+- Produces: HTTPS endpoint `https://onecare.ohmyfeishu.top/api/feishu/events`.
+
+- [ ] **Step 1: Register the subdomain with the OneCare Vercel project**
+
+Run:
+
+```bash
+npx vercel@latest domains add onecare.ohmyfeishu.top onecare
+npx vercel@latest domains inspect onecare.ohmyfeishu.top
+```
+
+Expected: Vercel assigns `onecare.ohmyfeishu.top` only to project `onecare` and prints the exact required CNAME record. Do not use `--force`.
+
+- [ ] **Step 2: Hand off the exact Aliyun DNS record**
+
+Report these fields without changing DNS on the user's behalf:
+
+```text
+Record type: CNAME
+Host record: onecare
+Record value: copy the exact CNAME target printed by `vercel domains add`
+TTL: default / 600 seconds
+```
+
+Expected: user adds the record in the Alibaba Cloud DNS zone for `ohmyfeishu.top` and confirms completion.
+
+- [ ] **Step 3: Verify authoritative DNS and Vercel TLS readiness**
+
+Run after user confirmation:
+
+```bash
+dig +short onecare.ohmyfeishu.top CNAME @dns23.hichina.com
+dig +short onecare.ohmyfeishu.top CNAME @dns24.hichina.com
+npx vercel@latest domains inspect onecare.ohmyfeishu.top
+curl -sS -o /dev/null -w 'status=%{http_code} redirect=%{redirect_url} total=%{time_total}s\n' \
+  -X POST 'https://onecare.ohmyfeishu.top/api/feishu/events' \
+  -H 'content-type: application/json' \
+  --data '{"challenge":"probe","token":"invalid","type":"url_verification"}'
+```
+
+Expected: both authoritative nameservers return exactly the CNAME target printed in Step 1; Vercel reports valid configuration; HTTPS probe returns 403 without redirect and within three seconds.
+
+- [ ] **Step 4: Validate the real Feishu challenge**
+
+Configure this exact request URL in Feishu:
+
+```text
+https://onecare.ohmyfeishu.top/api/feishu/events
+```
+
+Then run:
+
+```bash
+npx vercel@latest logs --environment production --since 10m --limit 100 --json
+```
+
+Expected: Feishu reports URL Verification success and Vercel logs contain the corresponding `POST /api/feishu/events` with HTTP 200.
+
+- [ ] **Step 5: Record the external validation result**
+
+Update this plan with DNS target, Vercel domain state, HTTPS probe timing, Feishu result, and any remaining gap. Run:
+
+```bash
+git diff --check
+git status --short --branch
+```
+
+Expected: documentation contains no secret values; `git diff --check` passes.
 
 ## Preview Evidence
 
