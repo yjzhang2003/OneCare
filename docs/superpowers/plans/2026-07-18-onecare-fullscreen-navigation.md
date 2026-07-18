@@ -51,7 +51,7 @@
 - Produces: `showcasePages`, `ShowcasePageId`, `ShowcasePageContent`, `ShowcaseNavigator({ user, authError, pages })`。
 - Consumes: `AuthUser` 与现有 `SiteHeader` 品牌、登录链接。
 
-- [ ] **Step 1: 写导航模型和交互失败测试**
+- [x] **Step 1: 写导航模型和交互失败测试**
 
 测试用四个简单的页面节点渲染 `ShowcaseNavigator`，明确断言：
 
@@ -67,7 +67,7 @@ expect(screen.getByTestId("page-home")).toHaveAttribute("aria-hidden", "true");
 
 补充 `history.back()` 等价的 `popstate`/`hashchange` 测试、非法 Hash 回到首页测试，以及重复点击当前入口不调用滚动复位的测试。每个测试先用 `window.history.replaceState(null, "", "/")` 隔离 Hash。
 
-- [ ] **Step 2: 运行测试并确认 RED**
+- [x] **Step 2: 运行测试并确认 RED**
 
 Run:
 
@@ -77,7 +77,7 @@ npx vitest run src/features/showcase/components/showcase-navigator.test.tsx
 
 Expected: FAIL，因为 `navigation.ts` 和 `ShowcaseNavigator` 尚不存在。
 
-- [ ] **Step 3: 实现最小页面模型**
+- [x] **Step 3: 实现最小页面模型**
 
 `navigation.ts` 使用只读常量建立唯一来源：
 
@@ -95,7 +95,7 @@ export type ShowcasePageContent = Record<ShowcasePageId, React.ReactNode>;
 
 增加 `parseShowcaseHash(hash: string): ShowcasePageId`，不支持的值返回 `home`。
 
-- [ ] **Step 4: 实现最小导航器和 Header 接口**
+- [x] **Step 4: 实现最小导航器和 Header 接口**
 
 `ShowcaseNavigator` 必须：
 
@@ -117,7 +117,7 @@ type SiteHeaderProps = {
 };
 ```
 
-- [ ] **Step 5: 运行目标测试并确认 GREEN**
+- [x] **Step 5: 运行目标测试并确认 GREEN**
 
 Run:
 
@@ -127,7 +127,7 @@ npx vitest run src/features/showcase/components/showcase-navigator.test.tsx
 
 Expected: 新测试全部 PASS，无 React `act`、Hydration 或未知 DOM 属性警告。
 
-- [ ] **Step 6: 提交导航状态**
+- [x] **Step 6: 提交导航状态**
 
 ```bash
 git add src/features/showcase/navigation.ts src/features/showcase/components/showcase-navigator.tsx src/features/showcase/components/showcase-navigator.test.tsx src/features/showcase/components/site-header.tsx
@@ -149,7 +149,7 @@ git commit -m "feat: add fullscreen showcase navigation"
 - Consumes: Task 1 的 `ShowcaseNavigator`、`ShowcasePageId` 和页面内容 Record。
 - Produces: `ShowcasePageHeading({ index, label, title, intro, tone })` 与四个完整一级页面。
 
-- [ ] **Step 1: 先更新首页展示测试并确认新的内容归属**
+- [x] **Step 1: 先更新首页展示测试并确认新的内容归属**
 
 把旧的单页锚点断言改成：
 
@@ -171,7 +171,7 @@ expect(container.querySelector("#team")).toContainElement(
 
 保留四视角键盘切换、飞书登录、已登录工作台、认证错误和无装饰箭头断言。
 
-- [ ] **Step 2: 运行首页测试并确认 RED**
+- [x] **Step 2: 运行首页测试并确认 RED**
 
 Run:
 
@@ -181,7 +181,7 @@ npx vitest run app/landing-content.test.tsx
 
 Expected: FAIL，因为当前仍显示英文 eyebrow、独立结果编号且未使用四页 Navigator。
 
-- [ ] **Step 3: 创建共享一级标题组件**
+- [x] **Step 3: 创建共享一级标题组件**
 
 实现：
 
@@ -197,7 +197,7 @@ type ShowcasePageHeadingProps = {
 
 输出 `.showcase-page-heading`、`.showcase-page-kicker`、带 `data-showcase-title` 与 `tabIndex={-1}` 的 `h2`，以及 `.showcase-page-intro`。`SectionFrame` 改为接收 `label` 并复用该组件。
 
-- [ ] **Step 4: 把 LandingContent 组合为四页**
+- [x] **Step 4: 把 LandingContent 组合为四页**
 
 页面 Record 必须按以下归属传给 `ShowcaseNavigator`：
 
@@ -208,7 +208,7 @@ type ShowcasePageHeadingProps = {
 
 结果区的小标题只显示“方案目标”。页尾导航使用四页 Hash，“返回顶部”改为语义准确的“返回首页”并指向 `#home`。
 
-- [ ] **Step 5: 运行目标测试并确认 GREEN**
+- [x] **Step 5: 运行目标测试并确认 GREEN**
 
 Run:
 
@@ -218,7 +218,7 @@ npx vitest run app/landing-content.test.tsx src/features/showcase/components/sho
 
 Expected: 两组测试全部 PASS。
 
-- [ ] **Step 6: 提交内容组合**
+- [x] **Step 6: 提交内容组合**
 
 ```bash
 git add app/landing-content.tsx app/landing-content.test.tsx src/features/showcase/components/showcase-page-heading.tsx src/features/showcase/components/section-frame.tsx src/features/showcase/components/site-footer.tsx
@@ -237,11 +237,11 @@ git commit -m "feat: compose four showcase pages"
 - Consumes: `.showcase-viewport`、`.showcase-page`、`data-position`、共享标题类名。
 - Produces: 固定视口、页面独立滚动和 `before|active|after` 横向过场。
 
-- [ ] **Step 1: 增加可测试的结构契约**
+- [x] **Step 1: 增加可测试的结构契约**
 
 在首页测试中断言四个 `.showcase-page`、一个 `.showcase-viewport`、活动页 `data-position="active"`，并确认四个页面的 `aria-label` 和标题关系完整。
 
-- [ ] **Step 2: 运行测试并确认 RED**
+- [x] **Step 2: 运行测试并确认 RED**
 
 Run:
 
@@ -251,7 +251,7 @@ npx vitest run app/landing-content.test.tsx
 
 Expected: FAIL，直到整屏结构类名落地。
 
-- [ ] **Step 3: 添加最终 CSS 覆盖层**
+- [x] **Step 3: 添加最终 CSS 覆盖层**
 
 在 showroom 规则之后增加聚焦覆盖：
 
@@ -284,7 +284,7 @@ Expected: FAIL，直到整屏结构类名落地。
 
 同时统一 `.showcase-page-kicker`、`.showcase-page-heading h2` 和 `.showcase-page-intro` 字阶；移动端把视口高度改为 `calc(100dvh - 118px)`；减少动效媒体查询取消页面 transition；活动 Top Bar 短线常驻显示。
 
-- [ ] **Step 4: 运行目标测试、Lint 和类型检查**
+- [x] **Step 4: 运行目标测试、Lint 和类型检查**
 
 Run:
 
@@ -296,7 +296,7 @@ npm run typecheck
 
 Expected: 全部退出码为 0。
 
-- [ ] **Step 5: 提交视觉实现**
+- [x] **Step 5: 提交视觉实现**
 
 ```bash
 git add app/globals.css app/landing-content.test.tsx
@@ -316,11 +316,11 @@ git commit -m "style: add fullscreen page transitions"
 - Consumes: 完成的四页体验。
 - Produces: 可复核文档、完整本地证据和非 Production Preview。
 
-- [ ] **Step 1: 更新文档与计划状态**
+- [x] **Step 1: 更新文档与计划状态**
 
 README 的“当前实现”改为四个整屏章节、固定 Top Bar、横向切换、各页独立滚动；保留静态原型和未接真实数据说明。Spec 只补充实现中确认的约束，不改变批准范围。逐项勾选本计划完成步骤。
 
-- [ ] **Step 2: 运行完整自动化验证**
+- [x] **Step 2: 运行完整自动化验证**
 
 Run:
 
@@ -336,7 +336,7 @@ git diff --check
 
 Expected: 所有命令退出码为 0，测试无失败，Audit 为 0 vulnerabilities。
 
-- [ ] **Step 3: 运行真实浏览器验收**
+- [x] **Step 3: 运行真实浏览器验收**
 
 在本地生产构建或 Preview 上检查 `1440 × 900` 和 `390 × 844`：
 
@@ -349,7 +349,7 @@ Expected: 所有命令退出码为 0，测试无失败，Audit 为 0 vulnerabili
 - `prefers-reduced-motion` 下无水平位移动画；
 - 页面没有横向溢出、控制台错误或 hydration 警告。
 
-- [ ] **Step 4: 提交文档**
+- [x] **Step 4: 提交文档**
 
 ```bash
 git add README.md docs/superpowers/specs/2026-07-18-onecare-fullscreen-navigation-design.md docs/superpowers/plans/2026-07-18-onecare-fullscreen-navigation.md
