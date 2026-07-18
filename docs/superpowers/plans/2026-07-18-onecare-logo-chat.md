@@ -410,7 +410,7 @@ Expected: 工作树干净，分支为 `codex/onecare-perspective-workspaces`，�
 - Produces: 始终存在的 `aria-label="对话快捷操作"` 操作槽。
 - Consumes: 现有 `CustomerStage` 与 `customerPrompts`，不增加新状态或网络行为。
 
-- [ ] **Step 1: 写消息正文与固定操作槽失败测试**
+- [x] **Step 1: 写消息正文与固定操作槽失败测试**
 
 在用户视角测试中增加：
 
@@ -437,7 +437,7 @@ expect(within(controls).getByText("服务已提交")).toBeInTheDocument();
 
 同时从 `@testing-library/react` 导入 `within`。
 
-- [ ] **Step 2: 确认 RED**
+- [x] **Step 2: 确认 RED**
 
 Run:
 
@@ -447,7 +447,7 @@ npx vitest run src/features/showcase/components/perspective-workspaces.test.tsx 
 
 Expected: FAIL，因为元信息仍是气泡的兄弟节点，且快捷回复没有持久操作槽。
 
-- [ ] **Step 3: 写最小结构实现**
+- [x] **Step 3: 写最小结构实现**
 
 `CustomerChatMessage` 将气泡与元信息包装为：
 
@@ -466,7 +466,7 @@ Expected: FAIL，因为元信息仍是气泡的兄弟节点，且快捷回复没
 
 `customer-service-progress` 保留原有条件，但移动到 `.customer-chat` 内部，使其只参与内部滚动。
 
-- [ ] **Step 4: 确认 GREEN 并提交**
+- [x] **Step 4: 确认 GREEN 并提交**
 
 Run:
 

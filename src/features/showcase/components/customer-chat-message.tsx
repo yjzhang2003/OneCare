@@ -25,8 +25,10 @@ export function CustomerChatMessage({
         ) : null}
         <span>{assistant ? "万护助手" : "我"}</span>
       </div>
-      <div className="customer-message__bubble">{children}</div>
-      <small className="customer-message__meta">{meta}</small>
+      <div className="customer-message__body">
+        <div className="customer-message__bubble">{children}</div>
+        <small className="customer-message__meta">{meta}</small>
+      </div>
     </article>
   );
 }

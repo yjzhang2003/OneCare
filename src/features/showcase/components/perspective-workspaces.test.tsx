@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { AgentWorkspace } from "./agent-workspace";
@@ -21,12 +27,25 @@ describe("perspective workspaces", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("万护助手")).toBeInTheDocument();
     expect(screen.getByText("刚刚")).toBeInTheDocument();
+    const meta = screen.getByText("刚刚");
+    expect(meta.parentElement).toHaveClass("customer-message__body");
+    expect(
+      meta.parentElement?.querySelector(".customer-message__bubble"),
+    ).not.toBeNull();
     expect(screen.getByLabelText("AI 服务对话")).toHaveAttribute(
       "aria-live",
       "polite",
     );
 
+    const controls = screen.getByLabelText("对话快捷操作");
+    expect(within(controls).getAllByRole("button")).toHaveLength(3);
+
     fireEvent.click(screen.getByRole("button", { name: "饮料不够凉" }));
+
+    expect(screen.getByLabelText("对话快捷操作")).toBe(controls);
+    expect(
+      within(controls).getByRole("button", { name: "继续安排服务" }),
+    ).toBeInTheDocument();
 
     const customerMessage = screen.getByText("饮料不够凉").closest("article");
     const assistantDiagnosis = screen
@@ -39,6 +58,8 @@ describe("perspective workspaces", () => {
     expect(screen.getByText("已送达")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "继续安排服务" }));
+    expect(screen.getByLabelText("对话快捷操作")).toBe(controls);
+    expect(within(controls).getByText("服务已提交")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("等待客服确认");
     expect(
       screen.getByText(/已为你提交 14:30–15:30 上门服务/),

@@ -67,66 +67,79 @@ export function CustomerWorkspace() {
             />
           </section>
 
-          <section
-            aria-label="AI 服务对话"
-            aria-live="polite"
-            className="customer-chat"
-          >
-            <CustomerChatMessage meta="刚刚" sender="assistant">
-              {customerDemo.greeting}
-            </CustomerChatMessage>
-
-            {stage === "invitation" ? (
-              <div className="customer-prompts" aria-label="快捷回复">
-                {customerPrompts.map((prompt) => (
-                  <button
-                    key={prompt}
-                    onClick={() => setStage("diagnosed")}
-                    type="button"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <>
-                <CustomerChatMessage meta="已送达" sender="customer">
-                  {customerDemo.prompt}
-                </CustomerChatMessage>
-                <CustomerChatMessage
-                  meta="设备数据已同步"
-                  sender="assistant"
-                >
-                  <span className="customer-message__reading">
-                    {customerDemo.reading}
-                  </span>
-                  <strong>{customerDemo.diagnosis}</strong>
-                </CustomerChatMessage>
-              </>
-            )}
-
-            {stage === "scheduled" ? (
-              <CustomerChatMessage meta="等待客服确认" sender="assistant">
-                {customerDemo.confirmation}
+          <div className="customer-conversation">
+            <section
+              aria-label="AI 服务对话"
+              aria-live="polite"
+              className="customer-chat"
+            >
+              <CustomerChatMessage meta="刚刚" sender="assistant">
+                {customerDemo.greeting}
               </CustomerChatMessage>
-            ) : null}
 
-            {stage === "diagnosed" ? (
-              <button
-                className="demo-primary-button customer-chat__action"
-                onClick={() => setStage("scheduled")}
-                type="button"
-              >
-                继续安排服务
-              </button>
-            ) : null}
-          </section>
+              {stage !== "invitation" ? (
+                <>
+                  <CustomerChatMessage meta="已送达" sender="customer">
+                    {customerDemo.prompt}
+                  </CustomerChatMessage>
+                  <CustomerChatMessage
+                    meta="设备数据已同步"
+                    sender="assistant"
+                  >
+                    <span className="customer-message__reading">
+                      {customerDemo.reading}
+                    </span>
+                    <strong>{customerDemo.diagnosis}</strong>
+                  </CustomerChatMessage>
+                </>
+              ) : null}
 
-          {stage !== "invitation" ? (
-            <section className="customer-service-progress">
-              <DemoTimeline label="本次服务进度" steps={timeline} />
+              {stage === "scheduled" ? (
+                <CustomerChatMessage meta="等待客服确认" sender="assistant">
+                  {customerDemo.confirmation}
+                </CustomerChatMessage>
+              ) : null}
+
+              {stage !== "invitation" ? (
+                <section className="customer-service-progress">
+                  <DemoTimeline label="本次服务进度" steps={timeline} />
+                </section>
+              ) : null}
             </section>
-          ) : null}
+
+            <div
+              aria-label="对话快捷操作"
+              className="customer-chat-controls"
+            >
+              {stage === "invitation" ? (
+                <div className="customer-prompts" aria-label="快捷回复">
+                  {customerPrompts.map((prompt) => (
+                    <button
+                      key={prompt}
+                      onClick={() => setStage("diagnosed")}
+                      type="button"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              {stage === "diagnosed" ? (
+                <button
+                  className="demo-primary-button customer-chat__action"
+                  onClick={() => setStage("scheduled")}
+                  type="button"
+                >
+                  继续安排服务
+                </button>
+              ) : null}
+
+              {stage === "scheduled" ? (
+                <div className="customer-chat__completion">服务已提交</div>
+              ) : null}
+            </div>
+          </div>
         </main>
 
         <footer className="customer-phone__footer">
