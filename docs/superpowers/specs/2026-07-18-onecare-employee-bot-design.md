@@ -115,6 +115,14 @@ type FeishuEventOutcome =
 - 卡片按钮回调、机器人自定义菜单事件或群聊业务；
 - LLM、RAG、真实 IoT、工单、配件、VOC 和回访集成。
 
+## 实施与验收记录（2026-07-18）
+
+本规格已在分支 `codex/onecare-employee-bot` 按 RED → GREEN 实现。机器人脚本已从消费者排障切换为八条员工菜单回复，并生成无按钮欢迎卡片；事件解析器已支持进入单聊事件；官方 SDK 适配器已支持按 `chat_id` 主动发送；Route Handler 会先确认事件，再调度欢迎卡片或原消息回复。群生命周期事件继续安全忽略。
+
+本地验证结果：`npm test` 通过 24 个测试文件中的 110 项测试；`npm run test:runtime` 通过 1 个文件中的 4 项生产运行时测试；Lint、TypeScript 类型检查、显式生产构建、生产依赖审计和 `git diff --check` 均通过，依赖审计报告 0 个漏洞。
+
+本分支尚未部署到 Production，也未发布新的飞书应用版本。仍需由真实企业成员验证进入会话欢迎卡片和八条菜单消息，完成前不宣称生产机器人已经可用。当前每次进入会话都会发送欢迎卡片，这是无持久化 MVP 的已知边界。
+
 ## 官方依据
 
 - [飞书机器人概述](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/bot-v3/bot-overview)

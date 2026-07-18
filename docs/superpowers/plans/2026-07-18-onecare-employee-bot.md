@@ -32,7 +32,7 @@
 - Produces: `createWelcomeMessage(): FeishuOutboundMessage`
 - Produces: `FeishuOutboundMessage = { msgType: "text" | "interactive"; content: string }`
 
-- [ ] **Step 1: Write failing employee command and welcome-card tests**
+- [x] **Step 1: Write failing employee command and welcome-card tests**
 
 Replace the old consumer assertions with table-driven tests for all eight message commands. Each case must test Chinese, English, and `中文 / English`. Add:
 
@@ -47,13 +47,13 @@ it("builds the staff welcome card", () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `npx vitest run src/features/feishu-bot/bot-script.test.ts`
 
 Expected: FAIL because employee command kinds and `createWelcomeMessage` do not exist.
 
-- [ ] **Step 3: Implement the smallest employee script**
+- [x] **Step 3: Implement the smallest employee script**
 
 Define reply kinds `help | operations | pending | ticket | progress | tasks | diagnosis | result`. Normalize trim, case and spaces around `/`. Match closed aliases for each command and fall back to help. Every response includes `万护 OneCare 演示` or equivalent explicit demo wording.
 
@@ -99,7 +99,7 @@ export function createWelcomeMessage(): FeishuOutboundMessage {
 }
 ```
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Run: `npx vitest run src/features/feishu-bot/bot-script.test.ts`
 
@@ -125,7 +125,7 @@ git commit -m "feat: add employee bot menu replies"
 - Produces: `sendFeishuMessage({ env, chatId, message }, createClient?): Promise<void>`
 - Consumes: `FeishuOutboundMessage` from Task 1.
 
-- [ ] **Step 1: Write failing entry-event tests**
+- [x] **Step 1: Write failing entry-event tests**
 
 Add a signed V2 event fixture:
 
@@ -148,13 +148,13 @@ function enteredBody(chatId: string | undefined = "oc_onecare_chat") {
 
 Assert a signed fixture returns `{ kind: "entered", chatId: "oc_onecare_chat" }`; missing/empty `chat_id` returns `ignored`; an authentic group event returns `ignored`.
 
-- [ ] **Step 2: Run event parser RED**
+- [x] **Step 2: Run event parser RED**
 
 Run: `npx vitest run src/features/feishu-bot/event-handler.test.ts`
 
 Expected: FAIL because the dispatcher does not register the entry event.
 
-- [ ] **Step 3: Register the entry event**
+- [x] **Step 3: Register the entry event**
 
 Add a narrow event type and register it beside `im.message.receive_v1`:
 
@@ -169,13 +169,13 @@ type BotP2pEnteredEvent = { chat_id?: string };
     : ({ kind: "ignored" } as const),
 ```
 
-- [ ] **Step 4: Verify event parser GREEN**
+- [x] **Step 4: Verify event parser GREEN**
 
 Run: `npx vitest run src/features/feishu-bot/event-handler.test.ts`
 
 Expected: challenge, message, entered, signature and ignored-event cases pass.
 
-- [ ] **Step 5: Write failing proactive-send tests**
+- [x] **Step 5: Write failing proactive-send tests**
 
 Extend the narrow client with `create`. Assert:
 
@@ -201,13 +201,13 @@ expect(create).toHaveBeenCalledWith({
 
 Assert non-zero SDK code throws `FeishuBotError("send_failed")` without upstream `msg`.
 
-- [ ] **Step 6: Run client RED**
+- [x] **Step 6: Run client RED**
 
 Run: `npx vitest run src/features/feishu-bot/client.test.ts`
 
 Expected: FAIL because `sendFeishuMessage` and `create` are missing.
 
-- [ ] **Step 7: Implement proactive send and verify GREEN**
+- [x] **Step 7: Implement proactive send and verify GREEN**
 
 Add `create` to `FeishuBotClient`, extend the stable error code union with `send_failed`, and call `client.im.message.create` using `receive_id_type: "chat_id"`.
 
@@ -215,7 +215,7 @@ Run: `npx vitest run src/features/feishu-bot/client.test.ts`
 
 Expected: reply and proactive-send tests pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/features/feishu-bot/event-handler.ts src/features/feishu-bot/event-handler.test.ts src/features/feishu-bot/client.ts src/features/feishu-bot/client.test.ts
@@ -235,7 +235,7 @@ git commit -m "feat: handle Feishu bot chat entry"
 - Consumes: `sendFeishuMessage()` from Task 2.
 - Extends route dependencies with `createWelcome` and `sendMessage`.
 
-- [ ] **Step 1: Write failing Route tests**
+- [x] **Step 1: Write failing Route tests**
 
 Add `createWelcome` and `sendMessage` fakes. For `{ kind: "entered", chatId: "oc_onecare_chat" }`, assert HTTP `200 {}` is returned before the scheduled callback runs, then assert:
 
@@ -252,17 +252,17 @@ expect(sendMessage).toHaveBeenCalledWith({
 
 Add a send-failure case that calls the same constant `reportFailure` marker without leaking the exception.
 
-- [ ] **Step 2: Run Route RED**
+- [x] **Step 2: Run Route RED**
 
 Run: `npx vitest run app/api/feishu/events/route.test.ts`
 
 Expected: FAIL because entered outcomes are not orchestrated.
 
-- [ ] **Step 3: Implement the Route branch**
+- [x] **Step 3: Implement the Route branch**
 
 Import `createWelcomeMessage` and `sendFeishuMessage`. After challenge/unauthorized/ignored handling, branch on `entered`, schedule a caught proactive send, and return `200 {}`. Preserve the existing message reply path unchanged.
 
-- [ ] **Step 4: Run targeted GREEN**
+- [x] **Step 4: Run targeted GREEN**
 
 Run:
 
@@ -272,7 +272,7 @@ npx vitest run app/api/feishu/events/route.test.ts src/features/feishu-bot
 
 Expected: all bot script, parser, client and Route tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/api/feishu/events/route.ts app/api/feishu/events/route.test.ts
@@ -293,11 +293,11 @@ git commit -m "feat: send employee bot welcome card"
 **Interfaces:**
 - Produces: accurate employee bot status and external Production acceptance checklist.
 
-- [ ] **Step 1: Update documentation**
+- [x] **Step 1: Update documentation**
 
 Replace the consumer self-service description with the employee bot behavior. Record the two handled events, eight message commands plus the direct website link, welcome-card repetition boundary, group-event ignore behavior, custom callback domain, and lack of real service-system writes. Do not claim Production conversation success before a real Feishu member tests it.
 
-- [ ] **Step 2: Run complete verification**
+- [x] **Step 2: Run complete verification**
 
 Run:
 
@@ -313,11 +313,11 @@ git diff --check
 
 Expected: every command exits `0`; all tests pass; audit reports zero production vulnerabilities.
 
-- [ ] **Step 3: Record exact verification results**
+- [x] **Step 3: Record exact verification results**
 
 Append test file/test counts, build result and remaining external acceptance gap to the new spec and plan. Harness reflection must explicitly state whether repository instructions caused durable ambiguity; update `AGENTS.md` only if evidence supports a durable rule change.
 
-- [ ] **Step 4: Commit documentation**
+- [x] **Step 4: Commit documentation**
 
 ```bash
 git add README.md docs/TECH_STACK.md docs/superpowers
@@ -333,3 +333,11 @@ git commit -m "docs: describe employee Feishu bot"
 - Type consistency: `FeishuOutboundMessage`, `createWelcomeMessage`, `entered`, `sendFeishuMessage`, `createWelcome` and `sendMessage` use identical names across tasks.
 - Placeholder scan: the plan contains no `TBD`, `TODO`, “similar to”, unspecified errors or missing verification command.
 - Deployment: Production deployment and real-member acceptance are deliberately excluded until the user reviews the implemented branch and authorizes remote release.
+
+## Execution Record — 2026-07-18
+
+- RED evidence: employee script tests failed 11 cases against the consumer script; the new entry event failed as `ignored`; proactive send failed 2 cases because the adapter was absent; Route welcome delivery failed 2 cases before orchestration was added.
+- GREEN commits: `e431bc5` implements employee menu replies and the welcome card; `b54fa9f` implements entry-event parsing and proactive SDK send; `e20ab50` schedules welcome delivery after callback acknowledgement.
+- Final automated verification: `npm test` passed 24 files / 110 tests; `npm run test:runtime` passed 1 file / 4 tests; lint, typecheck, explicit production build, production dependency audit and `git diff --check` exited successfully; audit reported 0 vulnerabilities.
+- Production remains unchanged by this branch. The custom callback URL is verified, but this revision still requires Production deployment, application-version publication and real-member testing of chat entry plus all eight message commands.
+- Harness reflection: repository instructions were clear. The initial nine-versus-eight command count was caught during plan self-review and came from counting the direct web link as a bot message, not from durable repository ambiguity; no `AGENTS.md` or `docs/HARNESS_REFLECTIONS.md` update is warranted.

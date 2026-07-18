@@ -2,7 +2,7 @@
 
 ## 状态
 
-本规格记录 2026-07-18 对方案一“网站引导页 + 飞书机器人”的确认设计。用户已确认：当前飞书内尚无可用的 OneCare 机器人；本轮先完成一版可评审实现，网站负责加入组织、验证身份和体验引导，飞书机器人负责承载真实对话体验。系统仍是单企业比赛演示，不把机器人描述为生产服务系统。
+本规格记录 2026-07-18 对方案一“网站引导页 + 飞书机器人”的初始确认设计。网站引导、OAuth 和邀请二维码部分仍有效；其中面向消费者的轻量机器人脚本已被 `2026-07-18-onecare-employee-bot-design.md` 取代，后续实现以员工菜单和进入会话欢迎卡片规格为准。系统仍是单企业比赛演示，不把机器人描述为生产服务系统。
 
 ## 背景与问题
 
@@ -195,7 +195,7 @@
 2. 开通最小的“读取用户发给机器人的单聊消息”和“以应用身份发送/回复消息”权限；
 3. 配置 `im.message.receive_v1`；
 4. 将稳定、公开、不受 Vercel Deployment Protection 阻挡的地址配置为事件请求 URL：
-   `https://onecare-loop.vercel.app/api/feishu/events`；
+   `https://onecare.ohmyfeishu.top/api/feishu/events`；
 5. 将同一 Verification Token 与 Encrypt Key 写入 Vercel Production 敏感环境变量；
 6. 创建并发布应用版本；
 7. 将应用可用范围覆盖所有允许参加比赛体验的 OneCare 成员；
@@ -304,7 +304,7 @@ Preview 只用于页面视觉、路由和本地模拟验收。Vercel 分享链�
 
 配置 Production 事件订阅时发现 Vercel 默认把事件函数部署到美国 `iad1`，飞书后台的中国侧请求在进入函数前触发三秒超时。后续修复使用每函数区域配置，只把 `app/api/feishu/events/route.ts` 部署到香港 `hkg1`，不改变 OAuth 与网站函数区域。该部署约束与验证步骤记录在 `2026-07-18-feishu-callback-latency-design.md`。
 
-尚未完成的外部验收包括：使用真实手机扫描页面二维码、在飞书后台成功完成 URL Verification、启用机器人最小权限、订阅消息事件、发布版本、确认应用可用范围，以及由真实企业成员完成 OAuth 和机器人单聊回复。完成这些步骤之前不得宣称生产机器人可用。
+后续已通过自定义域名 `https://onecare.ohmyfeishu.top/api/feishu/events` 完成 URL Verification，并配置了机器人权限、事件订阅和员工菜单。当前尚未完成的外部验收包括：使用真实手机扫描页面二维码、部署员工机器人新脚本、发布对应应用版本、确认应用可用范围，以及由真实企业成员完成 OAuth、进入会话欢迎卡片和全部菜单回复验收。完成这些步骤之前不得宣称生产机器人可用。
 
 ## 官方参考
 
