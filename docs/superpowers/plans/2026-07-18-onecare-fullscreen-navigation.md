@@ -356,11 +356,11 @@ git add README.md docs/superpowers/specs/2026-07-18-onecare-fullscreen-navigatio
 git commit -m "docs: document fullscreen showcase pages"
 ```
 
-- [ ] **Step 5: 发布并验证非 Production Preview**
+- [x] **Step 5: 发布并验证非 Production Preview**
 
 从当前分支运行 `vercel deploy --yes`，等待状态 `Ready`，把稳定 Preview alias 指向该部署；若 Deployment Protection 开启，生成限时分享链接。验证 HTTP 200，并在页面中确认四个中文 kicker。不得使用 `--prod`，不得修改环境变量或飞书回调。
 
-- [ ] **Step 6: 最终状态检查**
+- [x] **Step 6: 最终状态检查**
 
 Run:
 

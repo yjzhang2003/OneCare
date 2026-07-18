@@ -239,3 +239,5 @@ CSS 位移方向、固定栏高度、独立纵向滚动、移动端溢出、减�
 - 鼠标切换不产生常驻标题焦点框，键盘激活会在过场后聚焦目标标题；
 - `prefers-reduced-motion: reduce` 下页面 transition 为 `none`；
 - 浏览器控制台无错误或 hydration 警告。Next Image 的 Hero `priority` 资源在自动化反复改动视口时出现一次 preload 未及时使用的性能提示，不影响页面功能，也未通过删除 LCP 图片预加载来掩盖提示。
+
+非 Production Preview 部署 `dpl_89xiyd89o2J4M3JEJwPoECmUuLYu` 状态为 `READY`，稳定别名已更新为 `onecare-homepage-preview.vercel.app`。通过 Vercel Share 链接携带 Cookie 验证返回 HTTP 200，并在服务端 HTML 中确认四个中文一级小标题。Share 绕过值不写入仓库。
