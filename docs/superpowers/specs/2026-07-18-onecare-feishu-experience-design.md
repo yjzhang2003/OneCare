@@ -302,7 +302,9 @@ Preview 只用于页面视觉、路由和本地模拟验收。Vercel 分享链�
 
 非 Production Preview 已部署并绑定 `https://onecare-homepage-preview.vercel.app`，部署 ID 为 `dpl_62YKiDZXoD1SsYetbQpiRqLQKwHD`。Preview 保持 Vercel Deployment Protection，另生成七天有效的分享链接供用户确认。Preview 不包含 Production OAuth 或机器人密钥；点击 OAuth 按钮会安全返回 `/login?auth_error=configuration_error`，这是预期行为。
 
-尚未完成的外部验收包括：使用真实手机扫描页面二维码、在飞书后台启用机器人能力与最小权限、配置 Production 事件订阅、发布版本、确认应用可用范围，以及由真实企业成员完成 OAuth 和机器人单聊回复。完成这些步骤之前不得宣称生产机器人可用。
+配置 Production 事件订阅时发现 Vercel 默认把事件函数部署到美国 `iad1`，飞书后台的中国侧请求在进入函数前触发三秒超时。后续修复使用每函数区域配置，只把 `app/api/feishu/events/route.ts` 部署到香港 `hkg1`，不改变 OAuth 与网站函数区域。该部署约束与验证步骤记录在 `2026-07-18-feishu-callback-latency-design.md`。
+
+尚未完成的外部验收包括：使用真实手机扫描页面二维码、在飞书后台成功完成 URL Verification、启用机器人最小权限、订阅消息事件、发布版本、确认应用可用范围，以及由真实企业成员完成 OAuth 和机器人单聊回复。完成这些步骤之前不得宣称生产机器人可用。
 
 ## 官方参考
 
