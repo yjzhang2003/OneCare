@@ -137,7 +137,15 @@ export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
                   onReset={() => dispatch({ type: "resetJourney" })}
                 />
               ) : null}
-              {index === 3 ? <OperationsWorkspace /> : null}
+              {index === 3 ? (
+                <OperationsWorkspace
+                  journey={journey}
+                  onCreateImprovementTask={() =>
+                    dispatch({ type: "createImprovementTask" })
+                  }
+                  onReset={() => dispatch({ type: "resetJourney" })}
+                />
+              ) : null}
             </section>
           );
         })}

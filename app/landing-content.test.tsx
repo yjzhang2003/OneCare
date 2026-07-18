@@ -53,9 +53,14 @@ describe("LandingContent", () => {
     fireEvent.click(screen.getByRole("link", { name: "四个视角" }));
     expect(container.querySelector("#perspectives")).toContainElement(
       screen.getByRole("heading", {
-        name: "一次问题，四种角色，同一条服务上下文",
+        name: "一次问题，四种角色，一条完整服务链",
       }),
     );
+    expect(
+      screen.getByText(
+        "从 AI 自助、客服建单到工程师服务和后台改善，点击查看同一个问题如何一步步闭环。",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("01 · 四个视角")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "五层引擎" })).toHaveAttribute(
       "href",

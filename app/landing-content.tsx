@@ -69,9 +69,9 @@ export function LandingContent({ user, authError }: LandingContentProps) {
             <div className="perspectives-section">
               <ShowcasePageHeading
                 index="01"
-                intro="点击切换用户、客服、工程师和后台，查看同一个异常信号如何被理解、交接与闭环。"
+                intro="从 AI 自助、客服建单到工程师服务和后台改善，点击查看同一个问题如何一步步闭环。"
                 label="四个视角"
-                title="一次问题，四种角色，同一条服务上下文"
+                title="一次问题，四种角色，一条完整服务链"
                 titleId="perspectives-title"
               />
           <PerspectiveTabs perspectives={perspectives} />

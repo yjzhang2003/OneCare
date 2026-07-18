@@ -41,6 +41,11 @@ describe("linked service journey", () => {
     render(<PerspectiveTabs perspectives={perspectives} />);
     const customer = within(screen.getByTestId("workspace-customer"));
 
+    expect(customer.getByText("AI 自助服务")).toBeInTheDocument();
+    expect(
+      customer.getByText("能自己解决的，不必等待上门。"),
+    ).toBeInTheDocument();
+
     fireEvent.click(
       customer.getByRole("button", { name: "饮料不够凉" }),
     );
@@ -102,5 +107,84 @@ describe("linked service journey", () => {
     expect(
       engineer.getByRole("button", { name: "完成本次服务" }),
     ).toBeEnabled();
+  });
+
+  it("unlocks operations after service completion and resets every view", () => {
+    render(<PerspectiveTabs perspectives={perspectives} />);
+    const customer = within(screen.getByTestId("workspace-customer"));
+    const agent = within(screen.getByTestId("workspace-agent"));
+    const engineer = within(screen.getByTestId("workspace-engineer"));
+    const operations = within(screen.getByTestId("workspace-operations"));
+
+    expect(
+      operations.getByRole("button", {
+        hidden: true,
+        name: "创建改善任务",
+      }),
+    ).toBeDisabled();
+
+    fireEvent.click(
+      customer.getByRole("button", { name: "饮料不够凉" }),
+    );
+    fireEvent.click(
+      customer.getByRole("button", { name: "仍需人工服务" }),
+    );
+    fireEvent.click(screen.getByRole("tab", { name: /客服/ }));
+    fireEvent.click(agent.getByRole("button", { name: "生成服务工单" }));
+    fireEvent.click(screen.getByRole("tab", { name: /工程师/ }));
+    fireEvent.click(engineer.getByRole("button", { name: "确认携件" }));
+    fireEvent.click(
+      engineer.getByRole("button", { name: "完成本次服务" }),
+    );
+
+    expect(
+      customer.getByRole("status", { hidden: true }),
+    ).toHaveTextContent("服务已完成");
+    fireEvent.click(screen.getByRole("tab", { name: /后台/ }));
+    expect(
+      operations.getByRole("button", { name: "创建改善任务" }),
+    ).toBeEnabled();
+    fireEvent.click(
+      operations.getByRole("button", { name: "创建改善任务" }),
+    );
+    expect(operations.getByRole("status")).toHaveTextContent("已进入闭环");
+
+    fireEvent.click(operations.getByRole("button", { name: "重新演示" }));
+    expect(
+      customer.getByRole("button", {
+        hidden: true,
+        name: "饮料不够凉",
+      }),
+    ).toBeEnabled();
+    expect(
+      agent.getByRole("button", {
+        hidden: true,
+        name: "生成服务工单",
+      }),
+    ).toBeDisabled();
+    expect(
+      engineer.getByRole("button", { hidden: true, name: "确认携件" }),
+    ).toBeDisabled();
+  });
+
+  it("keeps the assisted-service path closed after AI self-help succeeds", () => {
+    render(<PerspectiveTabs perspectives={perspectives} />);
+    const customer = within(screen.getByTestId("workspace-customer"));
+    const agent = within(screen.getByTestId("workspace-agent"));
+
+    fireEvent.click(
+      customer.getByRole("button", { name: "饮料不够凉" }),
+    );
+    fireEvent.click(
+      customer.getByRole("button", { name: "问题已解决" }),
+    );
+
+    expect(customer.getByRole("status")).toHaveTextContent("问题已解决");
+    expect(
+      agent.getByRole("button", {
+        hidden: true,
+        name: "生成服务工单",
+      }),
+    ).toBeDisabled();
   });
 });

@@ -203,7 +203,15 @@ describe("perspective workspaces", () => {
   });
 
   it("lets operations inspect a VOC topic and create an improvement task", () => {
-    render(<OperationsWorkspace />);
+    const onCreateImprovementTask = vi.fn();
+    const onReset = vi.fn();
+    const { rerender } = render(
+      <OperationsWorkspace
+        journey={{ customerReply: "饮料不够凉", stage: "serviceCompleted" }}
+        onCreateImprovementTask={onCreateImprovementTask}
+        onReset={onReset}
+      />,
+    );
 
     expect(screen.getByText("VOC 闭环驾驶舱")).toBeInTheDocument();
     expect(screen.getByText("128 条相关声音")).toBeInTheDocument();
@@ -212,12 +220,19 @@ describe("perspective workspaces", () => {
     expect(screen.getByText("76 条相关声音")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "创建改善任务" }));
+    expect(onCreateImprovementTask).toHaveBeenCalledOnce();
+
+    rerender(
+      <OperationsWorkspace
+        journey={{ customerReply: "饮料不够凉", stage: "improvementCreated" }}
+        onCreateImprovementTask={onCreateImprovementTask}
+        onReset={onReset}
+      />,
+    );
     expect(screen.getByRole("status")).toHaveTextContent("已进入闭环");
     expect(screen.getByText("产品质量 × 服务运营")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "重新演示" }));
-    expect(
-      screen.getByRole("button", { name: "冷藏室温度偏高" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    expect(onReset).toHaveBeenCalledOnce();
   });
 });

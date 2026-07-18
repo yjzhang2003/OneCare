@@ -97,9 +97,11 @@ export function CustomerWorkspace({
   return (
     <div className="customer-scene">
       <div className="customer-scene__ambient" aria-hidden="true">
-        <span>主动感知</span>
-        <strong>问题出现前，服务已经开始。</strong>
-        <p>设备信号、用户表达和服务进度始终在同一条上下文中。</p>
+        <span>AI 自助服务</span>
+        <strong>能自己解决的，不必等待上门。</strong>
+        <p>
+          AI 结合设备数据与知识库先给出可执行建议；仍未解决时，再把已收集的信息交给客服建单。
+        </p>
       </div>
 
       <div className="customer-phone">

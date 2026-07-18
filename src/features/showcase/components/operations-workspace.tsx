@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   serviceCase,
@@ -8,22 +8,43 @@ import {
   type VocTopicId,
 } from "../perspective-demo-data";
 import {
+  journeyHasCompletedService,
+  journeyHasImprovementTask,
+  type ServiceJourneyState,
+} from "../service-journey";
+import {
   DemoMetric,
   DemoPanel,
   DemoStatusBar,
   DemoTimeline,
 } from "./perspective-workspace-ui";
 
-export function OperationsWorkspace() {
+type OperationsWorkspaceProps = Readonly<{
+  journey: ServiceJourneyState;
+  onCreateImprovementTask: () => void;
+  onReset: () => void;
+}>;
+
+export function OperationsWorkspace({
+  journey,
+  onCreateImprovementTask,
+  onReset,
+}: OperationsWorkspaceProps) {
   const [selectedTopic, setSelectedTopic] =
     useState<VocTopicId>("temperature");
-  const [taskTopic, setTaskTopic] = useState<VocTopicId | null>(null);
   const topic = vocTopics.find((item) => item.id === selectedTopic) ?? vocTopics[0];
-  const taskCreated = taskTopic === selectedTopic;
+  const serviceCompleted = journeyHasCompletedService(journey);
+  const taskCreated = journeyHasImprovementTask(journey);
+
+  useEffect(() => {
+    if (journey.stage === "detected") {
+      setSelectedTopic("temperature");
+    }
+  }, [journey.stage]);
 
   function reset() {
     setSelectedTopic("temperature");
-    setTaskTopic(null);
+    onReset();
   }
 
   return (
@@ -92,7 +113,13 @@ export function OperationsWorkspace() {
         <DemoPanel className="closure-panel">
           <div className="workspace-column-heading">
             <span>闭环追踪</span>
-            <small>{taskCreated ? "任务已建立" : "等待行动"}</small>
+            <small>
+              {taskCreated
+                ? "任务已建立"
+                : serviceCompleted
+                  ? "等待行动"
+                  : "等待服务结果"}
+            </small>
           </div>
           <DemoTimeline
             label="VOC 改善闭环"
@@ -101,7 +128,11 @@ export function OperationsWorkspace() {
               { label: "原因验证", state: "complete" },
               {
                 label: "服务策略",
-                state: taskCreated ? "complete" : "active",
+                state: taskCreated
+                  ? "complete"
+                  : serviceCompleted
+                    ? "active"
+                    : "pending",
               },
               {
                 label: "产品改进",
@@ -118,8 +149,8 @@ export function OperationsWorkspace() {
           <div className="workspace-actions">
             <button
               className="demo-primary-button"
-              disabled={taskCreated}
-              onClick={() => setTaskTopic(selectedTopic)}
+              disabled={!serviceCompleted || taskCreated}
+              onClick={onCreateImprovementTask}
               type="button"
             >
               {taskCreated ? "改善任务已创建" : "创建改善任务"}
@@ -133,7 +164,11 @@ export function OperationsWorkspace() {
             </button>
           </div>
           <div aria-live="polite" role="status">
-            {taskCreated ? `${topic.label}已进入闭环` : "等待创建改善任务"}
+            {taskCreated
+              ? `${topic.label}已进入闭环`
+              : serviceCompleted
+                ? "等待创建改善任务"
+                : "等待服务结果"}
           </div>
         </DemoPanel>
       </div>
