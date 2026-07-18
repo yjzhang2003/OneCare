@@ -55,7 +55,7 @@
 - Produces: `initialServiceJourneyState`、`serviceJourneyReducer(state, action)`。
 - Produces: `journeyHasWorkOrder(state)`、`journeyHasConfirmedParts(state)`、`journeyHasCompletedService(state)`、`journeyHasImprovementTask(state)`。
 
-- [ ] **Step 1: 写完整合法路径的失败测试**
+- [x] **Step 1: 写完整合法路径的失败测试**
 
 Create `src/features/showcase/service-journey.test.ts`:
 
@@ -91,7 +91,7 @@ describe("serviceJourneyReducer", () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试并确认 RED**
+- [x] **Step 2: 运行测试并确认 RED**
 
 Run:
 
@@ -101,7 +101,7 @@ npx vitest run src/features/showcase/service-journey.test.ts
 
 Expected: FAIL，因为 `service-journey.ts` 不存在。
 
-- [ ] **Step 3: 实现类型、reducer 与选择器**
+- [x] **Step 3: 实现类型、reducer 与选择器**
 
 Create `src/features/showcase/service-journey.ts`:
 
@@ -194,7 +194,7 @@ export const journeyHasImprovementTask = (state: ServiceJourneyState) =>
   state.stage === "improvementCreated";
 ```
 
-- [ ] **Step 4: 增加分支、非法跳步与重置测试**
+- [x] **Step 4: 增加分支、非法跳步与重置测试**
 
 Append inside the same `describe`:
 
@@ -230,7 +230,7 @@ it("resets every stage and clears the selected reply", () => {
 });
 ```
 
-- [ ] **Step 5: 确认 GREEN 并提交**
+- [x] **Step 5: 确认 GREEN 并提交**
 
 Run:
 
@@ -261,7 +261,7 @@ git commit -m "feat: add shared service journey state"
 - Produces: `CustomerWorkspace({ journey, onAnswerDiagnosis, onMarkSelfResolved, onRequestHumanService, onReset })`。
 - Produces: `PerspectiveTabs` 中唯一的共享 reducer 和用户动作 dispatch。
 
-- [ ] **Step 1: 写用户自助与转人工失败测试**
+- [x] **Step 1: 写用户自助与转人工失败测试**
 
 Create `src/features/showcase/components/service-journey-integration.test.tsx` with the shared scroll cleanup used by the existing workspace test, then add:
 
@@ -315,7 +315,7 @@ describe("linked service journey", () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试并确认 RED**
+- [x] **Step 2: 运行测试并确认 RED**
 
 Run:
 
@@ -325,7 +325,7 @@ npx vitest run src/features/showcase/components/service-journey-integration.test
 
 Expected: FAIL，因为知识库建议、共享父级状态和新按钮不存在。
 
-- [ ] **Step 3: 扩展确定性演示数据**
+- [x] **Step 3: 扩展确定性演示数据**
 
 Modify `customerDemo` in `perspective-demo-data.ts`:
 
@@ -352,7 +352,7 @@ export const customerDemo = {
 
 Move `agentDemo` above `customerDemo`, or keep `customerDemo.workOrderConfirmation` as a standalone template declared after both objects, so TypeScript initialization order is valid.
 
-- [ ] **Step 4: 将共享 reducer 接入 `PerspectiveTabs`**
+- [x] **Step 4: 将共享 reducer 接入 `PerspectiveTabs`**
 
 Replace local-only imports/state setup with:
 
@@ -384,7 +384,7 @@ Render the customer workspace with:
 />
 ```
 
-- [ ] **Step 5: 将 `CustomerWorkspace` 改为共享状态渲染**
+- [x] **Step 5: 将 `CustomerWorkspace` 改为共享状态渲染**
 
 Use this required prop contract:
 
@@ -427,7 +427,7 @@ For `selfHelp`, render exactly two controls:
 
 Map the footer status to `主动关怀中`、`AI 自助排查中`、`问题已解决`、`等待客服建单`、`客服已建单` and `服务已完成`. Keep the existing internal scroll effect keyed by `journey.stage`; use `onReset` for “重新演示”.
 
-- [ ] **Step 6: 更新工作台局部测试并确认 GREEN**
+- [x] **Step 6: 更新工作台局部测试并确认 GREEN**
 
 Update `perspective-workspaces.test.tsx` to render `CustomerWorkspace` with `initialServiceJourneyState` and `vi.fn()` callbacks, then verify the two self-help actions call their callbacks. Remove assertions for the deleted “继续安排服务” flow.
 
@@ -439,7 +439,7 @@ npx vitest run src/features/showcase/service-journey.test.ts src/features/showca
 
 Expected: reducer、用户自助和现有角色局部测试全部通过。
 
-- [ ] **Step 7: 提交 Task 2**
+- [x] **Step 7: 提交 Task 2**
 
 ```bash
 git add src/features/showcase/components/service-journey-integration.test.tsx src/features/showcase/components/perspective-tabs.tsx src/features/showcase/components/customer-workspace.tsx src/features/showcase/perspective-demo-data.ts src/features/showcase/components/perspective-workspaces.test.tsx
@@ -462,7 +462,7 @@ git commit -m "feat: add AI self-help customer journey"
 - Produces: `EngineerWorkspace({ journey, onConfirmParts, onCompleteService, onReset })`。
 - Consumes: `journeyHasWorkOrder`、`journeyHasConfirmedParts`、`journeyHasCompletedService`。
 
-- [ ] **Step 1: 写跨客服和工程师的失败测试**
+- [x] **Step 1: 写跨客服和工程师的失败测试**
 
 Append to `service-journey-integration.test.tsx`:
 
@@ -490,7 +490,7 @@ it("updates customer and engineer views when the agent creates a work order", ()
 });
 ```
 
-- [ ] **Step 2: 运行测试并确认 RED**
+- [x] **Step 2: 运行测试并确认 RED**
 
 Run:
 
@@ -500,7 +500,7 @@ npx vitest run src/features/showcase/components/service-journey-integration.test
 
 Expected: FAIL，因为客服和工程师仍持有独立本地状态。
 
-- [ ] **Step 3: 将客服改为共享阶段**
+- [x] **Step 3: 将客服改为共享阶段**
 
 Use:
 
@@ -522,7 +522,7 @@ const awaitingHuman = journey.stage === "serviceRequested";
 
 Set `DemoStatusBar` status to `自助记录已同步`. The primary button is disabled unless `canCreate`, calls `onCreateWorkOrder`, and shows `工单已生成` after `created`. Before `serviceRequested`, keep the case visible but show `等待用户转人工`; at `serviceRequested`, show `用户自助未解决` and the selected `journey.customerReply`. Use `onReset` for reset.
 
-- [ ] **Step 4: 将工程师改为共享阶段**
+- [x] **Step 4: 将工程师改为共享阶段**
 
 Use:
 
@@ -545,7 +545,7 @@ const complete = journeyHasCompletedService(journey);
 
 Before `assigned`, status is `等待客服建单` and both action buttons are disabled. After `assigned`, “确认携件” calls `onConfirmParts`; after `ready`, “完成本次服务” calls `onCompleteService`; after `complete`, both remain disabled and status is `服务已闭环`. Use `onReset` for reset.
 
-- [ ] **Step 5: 在父级编排客服和工程师动作**
+- [x] **Step 5: 在父级编排客服和工程师动作**
 
 Render:
 
@@ -563,7 +563,7 @@ Render:
 />
 ```
 
-- [ ] **Step 6: 更新局部测试并确认 GREEN**
+- [x] **Step 6: 更新局部测试并确认 GREEN**
 
 Update workspace tests to pass explicit shared state and spy callbacks. Verify initial disabled controls, service-request enablement, work-order assignment and parts/service actions without recreating local state.
 
@@ -575,7 +575,7 @@ npx vitest run src/features/showcase/service-journey.test.ts src/features/showca
 
 Expected: 人工请求、客服建单、工程师核验三段串联测试全部通过。
 
-- [ ] **Step 7: 提交 Task 3**
+- [x] **Step 7: 提交 Task 3**
 
 ```bash
 git add src/features/showcase/components/service-journey-integration.test.tsx src/features/showcase/components/perspective-tabs.tsx src/features/showcase/components/agent-workspace.tsx src/features/showcase/components/engineer-workspace.tsx src/features/showcase/components/perspective-workspaces.test.tsx
@@ -600,7 +600,7 @@ git commit -m "feat: link agent and engineer workspaces"
 - Consumes: `journeyHasCompletedService` 与 `journeyHasImprovementTask`。
 - Produces: 全角色共享重置，保留当前选中 Tab。
 
-- [ ] **Step 1: 写完整闭环与重置失败测试**
+- [x] **Step 1: 写完整闭环与重置失败测试**
 
 Append to the integration test:
 
@@ -637,7 +637,7 @@ it("unlocks operations after service completion and resets every view", () => {
 
 Also add a self-resolved branch test that clicks `问题已解决` and confirms the agent button stays disabled.
 
-- [ ] **Step 2: 运行测试并确认 RED**
+- [x] **Step 2: 运行测试并确认 RED**
 
 Run:
 
@@ -647,7 +647,7 @@ npx vitest run src/features/showcase/components/service-journey-integration.test
 
 Expected: FAIL，因为后台仍持有独立改善任务状态，重置未覆盖四个视角。
 
-- [ ] **Step 3: 将后台改善任务接入共享阶段**
+- [x] **Step 3: 将后台改善任务接入共享阶段**
 
 Use:
 
@@ -672,7 +672,7 @@ useEffect(() => {
 
 Disable “创建改善任务” until `serviceCompleted`; call `onCreateImprovementTask` when enabled. Before completion, status is `等待服务结果`; after completion it is `等待创建改善任务`; after creation it is `${topic.label}已进入闭环`. Reset sets the topic to `temperature` and calls `onReset`.
 
-- [ ] **Step 4: 在父级编排后台动作**
+- [x] **Step 4: 在父级编排后台动作**
 
 Render:
 
@@ -684,7 +684,7 @@ Render:
 />
 ```
 
-- [ ] **Step 5: 更新页面和角色文案测试**
+- [x] **Step 5: 更新页面和角色文案测试**
 
 Change `landing-content.test.tsx` to expect:
 
@@ -716,7 +716,7 @@ intro="从 AI 自助、客服建单到工程师服务和后台改善，点击查
 
 In `content.ts`, replace `用户声音 → 服务上下文` with `用户自助 → 人工服务`, and replace `带着上下文上门` with `带着诊断结果上门`.
 
-- [ ] **Step 6: 确认 GREEN 并提交**
+- [x] **Step 6: 确认 GREEN 并提交**
 
 Run:
 
@@ -744,7 +744,7 @@ git commit -m "feat: complete linked service journey"
 - Produces: `.customer-knowledge` 与 `.customer-resolution-actions` 的圆角、双列药丸和移动端布局。
 - Preserves: `.customer-scene`、`.customer-phone`、`.customer-chat-controls` 既有固定几何契约。
 
-- [ ] **Step 1: 写 CSS 合约失败测试**
+- [x] **Step 1: 写 CSS 合约失败测试**
 
 Append to `fullscreen-showcase-styles.test.ts`:
 
@@ -760,7 +760,7 @@ expect(css).toMatch(
 );
 ```
 
-- [ ] **Step 2: 运行测试并确认 RED**
+- [x] **Step 2: 运行测试并确认 RED**
 
 Run:
 
@@ -770,7 +770,7 @@ npx vitest run app/fullscreen-showcase-styles.test.ts
 
 Expected: FAIL，因为用户专属进度覆盖、知识卡和双按钮样式不存在。
 
-- [ ] **Step 3: 实现无线条进度和知识卡样式**
+- [x] **Step 3: 实现无线条进度和知识卡样式**
 
 Add to `app/globals.css`:
 
@@ -818,7 +818,7 @@ Add to `app/globals.css`:
 
 Keep the knowledge card inside `.customer-chat`, never in the fixed controls row. If mobile text wraps, increase only internal chat scroll; do not change phone or controls heights.
 
-- [ ] **Step 4: 确认 GREEN 并提交**
+- [x] **Step 4: 确认 GREEN 并提交**
 
 Run:
 
@@ -846,7 +846,7 @@ git commit -m "style: refine linked customer journey"
 - Consumes: Tasks 1–5 的完整共享流程。
 - Produces: 验证记录、新的非 Production Vercel Preview 与固定预览别名。
 
-- [ ] **Step 1: 运行完整自动化验证**
+- [x] **Step 1: 运行完整自动化验证**
 
 Run:
 
@@ -862,7 +862,7 @@ git diff --check
 
 Expected: 所有命令退出码为 0，Audit 为 `0 vulnerabilities`。
 
-- [ ] **Step 2: 本地真实浏览器验收**
+- [x] **Step 2: 本地真实浏览器验收**
 
 Build and start the production server, then use Playwright CLI at `1440 × 900` and `390 × 844`:
 
@@ -877,11 +877,15 @@ Build and start the production server, then use Playwright CLI at `1440 × 900` 
 
 For every user-visible stage, record `.customer-scene`、`.customer-phone` and `.customer-chat-controls` bounding boxes. Their `y` and `height` ranges must be `<= 1px`; the latest message must be visible inside `.customer-chat`; console must show 0 errors and 0 warnings.
 
-- [ ] **Step 3: 更新 README、spec 和 plan**
+2026-07-18 本地验收结果：桌面端抽样的 `detected`、`selfHelp`、`serviceRequested` 与 `improvementCreated` 四阶段中，场景为 `y=193.765625px / height=706.234375px`、手机为 `y=213.765625px / height=666.234375px`、操作槽为 `y=759px / height=44px`，极差均为 `0px`。移动端场景与手机固定为 `y=244.140625px / height=575.859375px`，操作槽 `y` 为 `702 / 701 / 701 / 701px`、高度固定为 `44px`；手机底部 `820px < 844px`，三个初始按钮宽度均为 `118px`。两端完整跑通用户转人工、客服建单、工程师服务、后台改善和全局重置；最新内容均可见，页面无横向溢出，控制台 0 错误、0 警告。
+
+- [x] **Step 3: 更新 README、spec 和 plan**
 
 README must state that the four roles now share one browser-local deterministic case state, list the self-help-to-improvement flow, and keep the boundary that no real business system or AI is connected. Record exact test counts and browser geometry in the spec and this plan.
 
-- [ ] **Step 4: 提交本地验收记录**
+2026-07-18 自动化结果：`npm test` 通过 17 个测试文件、66 个测试；`npm run test:runtime` 通过 3 个生产运行时测试；Lint、TypeScript、独立生产构建与 `git diff --check` 退出码为 0；依赖审计为 `0 vulnerabilities`。首次 Lint 发现并推动移除 effect 内同步本地状态的实现，改用 React 组件身份作为后台重置边界后复验通过。
+
+- [x] **Step 4: 提交本地验收记录**
 
 ```bash
 git add README.md docs/superpowers/specs/2026-07-18-onecare-linked-service-journey-design.md docs/superpowers/plans/2026-07-18-onecare-linked-service-journey.md
