@@ -23,4 +23,23 @@ describe("fullscreen showcase stylesheet", () => {
       /prefers-reduced-motion: reduce[\s\S]*?\.showcase-page[\s\S]*?transition: none/,
     );
   });
+
+  it("defines fullscreen role workspaces and a phone-sized customer demo", () => {
+    expect(css).not.toContain(".showroom-hero__pulse {");
+    expect(css).toMatch(
+      /\.perspectives-section\s*\{[\s\S]*?height:\s*100%/,
+    );
+    expect(css).toMatch(
+      /\.perspective-workspace-viewport\s*\{[\s\S]*?overflow:\s*hidden/,
+    );
+    expect(css).toMatch(
+      /\.perspective-workspace\[data-position="before"\][^{]*\{[\s\S]*?translateX\(-100%\)/,
+    );
+    expect(css).toMatch(
+      /\.customer-phone\s*\{[\s\S]*?width:\s*min\(390px,\s*100%\)/,
+    );
+    expect(css).toMatch(
+      /prefers-reduced-motion: reduce[\s\S]*?\.perspective-workspace[\s\S]*?transition: none/,
+    );
+  });
 });
