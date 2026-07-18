@@ -1,0 +1,154 @@
+"use client";
+
+import { useState } from "react";
+
+import { engineerDemo, serviceCase } from "../perspective-demo-data";
+import {
+  DemoMetric,
+  DemoPanel,
+  DemoStatusBar,
+  DemoTimeline,
+} from "./perspective-workspace-ui";
+
+type EngineerStage = "review" | "ready" | "complete";
+
+export function EngineerWorkspace() {
+  const [stage, setStage] = useState<EngineerStage>("review");
+  const ready = stage !== "review";
+  const complete = stage === "complete";
+
+  return (
+    <div className="engineer-workspace">
+      <DemoStatusBar
+        caseId={serviceCase.id}
+        product={serviceCase.product}
+        status={complete ? "服务已闭环" : ready ? "准备出发" : "待核验"}
+        title="一次上门工作台"
+      />
+
+      <div className="engineer-task-strip">
+        <div>
+          <span>今日上门</span>
+          <strong>{serviceCase.visitWindow}</strong>
+        </div>
+        <div>
+          <span>用户</span>
+          <strong>{serviceCase.customer}</strong>
+        </div>
+        <div>
+          <span>地址</span>
+          <strong>{serviceCase.address}</strong>
+        </div>
+        <div>
+          <span>联系偏好</span>
+          <strong>{engineerDemo.contactPreference}</strong>
+        </div>
+      </div>
+
+      <div className="engineer-workspace__grid">
+        <DemoPanel className="engineer-diagnosis">
+          <div className="workspace-column-heading">
+            <span>设备预诊</span>
+            <small>IoT 信号 · 本地模拟</small>
+          </div>
+          <div className="temperature-chart" aria-label="冷藏室温度趋势">
+            {[4, 4, 5, 6, 8, 9, 9].map((value, index) => (
+              <i
+                aria-label={`${index * 5} 分钟 ${value} 摄氏度`}
+                key={`${value}-${index}`}
+                style={{ height: `${value * 8}%` }}
+              />
+            ))}
+          </div>
+          <div className="engineer-metrics">
+            <DemoMetric
+              label="当前温度"
+              value={`${serviceCase.currentTemperature}°C`}
+            />
+            <DemoMetric
+              label="预诊置信度"
+              value={`${engineerDemo.confidence}%`}
+            />
+            <DemoMetric
+              label="异常持续"
+              value={`${serviceCase.anomalyMinutes} min`}
+            />
+          </div>
+          <section className="engineer-causes">
+            <span>可能原因</span>
+            <ol>
+              {engineerDemo.possibleCauses.map((cause, index) => (
+                <li key={cause}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  {cause}
+                </li>
+              ))}
+            </ol>
+          </section>
+        </DemoPanel>
+
+        <aside className="engineer-side">
+          <DemoPanel className="engineer-parts">
+            <div className="workspace-column-heading">
+              <span>建议携件</span>
+              <small>{ready ? "已核验" : "待确认"}</small>
+            </div>
+            <ul>
+              {engineerDemo.parts.map((part) => (
+                <li data-checked={ready ? "true" : "false"} key={part}>
+                  <i aria-hidden="true" />
+                  <span>{part}</span>
+                </li>
+              ))}
+            </ul>
+          </DemoPanel>
+
+          <DemoPanel className="engineer-progress">
+            <DemoTimeline
+              label="上门任务进度"
+              steps={[
+                { label: "接收任务", state: "complete" },
+                {
+                  label: "核验配件",
+                  state: ready ? "complete" : "active",
+                },
+                {
+                  label: "现场解决",
+                  state: complete ? "complete" : ready ? "active" : "pending",
+                },
+              ]}
+            />
+            <div className="workspace-actions">
+              <button
+                className="demo-secondary-button"
+                disabled={ready}
+                onClick={() => setStage("ready")}
+                type="button"
+              >
+                {ready ? "携件已确认" : "确认携件"}
+              </button>
+              <button
+                className="demo-primary-button"
+                disabled={!ready || complete}
+                onClick={() => setStage("complete")}
+                type="button"
+              >
+                {complete ? "服务已完成" : "完成本次服务"}
+              </button>
+              <button
+                className="demo-reset-button"
+                onClick={() => setStage("review")}
+                type="button"
+              >
+                重新演示
+              </button>
+            </div>
+            <div aria-live="polite" role="status">
+              {complete ? "首次上门完成" : ready ? "准备出发" : "等待确认携件"}
+            </div>
+          </DemoPanel>
+        </aside>
+      </div>
+    </div>
+  );
+}

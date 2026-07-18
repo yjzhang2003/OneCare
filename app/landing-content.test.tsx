@@ -79,7 +79,7 @@ describe("LandingContent", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "客服" }));
     expect(screen.getByRole("tabpanel")).toHaveTextContent(
-      "一次理解，不再重复描述",
+      "智能服务坐席",
     );
 
     fireEvent.click(screen.getByRole("link", { name: "五层引擎" }));
