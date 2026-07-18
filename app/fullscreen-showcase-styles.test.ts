@@ -103,4 +103,27 @@ describe("fullscreen showcase stylesheet", () => {
       /\.customer-knowledge\s*\{[\s\S]*?border-radius:/,
     );
   });
+
+  it("keeps the Feishu gateway scannable and its actions pill-shaped", () => {
+    expect(css).toMatch(
+      /\.feishu-login-shell\s*\{[^}]*min-height:\s*100svh/,
+    );
+    expect(css).toMatch(
+      /\.feishu-invite-image\s*\{[^}]*object-fit:\s*contain/,
+    );
+    const inviteImageRule = css.match(/\.feishu-invite-image\s*\{[^}]*\}/)?.[0];
+    expect(inviteImageRule).not.toContain("filter:");
+    const feishuActionRule = css.match(
+      /\.feishu-auth-action,[\s\S]*?\.feishu-experience-banner__action\s*\{[^}]*\}/,
+    )?.[0];
+    expect(feishuActionRule).toContain("border-radius: 999px");
+    expect(feishuActionRule).toContain("justify-content: center");
+    expect(css).toMatch(
+      /\.feishu-experience-banner\s*\{[^}]*border-radius:\s*22px/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width:\s*760px\)[\s\S]*?\.feishu-login-main\s*\{[^}]*grid-template-columns:\s*1fr/,
+    );
+    expect(css).not.toMatch(/\.feishu-[^{:]+::after\s*\{[^}]*content:/);
+  });
 });

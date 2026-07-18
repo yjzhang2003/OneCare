@@ -13,6 +13,7 @@ import {
   DemoStatusBar,
   DemoTimeline,
 } from "./perspective-workspace-ui";
+import { FeishuExperienceBanner } from "./feishu-experience-banner";
 
 type EngineerWorkspaceProps = Readonly<{
   journey: ServiceJourneyState;
@@ -47,6 +48,10 @@ export function EngineerWorkspace({
         }
         title="一次上门工作台"
       />
+
+      <FeishuExperienceBanner role="engineer">
+        在飞书接收工单、配件与上门提醒
+      </FeishuExperienceBanner>
 
       <div className="engineer-task-strip">
         <div>

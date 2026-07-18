@@ -10,6 +10,7 @@ import {
   DemoPanel,
   DemoStatusBar,
 } from "./perspective-workspace-ui";
+import { FeishuExperienceBanner } from "./feishu-experience-banner";
 
 type AgentWorkspaceProps = Readonly<{
   journey: ServiceJourneyState;
@@ -35,6 +36,10 @@ export function AgentWorkspace({
         status="自助记录已同步"
         title="智能服务坐席"
       />
+
+      <FeishuExperienceBanner role="agent">
+        在飞书接收转人工会话与 AI 预诊摘要
+      </FeishuExperienceBanner>
 
       <div className="agent-workspace__grid">
         <aside className="agent-queue" aria-label="服务会话队列">

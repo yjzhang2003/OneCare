@@ -57,6 +57,7 @@ describe("perspective workspaces", () => {
     scrollTo.mockClear();
 
     expect(screen.getByText("爱家服务助手")).toBeInTheDocument();
+    expect(screen.queryByText("计划接入飞书")).not.toBeInTheDocument();
     expect(screen.getByText("静态交互 Demo")).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -134,6 +135,13 @@ describe("perspective workspaces", () => {
     );
 
     expect(screen.getByText("智能服务坐席")).toBeInTheDocument();
+    expect(
+      screen.getByText("在飞书接收转人工会话与 AI 预诊摘要"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "登录体验" })).toHaveAttribute(
+      "href",
+      "/login?from=agent",
+    );
     expect(screen.getByText("预诊置信度 87%")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "生成服务工单" }));
@@ -169,6 +177,13 @@ describe("perspective workspaces", () => {
     const complete = screen.getByRole("button", {
       name: "完成本次服务",
     });
+    expect(
+      screen.getByText("在飞书接收工单、配件与上门提醒"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "登录体验" })).toHaveAttribute(
+      "href",
+      "/login?from=engineer",
+    );
     expect(complete).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "确认携件" }));
@@ -214,6 +229,13 @@ describe("perspective workspaces", () => {
     );
 
     expect(screen.getByText("VOC 闭环驾驶舱")).toBeInTheDocument();
+    expect(
+      screen.getByText("在飞书接收 VOC 异常与闭环任务"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "登录体验" })).toHaveAttribute(
+      "href",
+      "/login?from=operations",
+    );
     expect(screen.getByText("128 条相关声音")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "安装等待时间" }));

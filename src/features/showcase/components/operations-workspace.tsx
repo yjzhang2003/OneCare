@@ -18,6 +18,7 @@ import {
   DemoStatusBar,
   DemoTimeline,
 } from "./perspective-workspace-ui";
+import { FeishuExperienceBanner } from "./feishu-experience-banner";
 
 type OperationsWorkspaceProps = Readonly<{
   journey: ServiceJourneyState;
@@ -49,6 +50,10 @@ export function OperationsWorkspace({
         status="数据更新于 10:24"
         title="VOC 闭环驾驶舱"
       />
+
+      <FeishuExperienceBanner role="operations">
+        在飞书接收 VOC 异常与闭环任务
+      </FeishuExperienceBanner>
 
       <div className="operations-metrics">
         <DemoMetric detail="需跨角色协同" label="待闭环" value="12" />
