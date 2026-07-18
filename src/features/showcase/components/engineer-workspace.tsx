@@ -1,8 +1,12 @@
 "use client";
 
-import { useState } from "react";
-
 import { engineerDemo, serviceCase } from "../perspective-demo-data";
+import {
+  journeyHasCompletedService,
+  journeyHasConfirmedParts,
+  journeyHasWorkOrder,
+  type ServiceJourneyState,
+} from "../service-journey";
 import {
   DemoMetric,
   DemoPanel,
@@ -10,26 +14,44 @@ import {
   DemoTimeline,
 } from "./perspective-workspace-ui";
 
-type EngineerStage = "review" | "ready" | "complete";
+type EngineerWorkspaceProps = Readonly<{
+  journey: ServiceJourneyState;
+  onConfirmParts: () => void;
+  onCompleteService: () => void;
+  onReset: () => void;
+}>;
 
-export function EngineerWorkspace() {
-  const [stage, setStage] = useState<EngineerStage>("review");
-  const ready = stage !== "review";
-  const complete = stage === "complete";
+export function EngineerWorkspace({
+  journey,
+  onConfirmParts,
+  onCompleteService,
+  onReset,
+}: EngineerWorkspaceProps) {
+  const assigned = journeyHasWorkOrder(journey);
+  const ready = journeyHasConfirmedParts(journey);
+  const complete = journeyHasCompletedService(journey);
 
   return (
     <div className="engineer-workspace">
       <DemoStatusBar
         caseId={serviceCase.id}
         product={serviceCase.product}
-        status={complete ? "服务已闭环" : ready ? "准备出发" : "待核验"}
+        status={
+          complete
+            ? "服务已闭环"
+            : ready
+              ? "准备出发"
+              : assigned
+                ? "待核验"
+                : "等待客服建单"
+        }
         title="一次上门工作台"
       />
 
       <div className="engineer-task-strip">
         <div>
           <span>今日上门</span>
-          <strong>{serviceCase.visitWindow}</strong>
+          <strong>{assigned ? serviceCase.visitWindow : "等待分配"}</strong>
         </div>
         <div>
           <span>用户</span>
@@ -91,7 +113,7 @@ export function EngineerWorkspace() {
           <DemoPanel className="engineer-parts">
             <div className="workspace-column-heading">
               <span>建议携件</span>
-              <small>{ready ? "已核验" : "待确认"}</small>
+              <small>{ready ? "已核验" : assigned ? "待确认" : "等待工单"}</small>
             </div>
             <ul>
               {engineerDemo.parts.map((part) => (
@@ -107,10 +129,13 @@ export function EngineerWorkspace() {
             <DemoTimeline
               label="上门任务进度"
               steps={[
-                { label: "接收任务", state: "complete" },
+                {
+                  label: "接收任务",
+                  state: assigned ? "complete" : "pending",
+                },
                 {
                   label: "核验配件",
-                  state: ready ? "complete" : "active",
+                  state: ready ? "complete" : assigned ? "active" : "pending",
                 },
                 {
                   label: "现场解决",
@@ -121,8 +146,8 @@ export function EngineerWorkspace() {
             <div className="workspace-actions">
               <button
                 className="demo-secondary-button"
-                disabled={ready}
-                onClick={() => setStage("ready")}
+                disabled={!assigned || ready}
+                onClick={onConfirmParts}
                 type="button"
               >
                 {ready ? "携件已确认" : "确认携件"}
@@ -130,21 +155,27 @@ export function EngineerWorkspace() {
               <button
                 className="demo-primary-button"
                 disabled={!ready || complete}
-                onClick={() => setStage("complete")}
+                onClick={onCompleteService}
                 type="button"
               >
                 {complete ? "服务已完成" : "完成本次服务"}
               </button>
               <button
                 className="demo-reset-button"
-                onClick={() => setStage("review")}
+                onClick={onReset}
                 type="button"
               >
                 重新演示
               </button>
             </div>
             <div aria-live="polite" role="status">
-              {complete ? "首次上门完成" : ready ? "准备出发" : "等待确认携件"}
+              {complete
+                ? "首次上门完成"
+                : ready
+                  ? "准备出发"
+                  : assigned
+                    ? "等待确认携件"
+                    : "等待客服建单"}
             </div>
           </DemoPanel>
         </aside>

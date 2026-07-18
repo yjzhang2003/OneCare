@@ -1,23 +1,38 @@
 "use client";
 
-import { useState } from "react";
-
-import { agentDemo, serviceCase } from "../perspective-demo-data";
+import { agentDemo, customerDemo, serviceCase } from "../perspective-demo-data";
+import {
+  journeyHasWorkOrder,
+  type ServiceJourneyState,
+} from "../service-journey";
 import {
   DemoMetric,
   DemoPanel,
   DemoStatusBar,
 } from "./perspective-workspace-ui";
 
-export function AgentWorkspace() {
-  const [created, setCreated] = useState(false);
+type AgentWorkspaceProps = Readonly<{
+  journey: ServiceJourneyState;
+  onCreateWorkOrder: () => void;
+  onReset: () => void;
+}>;
+
+export function AgentWorkspace({
+  journey,
+  onCreateWorkOrder,
+  onReset,
+}: AgentWorkspaceProps) {
+  const canCreate = journey.stage === "serviceRequested";
+  const created = journeyHasWorkOrder(journey);
+  const awaitingHuman = journey.stage === "serviceRequested";
+  const selfResolved = journey.stage === "selfResolved";
 
   return (
     <div className="agent-workspace">
       <DemoStatusBar
         caseId={serviceCase.id}
         product={serviceCase.product}
-        status="上下文已同步"
+        status="自助记录已同步"
         title="智能服务坐席"
       />
 
@@ -25,13 +40,21 @@ export function AgentWorkspace() {
         <aside className="agent-queue" aria-label="服务会话队列">
           <div className="workspace-column-heading">
             <span>服务队列</span>
-            <strong>8</strong>
+            <strong>{awaitingHuman ? "9" : "8"}</strong>
           </div>
           <ol>
             <li data-active="true">
               <span>温度异常</span>
               <strong>李女士</strong>
-              <small>刚刚 · AI 已预诊</small>
+              <small>
+                {created
+                  ? "工单已生成"
+                  : awaitingHuman
+                    ? "用户自助未解决"
+                    : selfResolved
+                      ? "AI 自助已解决"
+                      : "等待用户转人工"}
+              </small>
             </li>
             <li>
               <span>预约调整</span>
@@ -48,8 +71,8 @@ export function AgentWorkspace() {
 
         <DemoPanel className="agent-context">
           <div className="workspace-column-heading">
-            <span>当前会话</span>
-            <small>不再重复询问</small>
+            <span>当前服务记录</span>
+            <small>无需重复询问</small>
           </div>
           <div className="agent-customer-line">
             <div aria-hidden="true">李</div>
@@ -60,8 +83,8 @@ export function AgentWorkspace() {
           </div>
           <div className="agent-transcript">
             <p>万护：检测到冷藏室温度持续偏高，需要我帮你确认吗？</p>
-            <p>用户：饮料不够凉。</p>
-            <p>万护：已结合设备数据完成预诊，正在为你衔接服务。</p>
+            <p>用户：{journey.customerReply ?? "尚未开始自助排查"}。</p>
+            <p>万护：{customerDemo.knowledgeIntro}</p>
           </div>
           <div className="agent-signal-row">
             <DemoMetric
@@ -112,22 +135,28 @@ export function AgentWorkspace() {
           <div className="workspace-actions">
             <button
               className="demo-primary-button"
-              disabled={created}
-              onClick={() => setCreated(true)}
+              disabled={!canCreate}
+              onClick={onCreateWorkOrder}
               type="button"
             >
               {created ? "工单已生成" : "生成服务工单"}
             </button>
             <button
               className="demo-reset-button"
-              onClick={() => setCreated(false)}
+              onClick={onReset}
               type="button"
             >
               重新演示
             </button>
           </div>
           <div aria-live="polite" role="status">
-            {created ? `已分配给${agentDemo.engineer}` : "等待生成服务工单"}
+            {created
+              ? `已分配给${agentDemo.engineer}`
+              : awaitingHuman
+                ? "等待生成服务工单"
+                : selfResolved
+                  ? "用户已通过自助解决"
+                  : "等待用户转人工"}
           </div>
         </DemoPanel>
       </div>

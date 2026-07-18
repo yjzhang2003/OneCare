@@ -118,8 +118,25 @@ export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
                   onReset={() => dispatch({ type: "resetJourney" })}
                 />
               ) : null}
-              {index === 1 ? <AgentWorkspace /> : null}
-              {index === 2 ? <EngineerWorkspace /> : null}
+              {index === 1 ? (
+                <AgentWorkspace
+                  journey={journey}
+                  onCreateWorkOrder={() =>
+                    dispatch({ type: "createWorkOrder" })
+                  }
+                  onReset={() => dispatch({ type: "resetJourney" })}
+                />
+              ) : null}
+              {index === 2 ? (
+                <EngineerWorkspace
+                  journey={journey}
+                  onCompleteService={() =>
+                    dispatch({ type: "completeService" })
+                  }
+                  onConfirmParts={() => dispatch({ type: "confirmParts" })}
+                  onReset={() => dispatch({ type: "resetJourney" })}
+                />
+              ) : null}
               {index === 3 ? <OperationsWorkspace /> : null}
             </section>
           );

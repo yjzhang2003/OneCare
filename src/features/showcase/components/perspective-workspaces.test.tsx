@@ -123,24 +123,48 @@ describe("perspective workspaces", () => {
   });
 
   it("lets the service agent create and reset a routed work order", () => {
-    render(<AgentWorkspace />);
+    const onCreateWorkOrder = vi.fn();
+    const onReset = vi.fn();
+    const { rerender } = render(
+      <AgentWorkspace
+        journey={{ customerReply: "饮料不够凉", stage: "serviceRequested" }}
+        onCreateWorkOrder={onCreateWorkOrder}
+        onReset={onReset}
+      />,
+    );
 
     expect(screen.getByText("智能服务坐席")).toBeInTheDocument();
     expect(screen.getByText("预诊置信度 87%")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "生成服务工单" }));
+    expect(onCreateWorkOrder).toHaveBeenCalledOnce();
 
+    rerender(
+      <AgentWorkspace
+        journey={{ customerReply: "饮料不够凉", stage: "workOrderCreated" }}
+        onCreateWorkOrder={onCreateWorkOrder}
+        onReset={onReset}
+      />,
+    );
     expect(screen.getByRole("button", { name: "工单已生成" })).toBeDisabled();
     expect(screen.getByRole("status")).toHaveTextContent("已分配给周启明");
 
     fireEvent.click(screen.getByRole("button", { name: "重新演示" }));
-    expect(
-      screen.getByRole("button", { name: "生成服务工单" }),
-    ).toBeEnabled();
+    expect(onReset).toHaveBeenCalledOnce();
   });
 
   it("requires the engineer to confirm parts before completing service", () => {
-    render(<EngineerWorkspace />);
+    const onConfirmParts = vi.fn();
+    const onCompleteService = vi.fn();
+    const onReset = vi.fn();
+    const { rerender } = render(
+      <EngineerWorkspace
+        journey={{ customerReply: "饮料不够凉", stage: "workOrderCreated" }}
+        onCompleteService={onCompleteService}
+        onConfirmParts={onConfirmParts}
+        onReset={onReset}
+      />,
+    );
 
     const complete = screen.getByRole("button", {
       name: "完成本次服务",
@@ -148,16 +172,34 @@ describe("perspective workspaces", () => {
     expect(complete).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "确认携件" }));
+    expect(onConfirmParts).toHaveBeenCalledOnce();
+
+    rerender(
+      <EngineerWorkspace
+        journey={{ customerReply: "饮料不够凉", stage: "partsConfirmed" }}
+        onCompleteService={onCompleteService}
+        onConfirmParts={onConfirmParts}
+        onReset={onReset}
+      />,
+    );
     expect(complete).toBeEnabled();
     expect(screen.getByRole("status")).toHaveTextContent("准备出发");
 
     fireEvent.click(complete);
+    expect(onCompleteService).toHaveBeenCalledOnce();
+
+    rerender(
+      <EngineerWorkspace
+        journey={{ customerReply: "饮料不够凉", stage: "serviceCompleted" }}
+        onCompleteService={onCompleteService}
+        onConfirmParts={onConfirmParts}
+        onReset={onReset}
+      />,
+    );
     expect(screen.getByRole("status")).toHaveTextContent("首次上门完成");
 
     fireEvent.click(screen.getByRole("button", { name: "重新演示" }));
-    expect(
-      screen.getByRole("button", { name: "完成本次服务" }),
-    ).toBeDisabled();
+    expect(onReset).toHaveBeenCalledOnce();
   });
 
   it("lets operations inspect a VOC topic and create an improvement task", () => {
