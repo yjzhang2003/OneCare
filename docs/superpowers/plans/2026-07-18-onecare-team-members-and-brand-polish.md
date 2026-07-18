@@ -49,7 +49,7 @@
 - Produces: `TeamMember` 的 `name`、`role`、`education`、`highlights`、`capabilities` 字段与三位成员只读数据。
 - Consumes: 现有 `teamMembers.map()` 与 `SectionFrame` 团队页组合。
 
-- [ ] **Step 1: 写成员内容失败测试**
+- [x] **Step 1: 写成员内容失败测试**
 
 把 `app/landing-content.test.tsx` 中团队占位断言替换为以下契约：
 
@@ -97,7 +97,7 @@ expect(
 ).toBeInTheDocument();
 ```
 
-- [ ] **Step 2: 运行目标测试并确认 RED**
+- [x] **Step 2: 运行目标测试并确认 RED**
 
 Run:
 
@@ -107,7 +107,7 @@ npx vitest run app/landing-content.test.tsx
 
 Expected: FAIL，因为页面仍显示“成员信息待补充”和三张通用能力占位卡，三位姓名与学历尚不存在。
 
-- [ ] **Step 3: 扩展成员类型与真实内容数据**
+- [x] **Step 3: 扩展成员类型与真实内容数据**
 
 把 `src/features/showcase/content.ts` 中的 `TeamMember` 改为：
 
@@ -171,7 +171,7 @@ export const teamMembers: readonly TeamMember[] = [
 ] as const;
 ```
 
-- [ ] **Step 4: 更新团队页语义结构**
+- [x] **Step 4: 更新团队页语义结构**
 
 把 `app/landing-content.tsx` 中团队 `SectionFrame` 的导语改为批准文案，并把卡片内容改为：
 
@@ -204,7 +204,7 @@ export const teamMembers: readonly TeamMember[] = [
 </article>
 ```
 
-- [ ] **Step 5: 运行目标测试并确认 GREEN**
+- [x] **Step 5: 运行目标测试并确认 GREEN**
 
 Run:
 
@@ -214,7 +214,7 @@ npx vitest run app/landing-content.test.tsx
 
 Expected: `app/landing-content.test.tsx` 全部 PASS，三位成员与六条学历可通过语义查询访问，旧占位文案不存在。
 
-- [ ] **Step 6: 提交成员内容**
+- [x] **Step 6: 提交成员内容**
 
 ```bash
 git add app/landing-content.test.tsx app/landing-content.tsx src/features/showcase/content.ts
@@ -234,7 +234,7 @@ git commit -m "feat: add OneCare team member profiles"
 - Consumes: `ONECARE_LOGO_DARK_SRC` 的 `data:image/png;base64,...` 字节。
 - Produces: Next.js App Router 自动发现的静态 `app/icon.png`。
 
-- [ ] **Step 1: 写 favicon 来源失败测试**
+- [x] **Step 1: 写 favicon 来源失败测试**
 
 创建 `app/icon.test.ts`：
 
@@ -270,7 +270,7 @@ describe("browser tab icon", () => {
 });
 ```
 
-- [ ] **Step 2: 运行 favicon 测试并确认 RED**
+- [x] **Step 2: 运行 favicon 测试并确认 RED**
 
 Run:
 
@@ -280,7 +280,7 @@ npx vitest run app/icon.test.ts
 
 Expected: FAIL，因为 `app/icon.svg` 仍存在且 `app/icon.png` 尚不存在。
 
-- [ ] **Step 3: 从现有品牌源机械派生静态图标**
+- [x] **Step 3: 从现有品牌源机械派生静态图标**
 
 运行以下一次性 Node 命令。它只读取已跟踪的 TypeScript 品牌常量并写出完全相同的 PNG 字节，不新增 JavaScript 文件或运行时依赖：
 
@@ -294,7 +294,7 @@ node -e 'const fs=require("node:fs");const source=fs.readFileSync("src/features/
 *** Delete File: app/icon.svg
 ```
 
-- [ ] **Step 4: 运行 favicon 测试并确认 GREEN**
+- [x] **Step 4: 运行 favicon 测试并确认 GREEN**
 
 Run:
 
@@ -304,7 +304,7 @@ npx vitest run app/icon.test.ts
 
 Expected: `1` 个测试 PASS，`app/icon.png` 与 `ONECARE_LOGO_DARK_SRC` 字节一致，旧 SVG 不存在。
 
-- [ ] **Step 5: 提交 favicon**
+- [x] **Step 5: 提交 favicon**
 
 ```bash
 git add app/icon.test.ts app/icon.png app/icon.svg
@@ -323,7 +323,7 @@ git commit -m "fix: align favicon with OneCare brand"
 - Produces: `.footer-top`、`.footer-bottom`、四页 `nav` 与 `.back-to-top`。
 - Consumes: 现有 `OneCareLogo` 浅色版本和四个稳定 Hash。
 
-- [ ] **Step 1: 写 Footer 结构失败测试**
+- [x] **Step 1: 写 Footer 结构失败测试**
 
 创建 `src/features/showcase/components/site-footer.test.tsx`：
 
@@ -369,7 +369,7 @@ describe("SiteFooter", () => {
 });
 ```
 
-- [ ] **Step 2: 运行 Footer 测试并确认 RED**
+- [x] **Step 2: 运行 Footer 测试并确认 RED**
 
 Run:
 
@@ -379,7 +379,7 @@ npx vitest run src/features/showcase/components/site-footer.test.tsx
 
 Expected: FAIL，因为现有 Footer 没有 `.footer-top`、`.footer-bottom` 和“首页”页尾导航，且仍显示 `Typeface: MiSans`。
 
-- [ ] **Step 3: 实现双层 Footer**
+- [x] **Step 3: 实现双层 Footer**
 
 把 `SiteFooter` 改为：
 
@@ -417,7 +417,7 @@ export function SiteFooter() {
 }
 ```
 
-- [ ] **Step 4: 运行 Footer 与首页测试并确认 GREEN**
+- [x] **Step 4: 运行 Footer 与首页测试并确认 GREEN**
 
 Run:
 
@@ -427,7 +427,7 @@ npx vitest run src/features/showcase/components/site-footer.test.tsx app/landing
 
 Expected: 两个测试文件全部 PASS，Footer 四页导航与首页集成契约均保持有效。
 
-- [ ] **Step 5: 提交 Footer 结构**
+- [x] **Step 5: 提交 Footer 结构**
 
 ```bash
 git add src/features/showcase/components/site-footer.tsx src/features/showcase/components/site-footer.test.tsx
@@ -446,7 +446,7 @@ git commit -m "refactor: organize OneCare footer content"
 - Consumes: `.team-card__heading`、`.team-card__section`、`.team-card__capabilities`、`.footer-top`、`.footer-bottom`。
 - Produces: 三列成员卡、双层桌面 Footer 与单列移动 Footer。
 
-- [ ] **Step 1: 增加视觉结构失败契约**
+- [x] **Step 1: 增加视觉结构失败契约**
 
 在 `app/fullscreen-showcase-styles.test.ts` 中读取 `app/globals.css` 的既有测试里加入：
 
@@ -461,7 +461,7 @@ expect(css).toMatch(
 );
 ```
 
-- [ ] **Step 2: 运行样式测试并确认 RED**
+- [x] **Step 2: 运行样式测试并确认 RED**
 
 Run:
 
@@ -471,7 +471,7 @@ npx vitest run app/fullscreen-showcase-styles.test.ts
 
 Expected: FAIL，因为新增成员分组和 Footer 双层类名尚未有最终 CSS。
 
-- [ ] **Step 3: 实现成员卡信息层级**
+- [x] **Step 3: 实现成员卡信息层级**
 
 替换 `app/globals.css` 中现有 `.landing-shell .team-card` 规则，使卡片不再依赖 `h3 { margin: auto 0 0; }`，并加入：
 
@@ -547,7 +547,7 @@ Expected: FAIL，因为新增成员分组和 Footer 双层类名尚未有最终 
 }
 ```
 
-- [ ] **Step 4: 实现双层 Footer 布局**
+- [x] **Step 4: 实现双层 Footer 布局**
 
 把 `.landing-shell .public-footer` 及其子规则重写为：
 
@@ -600,7 +600,7 @@ Expected: FAIL，因为新增成员分组和 Footer 双层类名尚未有最终 
 
 保留并适配现有 `.footer-brand`、文字颜色、链接 hover 与 focus-visible 规则，移除旧四列 Footer 选择器和圆形 `.back-to-top` 尺寸。
 
-- [ ] **Step 5: 实现移动端堆叠**
+- [x] **Step 5: 实现移动端堆叠**
 
 在 `@media (max-width: 640px)` 中用以下规则替换旧 Footer 移动规则：
 
@@ -632,7 +632,7 @@ Expected: FAIL，因为新增成员分组和 Footer 双层类名尚未有最终 
 
 移动端 `.team-card` 保持单列，使用 `padding: 24px` 与 `border-radius: 16px`，不设置固定最小高度。
 
-- [ ] **Step 6: 运行样式与组件测试并确认 GREEN**
+- [x] **Step 6: 运行样式与组件测试并确认 GREEN**
 
 Run:
 
@@ -642,7 +642,7 @@ npx vitest run app/fullscreen-showcase-styles.test.ts app/landing-content.test.t
 
 Expected: 三个测试文件全部 PASS。
 
-- [ ] **Step 7: 提交响应式视觉**
+- [x] **Step 7: 提交响应式视觉**
 
 ```bash
 git add app/globals.css app/fullscreen-showcase-styles.test.ts
@@ -662,7 +662,7 @@ git commit -m "style: refine team cards and footer"
 - Consumes: 完成的成员卡、favicon 与 Footer。
 - Produces: 可复核文档、完整本地验证证据和非 Production Preview URL。
 
-- [ ] **Step 1: 更新 README 当前实现**
+- [x] **Step 1: 更新 README 当前实现**
 
 把“当前实现”中的“三位成员能力的圆角卡片占位”改为：
 
@@ -672,7 +672,7 @@ git commit -m "style: refine team cards and footer"
 
 在视觉描述中补充浏览器 Tab 使用现有万护品牌图形、团队页采用整理后的双层黑色 Footer。不得改变 IoT、VOC、AI、持久化与飞书集成的未实现边界。
 
-- [ ] **Step 2: 运行完整自动化验证**
+- [x] **Step 2: 运行完整自动化验证**
 
 Run:
 
@@ -688,7 +688,7 @@ git diff --check
 
 Expected: 所有命令退出码为 `0`；所有 Vitest 测试 PASS；Lint 与 TypeScript 无错误；两个生产构建成功；Audit 为 `0 vulnerabilities`；Diff 无空白错误。
 
-- [ ] **Step 3: 运行真实浏览器验收**
+- [x] **Step 3: 运行真实浏览器验收**
 
 在本地生产构建或 Preview 上检查 `1440 × 900` 和 `390 × 844`：
 
@@ -700,11 +700,11 @@ Expected: 所有命令退出码为 `0`；所有 Vitest 测试 PASS；Lint 与 Ty
 - 浏览器 Tab 显示现有黑色万护图形，不显示旧橙色 `A`；
 - 页面无控制台错误、hydration 警告或水平滚动条。
 
-- [ ] **Step 4: 更新规格与计划验证记录**
+- [x] **Step 4: 更新规格与计划验证记录**
 
 在规格末尾增加“实现记录”，写明实际成员排序、favicon 来源、Footer 布局和浏览器检查结果。把本计划已完成步骤逐项勾选，并记录测试数量、构建结果、Audit 与 Preview 验证标记。
 
-- [ ] **Step 5: 提交文档与验证记录**
+- [x] **Step 5: 提交文档与验证记录**
 
 ```bash
 git add README.md docs/superpowers/specs/2026-07-18-onecare-team-members-design.md docs/superpowers/plans/2026-07-18-onecare-team-members-and-brand-polish.md
@@ -731,3 +731,18 @@ git log -8 --oneline
 ```
 
 Expected: 工作树干净，当前分支为 `codex/member-page-team`，提交只包含规格、计划、成员页、favicon、Footer、样式、测试与 README 变更。
+
+## Validation Record
+
+- `npm test`: 26 个测试文件、108 个测试全部通过；
+- `npm run test:runtime`: 4 个生产运行时测试全部通过；
+- `npm run lint`: 通过；
+- `npm run typecheck`: 通过；
+- `npm run build`: 通过，并输出静态 `/icon.png` 路由；
+- `npm audit --omit=dev`: `0 vulnerabilities`；
+- `git diff --check`: 通过；
+- Playwright `1440 × 900`: 三列成员卡无裁切，Footer 双层整行对齐；
+- Playwright `390 × 844`: 单列成员卡与 Footer 自然堆叠，`scrollWidth` 与 `clientWidth` 均为 `390`；
+- 浏览器控制台：`0` errors、`0` warnings；
+- favicon：页面实际加载 `/icon.png`，测试确认其字节与 `ONECARE_LOGO_DARK_SRC` 一致；
+- Preview：待发布与验证。
