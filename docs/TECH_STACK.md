@@ -2,7 +2,7 @@
 
 ## Status
 
-The 万护 OneCare TypeScript web baseline and Feishu custom-app login were implemented on 2026-07-17. A guided Feishu experience page and a stateless single-chat text bot webhook were added on 2026-07-18. The current application remains a single-enterprise demonstration; IoT and VOC data, service-system integrations, AI analysis, persistence, and production Feishu bot activation remain unimplemented.
+The 万护 OneCare TypeScript web baseline and Feishu custom-app login were implemented on 2026-07-17. A guided Feishu experience page and stateless employee bot webhook were added on 2026-07-18. On 2026-07-19 the bot was upgraded locally to an all-Card-2.0 workbench with verified button callbacks; production deployment, callback subscription, app-version publication and real-member acceptance are still required. The current application remains a single-enterprise demonstration; IoT and VOC data, service-system integrations, AI analysis, persistence, and production Feishu bot activation remain unimplemented.
 
 The production deployment is available at `https://onecare-loop.vercel.app`. The canonical OAuth callback is `https://onecare-loop.vercel.app/api/auth/feishu/callback`, and the verified bot event callback is `https://onecare.ohmyfeishu.top/api/feishu/events`. URL Verification, permissions, event subscriptions and custom menus have been configured externally; the employee-bot branch is not considered active until its code is deployed to Production, the application version is published, and a real enterprise member completes acceptance testing.
 
@@ -71,11 +71,13 @@ PostgreSQL and Drizzle remain the intended system-of-record stack when persisten
 
 ## Feishu Events and Bot
 
-`POST /api/feishu/events` implements the HTTP surface for a lightweight employee demonstration bot. It validates the raw-body signature, Verification Token, and Encrypt Key; supports URL Verification; accepts authenticated `im.message.receive_v1` events whose message is `p2p` text and `im.chat.access_event.bot_p2p_chat_entered_v1` events with a valid `chat_id`; acknowledges accepted events before scheduling work with Next.js `after()`; and uses the official Node SDK to reply to the original message or proactively send a welcome card to the entered chat. Authenticated but unregistered group lifecycle events are acknowledged and ignored.
+`POST /api/feishu/events` implements the HTTP surface for a lightweight employee demonstration bot. It validates the raw-body signature, Verification Token, Encrypt Key, configured App ID and non-empty tenant context; supports URL Verification; accepts authenticated `im.message.receive_v1` p2p text events, `im.chat.access_event.bot_p2p_chat_entered_v1` events with a valid chat ID, and `card.action.trigger` callbacks normalized by the official SDK. Authenticated but unregistered group lifecycle events are acknowledged and ignored.
 
-The bot script is deterministic and stateless. It recognizes eight employee menu commands in Chinese, English or the configured bilingual form: help, operations center, pending services, ticket creation, progress, today's tasks, AI diagnosis and parts, and result submission. Every business result is explicitly simulated. It does not call an LLM, retrieve a knowledge base, read IoT data, create a real work order, or persist message text, user identifiers, tokens or event IDs. The V2 chat-entry event sends a concise card on every entry because there is no durable 24-hour welcome deduplication. Feishu retries can also produce duplicate demonstration messages; persistence is required before real service operations.
+Every bot-authored business output is an `interactive` Card 2.0 message: chat entry, all eight Chinese/English/bilingual menu commands, unknown-input fallback, query views and operation results. Navigation actions acknowledge within the callback deadline and schedule a new card with Next.js `after()`; `create_ticket`, `confirm_parts` and `submit_result` synchronously return a complete raw replacement card plus toast. Callback actions are restricted to a closed allowlist and the fixed demo case. The SDK client logs at fatal-only level so upstream response objects are not emitted by default.
 
-The stable public callback, matching server secrets and URL Verification are complete. Production activation of this employee-bot revision still requires deploying the branch, publishing the corresponding application version, confirming the availability scope, and acceptance testing both chat entry and all menu actions with a real enterprise member. A Vercel Preview protected by Deployment Protection cannot be configured as the live callback.
+The bot remains deterministic and stateless. Every business result is explicitly simulated. It does not call an LLM, retrieve a knowledge base, read IoT data, create a real work order, or persist message text, user identifiers, tokens or event IDs. Card-local completed state is not shared with later menu messages. The chat-entry event sends the workbench on every entry because there is no durable welcome deduplication; persistence is required before real service operations.
+
+The stable public callback, matching server secrets and URL Verification are complete. Production activation of this card-workbench revision still requires deploying the branch, adding `card.action.trigger` under the developer console's separate callback configuration with `https://onecare.ohmyfeishu.top/api/feishu/events`, publishing the corresponding application version, confirming the availability scope, and acceptance testing chat entry, all menu cards and every button with a real enterprise member on Feishu 7.20 or newer. A Vercel Preview protected by Deployment Protection cannot be configured as the live callback.
 
 ## Testing Baseline
 
@@ -108,6 +110,8 @@ Each deferred item requires a focused specification before implementation.
 - [Feishu user information](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/authen-v1/user_info/get)
 - [Feishu custom and store application differences](https://open.feishu.cn/document/server-docs/im-v1/faq?lang=zh-CN)
 - [Feishu event callback optimization](https://open.feishu.cn/document/event-subscription-guide/event-subscriptions/event-callback-optimization-guide?lang=zh-CN)
+- [Feishu Card 2.0 overview](https://open.feishu.cn/document/feishu-cards/feishu-card-overview)
+- [Feishu card callback communication](https://open.feishu.cn/document/feishu-cards/card-callback-communication?lang=zh-CN)
 - [Next.js App Router](https://nextjs.org/docs/app)
 - [Next.js Cookie API](https://nextjs.org/docs/app/api-reference/functions/cookies)
 - [Vercel CLI deployment](https://vercel.com/docs/cli/deploy)

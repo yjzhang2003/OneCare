@@ -1,7 +1,7 @@
 import { Client, LoggerLevel } from "@larksuiteoapi/node-sdk";
 
 import type { BotEnv } from "../../lib/env";
-import type { FeishuOutboundMessage } from "./bot-script";
+import type { FeishuOutboundMessage } from "./card-types";
 
 type ReplyPayload = Readonly<{
   path: { message_id: string };
@@ -37,18 +37,29 @@ export class FeishuBotError extends Error {
   }
 }
 
+type FeishuSdkClientOptions = ConstructorParameters<typeof Client>[0];
+type FeishuSdkClientFactory = (
+  options: FeishuSdkClientOptions,
+) => FeishuBotClient;
+
+export function createFeishuBotClient(
+  env: BotEnv,
+  createSdkClient: FeishuSdkClientFactory = (options) => new Client(options),
+): FeishuBotClient {
+  return createSdkClient({
+    appId: env.appId,
+    appSecret: env.appSecret,
+    loggerLevel: LoggerLevel.fatal,
+  });
+}
+
 export async function sendFeishuMessage(
   input: Readonly<{
     env: BotEnv;
     chatId: string;
     message: FeishuOutboundMessage;
   }>,
-  createClient: () => FeishuBotClient = () =>
-    new Client({
-      appId: input.env.appId,
-      appSecret: input.env.appSecret,
-      loggerLevel: LoggerLevel.error,
-    }),
+  createClient: () => FeishuBotClient = () => createFeishuBotClient(input.env),
 ): Promise<void> {
   const response = await createClient().im.message.create({
     params: { receive_id_type: "chat_id" },
@@ -65,19 +76,18 @@ export async function sendFeishuMessage(
 }
 
 export async function replyToFeishuMessage(
-  input: Readonly<{ env: BotEnv; messageId: string; text: string }>,
-  createClient: () => FeishuBotClient = () =>
-    new Client({
-      appId: input.env.appId,
-      appSecret: input.env.appSecret,
-      loggerLevel: LoggerLevel.error,
-    }),
+  input: Readonly<{
+    env: BotEnv;
+    messageId: string;
+    message: FeishuOutboundMessage;
+  }>,
+  createClient: () => FeishuBotClient = () => createFeishuBotClient(input.env),
 ): Promise<void> {
   const response = await createClient().im.message.reply({
     path: { message_id: input.messageId },
     data: {
-      msg_type: "text",
-      content: JSON.stringify({ text: input.text }),
+      msg_type: input.message.msgType,
+      content: input.message.content,
     },
   });
 
