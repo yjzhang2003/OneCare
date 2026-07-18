@@ -125,6 +125,9 @@ describe("LandingContent", () => {
       screen.queryByText("方案原型 · 未接入真实业务数据"),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("冰箱温控异常")).not.toBeInTheDocument();
+    expect(screen.queryByText("−18°")).not.toBeInTheDocument();
+    expect(screen.queryByText("04°")).not.toBeInTheDocument();
+    expect(container.querySelector(".showroom-hero__pulse")).toBeNull();
   });
 
   it("moves between perspective tabs with the keyboard", () => {
