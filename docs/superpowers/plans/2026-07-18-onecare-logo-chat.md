@@ -372,18 +372,20 @@ Expected: 所有命令退出码为 0，Audit 为 `0 vulnerabilities`。
 
 在 `1440 × 900` 与 `390 × 844` 验证：顶栏、页脚、手机标题栏与 AI 头像使用正确 Logo 反色；AI 左气泡、用户右气泡、身份、时间/状态和预约确认一眼可辨；手机内容可滚动且无页面级横向溢出；减少动效下消息动画为 `none`；控制台无错误、hydration 警告或资源 404。
 
-- [ ] **Step 4: 提交文档**
+- [x] **Step 4: 提交文档**
 
 ```bash
 git add README.md docs/superpowers/specs/2026-07-18-onecare-logo-chat-design.md docs/superpowers/plans/2026-07-18-onecare-logo-chat.md
 git commit -m "docs: document OneCare logo chat preview"
 ```
 
-- [ ] **Step 5: 发布并验证 Preview**
+- [x] **Step 5: 发布并验证 Preview**
 
 运行 `vercel deploy --yes`，等待 Ready 后把 `onecare-homepage-preview.vercel.app` 指向新部署；不得使用 `--prod`。若有 Deployment Protection，创建限时 Share Link。通过未登录 Share Link 验证页面标题、Logo、双方消息、预约确认和无 `.showroom-hero__pulse`。
 
-- [ ] **Step 6: 最终状态检查**
+2026-07-18 已发布非 Production 部署 `dpl_Qt7BFWTie98Vh3UNqf74NtzNgEbJ`，状态为 Ready；固定域名已重新指向该部署。匿名 Share Link 已重建并验证：页面标题正确，Logo tone 序列包含深浅两种版本，线上可完成“饮料不够凉 → 继续安排服务”，预约确认出现，`.showroom-hero__pulse` 不存在，页面无横向溢出，控制台为 0 错误、0 警告。Share secret 不写入仓库，仅在交付消息中提供。
+
+- [x] **Step 6: 最终状态检查**
 
 Run:
 

@@ -156,4 +156,4 @@ Logo 资产由用户提供，不调用网络图片，不增加第三方运行时
 - `prefers-reduced-motion: reduce` 下消息动画计算值为 `none`；
 - 浏览器控制台无错误、警告、hydration 异常或资源 404。
 
-完整自动化验证和 Vercel Preview 部署结果记录在实施计划中。
+完整自动化验证和 Vercel Preview 部署结果记录在实施计划中。非 Production 部署 `dpl_Qt7BFWTie98Vh3UNqf74NtzNgEbJ` 已 Ready，并已重新绑定 `onecare-homepage-preview.vercel.app`；限时 Share Link 只在交付消息中提供，不写入仓库。
