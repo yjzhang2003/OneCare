@@ -54,11 +54,27 @@ describe("fullscreen showcase stylesheet", () => {
     expect(css).toMatch(
       /\.customer-message\[data-sender="customer"\][^{]*\{[\s\S]*?align-self:\s*flex-end/,
     );
+    expect(css).toMatch(/\.customer-message__body\s*\{[^}]*max-width:\s*78%/);
     expect(css).toMatch(
-      /\.customer-message__bubble\s*\{[\s\S]*?max-width:\s*78%/,
+      /\.customer-message__meta\s*\{[^}]*align-self:\s*flex-end/,
     );
     expect(css).toMatch(
       /prefers-reduced-motion:\s*reduce[\s\S]*\.customer-message\s*\{[\s\S]*?animation:\s*none/,
+    );
+  });
+
+  it("keeps the customer phone stable while messages scroll internally", () => {
+    expect(css).toMatch(/\.customer-scene\s*\{[^}]*height:\s*100%/);
+    expect(css).toMatch(/\.customer-scene\s*\{[^}]*min-height:\s*0/);
+    expect(css).toMatch(
+      /\.customer-phone\s*\{[^}]*max-height:\s*calc\(100% - 16px\)/,
+    );
+    expect(css).toMatch(
+      /\.customer-phone__content\s*\{[^}]*overflow:\s*hidden/,
+    );
+    expect(css).toMatch(/\.customer-chat\s*\{[^}]*overflow-y:\s*auto/);
+    expect(css).toMatch(
+      /\.customer-prompts\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
     );
   });
 });

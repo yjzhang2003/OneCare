@@ -493,7 +493,7 @@ git commit -m "fix: stabilize customer chat controls"
 - Consumes: Task 5 的 `.customer-message__body`、`.customer-conversation` 与 `.customer-chat-controls`。
 - Produces: 固定场景/手机几何、内部消息滚动和三列等宽药丸布局。
 
-- [ ] **Step 1: 写稳定几何与操作槽 CSS 失败测试**
+- [x] **Step 1: 写稳定几何与操作槽 CSS 失败测试**
 
 增加以下合约：
 
@@ -508,7 +508,7 @@ expect(css).toMatch(/\.customer-message__meta\s*\{[\s\S]*?align-self:\s*flex-end
 expect(css).toMatch(/\.customer-prompts\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
 ```
 
-- [ ] **Step 2: 确认 RED**
+- [x] **Step 2: 确认 RED**
 
 Run:
 
@@ -518,7 +518,7 @@ npx vitest run app/fullscreen-showcase-styles.test.ts
 
 Expected: FAIL，因为场景会被内容撑高，消息区不独立滚动，快捷回复仍使用 flex 与左缩进。
 
-- [ ] **Step 3: 写最小 CSS 实现**
+- [x] **Step 3: 写最小 CSS 实现**
 
 关键规则：
 
@@ -539,7 +539,7 @@ Expected: FAIL，因为场景会被内容撑高，消息区不独立滚动，快
 
 移动端覆盖 `.customer-phone { max-height: none; }`，继续让手机占满角色工作台；所有变量内容必须留在 `.customer-chat` 内部滚动。
 
-- [ ] **Step 4: 确认 GREEN 并提交**
+- [x] **Step 4: 确认 GREEN 并提交**
 
 Run:
 
