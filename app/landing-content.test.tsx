@@ -1,7 +1,11 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { LandingContent } from "./landing-content";
+
+beforeEach(() => {
+  window.history.replaceState(null, "", "/");
+});
 
 afterEach(cleanup);
 
@@ -22,15 +26,29 @@ describe("LandingContent", () => {
       screen.getByText(/万护 OneCare 面向海信智能家庭场景/),
     ).toBeInTheDocument();
 
+    expect(screen.getByText("00 · 首页")).toBeInTheDocument();
+    expect(screen.getByTestId("page-home")).toHaveAttribute(
+      "data-position",
+      "active",
+    );
+    expect(screen.getByRole("link", { name: "首页" })).toHaveAttribute(
+      "href",
+      "#home",
+    );
+    const login = screen.getByRole("link", { name: "使用飞书登录" });
+    expect(login).toHaveAttribute("href", "/api/auth/feishu/start");
+
     expect(screen.getByRole("link", { name: "四个视角" })).toHaveAttribute(
       "href",
       "#perspectives",
     );
+    fireEvent.click(screen.getByRole("link", { name: "四个视角" }));
     expect(container.querySelector("#perspectives")).toContainElement(
       screen.getByRole("heading", {
         name: "一次问题，四种角色，同一条服务上下文",
       }),
     );
+    expect(screen.getByText("01 · 四个视角")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "五层引擎" })).toHaveAttribute(
       "href",
       "#architecture",
@@ -64,6 +82,8 @@ describe("LandingContent", () => {
       "一次理解，不再重复描述",
     );
 
+    fireEvent.click(screen.getByRole("link", { name: "五层引擎" }));
+    expect(screen.getByText("02 · 五层引擎")).toBeInTheDocument();
     expect(
       screen.getByRole("list", { name: "万护 OneCare 五层服务蓝图" }),
     ).toBeInTheDocument();
@@ -76,17 +96,26 @@ describe("LandingContent", () => {
         expect(screen.getByText(outcome)).toBeInTheDocument();
       },
     );
+    expect(container.querySelector("#architecture")).toContainElement(
+      screen.getByText("更短服务周期"),
+    );
 
+    fireEvent.click(screen.getByRole("link", { name: "团队" }));
+    expect(screen.getByText("03 · 团队")).toBeInTheDocument();
     expect(screen.getByText("成员 01")).toBeInTheDocument();
     expect(screen.getByText("成员 02")).toBeInTheDocument();
     expect(screen.getByText("成员 03")).toBeInTheDocument();
     expect(screen.getByText(/成员信息待补充/)).toBeInTheDocument();
 
-    const login = screen.getByRole("link", { name: "使用飞书登录" });
-    expect(login).toHaveAttribute("href", "/api/auth/feishu/start");
     expect(
       screen.getByText(/当前为万护 OneCare 方案原型/),
     ).toBeInTheDocument();
+    expect(container.querySelector("#team")).toContainElement(
+      screen.getByText(/当前为万护 OneCare 方案原型/),
+    );
+    expect(screen.queryByText("FIVE-LAYER ENGINE")).not.toBeInTheDocument();
+    expect(screen.queryByText("TEAM CREDITS")).not.toBeInTheDocument();
+    expect(screen.queryByText("03 / OUTCOME")).not.toBeInTheDocument();
     expect(container.querySelector('a[href^="/experience/"]')).toBeNull();
     expect(container.querySelector(".role-card, .signal-flow")).toBeNull();
     expect(
@@ -100,6 +129,7 @@ describe("LandingContent", () => {
 
   it("moves between perspective tabs with the keyboard", () => {
     render(<LandingContent user={null} />);
+    fireEvent.click(screen.getByRole("link", { name: "四个视角" }));
 
     const customer = screen.getByRole("tab", { name: "客服" });
     customer.focus();
@@ -119,6 +149,7 @@ describe("LandingContent", () => {
 
   it("keeps text controls centered and free of decorative arrows", () => {
     const { container } = render(<LandingContent user={null} />);
+    fireEvent.click(screen.getByRole("link", { name: "团队" }));
 
     const textControls = container.querySelectorAll(
       ".header-cta, .primary-action, .secondary-action, .back-to-top",
@@ -128,9 +159,9 @@ describe("LandingContent", () => {
     textControls.forEach((control) => {
       expect(control.textContent).not.toMatch(/[↗↓↑]/);
     });
-    expect(screen.getByRole("link", { name: "返回顶部" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "返回首页" })).toHaveAttribute(
       "href",
-      "#top",
+      "#home",
     );
   });
 

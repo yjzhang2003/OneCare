@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 
+import { ShowcasePageHeading } from "./showcase-page-heading";
+
 type SectionFrameProps = {
   id: string;
   index: string;
-  eyebrow: string;
+  label: string;
   title: string;
   intro: string;
   tone?: "light" | "dark";
@@ -13,7 +15,7 @@ type SectionFrameProps = {
 export function SectionFrame({
   id,
   index,
-  eyebrow,
+  label,
   title,
   intro,
   tone = "light",
@@ -27,16 +29,14 @@ export function SectionFrame({
       id={id}
       aria-labelledby={titleId}
     >
-      <div className="section-frame__heading">
-        <div className="section-frame__meta">
-          <span>{index}</span>
-          <p>{eyebrow}</p>
-        </div>
-        <div>
-          <h2 id={titleId}>{title}</h2>
-          <p className="section-frame__intro">{intro}</p>
-        </div>
-      </div>
+      <ShowcasePageHeading
+        index={index}
+        intro={intro}
+        label={label}
+        title={title}
+        titleId={titleId}
+        tone={tone}
+      />
       {children}
     </section>
   );

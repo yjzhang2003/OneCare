@@ -10,12 +10,12 @@ export function SiteFooter() {
         当前为万护 OneCare 方案原型，尚未接入真实业务数据或 AI 服务。
       </p>
       <nav aria-label="页尾导航">
-        <a href="#perspectives">返回四个视角</a>
-        <a href="#architecture">返回五层引擎</a>
-        <a href="#team">返回团队</a>
+        <a href="#perspectives">四个视角</a>
+        <a href="#architecture">五层引擎</a>
+        <a href="#team">团队</a>
       </nav>
-      <a className="back-to-top" href="#top" aria-label="返回顶部">
-        返回顶部
+      <a className="back-to-top" href="#home" aria-label="返回首页">
+        返回首页
       </a>
     </footer>
   );
