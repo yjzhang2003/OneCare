@@ -74,7 +74,7 @@ describe("LandingContent", () => {
     const userTab = screen.getByRole("tab", { name: "用户" });
     expect(userTab).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tabpanel")).toHaveTextContent(
-      "冰箱好像不太冷了",
+      "爱家服务助手",
     );
 
     fireEvent.click(screen.getByRole("tab", { name: "客服" }));

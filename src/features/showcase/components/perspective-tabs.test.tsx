@@ -64,4 +64,18 @@ describe("PerspectiveTabs", () => {
       "true",
     );
   });
+
+  it("preserves a workspace demo while switching roles", () => {
+    render(<PerspectiveTabs perspectives={perspectives} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "饮料不够凉" }));
+    fireEvent.click(screen.getByRole("tab", { name: "客服" }));
+    fireEvent.click(screen.getByRole("tab", { name: "用户" }));
+
+    expect(
+      screen.getByText(
+        "结合温度曲线，可能与冷藏温度传感器或风道密封有关。",
+      ),
+    ).toBeInTheDocument();
+  });
 });

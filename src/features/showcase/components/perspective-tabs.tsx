@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 
 import type { Perspective } from "../content";
+import { CustomerWorkspace } from "./customer-workspace";
 
 type PerspectiveTabsProps = {
   perspectives: readonly Perspective[];
@@ -91,11 +92,15 @@ export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
               key={perspective.index}
               role="tabpanel"
             >
-              <div className="perspective-workspace__placeholder">
-                <p>{perspective.title}</p>
-                <h3>{perspective.sceneLine}</h3>
-                <p>{perspective.value}</p>
-              </div>
+              {index === 0 ? (
+                <CustomerWorkspace />
+              ) : (
+                <div className="perspective-workspace__placeholder">
+                  <p>{perspective.title}</p>
+                  <h3>{perspective.sceneLine}</h3>
+                  <p>{perspective.value}</p>
+                </div>
+              )}
             </section>
           );
         })}
