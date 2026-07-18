@@ -33,7 +33,7 @@
 - [x] 部署 Preview，并检查事件函数实际区域为 `hkg1`。
 - [x] 若 Preview 证明配置有效，部署 Production。
 - [x] 检查生产事件函数区域为 `hkg1`。
-- [ ] 重新观察飞书后台 URL Verification 请求并确认成功。
+- [x] 重新观察飞书后台 URL Verification 请求并确认成功。
 
 ## Task 3: Document the resolved deployment constraint
 
@@ -90,7 +90,7 @@ curl -sS -o /dev/null -w 'status=%{http_code} redirect=%{redirect_url} total=%{t
 
 Expected: both authoritative nameservers return exactly the CNAME target printed in Step 1; Vercel reports valid configuration; HTTPS probe returns 403 without redirect and within three seconds.
 
-- [ ] **Step 4: Validate the real Feishu challenge**
+- [x] **Step 4: Validate the real Feishu challenge**
 
 Configure this exact request URL in Feishu:
 
@@ -106,7 +106,7 @@ npx vercel@latest logs --environment production --since 10m --limit 100 --json
 
 Expected: Feishu reports URL Verification success and Vercel logs contain the corresponding `POST /api/feishu/events` with HTTP 200.
 
-- [ ] **Step 5: Record the external validation result**
+- [x] **Step 5: Record the external validation result**
 
 Update this plan with DNS target, Vercel domain state, HTTPS probe timing, Feishu result, and any remaining gap. Run:
 
@@ -126,6 +126,9 @@ Expected: documentation contains no secret values; `git diff --check` passes.
 - Vercel reports `configured-correctly` and confirmed the domain is attached only to project `onecare`.
 - Automatic TLS was not yet present immediately after DNS verification, so Vercel certificate issuance was triggered explicitly. The resulting Let's Encrypt certificate covers `onecare.ohmyfeishu.top` and is valid through 2026-10-16.
 - HTTPS probe returns the expected 403 without redirect in approximately 1.71 seconds; `x-vercel-id` confirms execution in `hkg1`.
+- Feishu URL Verification succeeded against `https://onecare.ohmyfeishu.top/api/feishu/events`.
+- Vercel Production logs confirm the corresponding custom-domain POST returned HTTP 200 on deployment `dpl_36jCYcL9teifexMPVQJomzSKJZX1`.
+- The callback transport is now verified. Event selection, minimum IM permissions, application version publication, and a real employee bot conversation remain separate activation steps.
 
 ## Preview Evidence
 
