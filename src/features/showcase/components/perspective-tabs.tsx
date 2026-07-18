@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useRef, useState } from "react";
 
 import type { Perspective } from "../content";
@@ -9,10 +8,11 @@ type PerspectiveTabsProps = {
   perspectives: readonly Perspective[];
 };
 
+const workspaceIds = ["customer", "agent", "engineer", "operations"] as const;
+
 export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
-  const active = perspectives[selectedIndex];
 
   function select(index: number, focus = false) {
     setSelectedIndex(index);
@@ -45,9 +45,9 @@ export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
   return (
     <section className="perspective-showcase">
       <div
+        aria-label="万护 OneCare 服务角色"
         className="perspective-tabs"
         role="tablist"
-        aria-label="万护 OneCare 服务角色"
       >
         {perspectives.map((perspective, index) => (
           <button
@@ -70,36 +70,36 @@ export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
         ))}
       </div>
 
-      <article
-        aria-labelledby={`perspective-tab-${selectedIndex}`}
-        className="perspective-panel surface-card"
-        id={`perspective-panel-${selectedIndex}`}
-        key={active.index}
-        role="tabpanel"
-      >
-        <div className="perspective-panel__media">
-          <Image
-            alt="海信智能冰箱产品示意"
-            fill
-            sizes="(max-width: 768px) 100vw, 42vw"
-            src="/images/hisense/smart-refrigerator.webp"
-          />
-          <span>{active.handoff}</span>
-        </div>
-        <div className="perspective-panel__copy">
-          <p className="perspective-panel__role">{active.title}</p>
-          <h3>{active.sceneLine}</h3>
-          <p className="perspective-panel__value">{active.value}</p>
-          <ul aria-label={`${active.title}关键能力`}>
-            {active.capabilities.map((capability, index) => (
-              <li key={capability}>
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                {capability}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </article>
+      <div className="perspective-workspace-viewport">
+        {perspectives.map((perspective, index) => {
+          const active = index === selectedIndex;
+          const position = active
+            ? "active"
+            : index < selectedIndex
+              ? "before"
+              : "after";
+
+          return (
+            <section
+              aria-hidden={active ? undefined : true}
+              aria-labelledby={`perspective-tab-${index}`}
+              className="perspective-workspace"
+              data-position={position}
+              data-testid={`workspace-${workspaceIds[index]}`}
+              id={`perspective-panel-${index}`}
+              inert={active ? undefined : true}
+              key={perspective.index}
+              role="tabpanel"
+            >
+              <div className="perspective-workspace__placeholder">
+                <p>{perspective.title}</p>
+                <h3>{perspective.sceneLine}</h3>
+                <p>{perspective.value}</p>
+              </div>
+            </section>
+          );
+        })}
+      </div>
     </section>
   );
 }
