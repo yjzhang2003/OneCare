@@ -6,7 +6,7 @@ import { showcasePages, type ShowcasePageId } from "../navigation";
 type SiteHeaderProps = {
   user: AuthUser | null;
   activePage: ShowcasePageId;
-  onNavigate: (page: ShowcasePageId) => void;
+  onNavigate: (page: ShowcasePageId, focusContent?: boolean) => void;
 };
 
 export function SiteHeader({
@@ -34,7 +34,7 @@ export function SiteHeader({
             key={page.id}
             onClick={(event) => {
               event.preventDefault();
-              onNavigate(page.id);
+              onNavigate(page.id, event.detail === 0);
             }}
           >
             {page.label}

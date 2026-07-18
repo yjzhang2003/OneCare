@@ -25,6 +25,7 @@ export function ShowcaseNavigator({
   const [activePage, setActivePage] = useState<ShowcasePageId>("home");
   const [isReady, setIsReady] = useState(false);
   const activePageRef = useRef<ShowcasePageId>("home");
+  const focusContentRef = useRef(false);
   const pageElements = useRef<Partial<Record<ShowcasePageId, HTMLElement | null>>>(
     {},
   );
@@ -46,11 +47,12 @@ export function ShowcaseNavigator({
     setActivePage(nextPage);
   }
 
-  function navigate(nextPage: ShowcasePageId) {
+  function navigate(nextPage: ShowcasePageId, focusContent = false) {
     if (nextPage === activePageRef.current) {
       return;
     }
 
+    focusContentRef.current = focusContent;
     window.history.pushState(null, "", `#${nextPage}`);
     activate(nextPage);
   }
@@ -69,7 +71,7 @@ export function ShowcaseNavigator({
     }
 
     event.preventDefault();
-    navigate(nextPage);
+    navigate(nextPage, event.detail === 0);
   }
 
   useEffect(() => {
@@ -97,11 +99,12 @@ export function ShowcaseNavigator({
   }, []);
 
   useEffect(() => {
-    if (!isReady) {
+    if (!isReady || !focusContentRef.current) {
       return;
     }
 
     const focusTimer = window.setTimeout(() => {
+      focusContentRef.current = false;
       pageElements.current[activePage]
         ?.querySelector<HTMLElement>("[data-showcase-title]")
         ?.focus({ preventScroll: true });

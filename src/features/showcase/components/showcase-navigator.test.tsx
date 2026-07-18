@@ -1,4 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ShowcasePageContent } from "../navigation";
@@ -23,6 +30,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("ShowcaseNavigator", () => {
@@ -137,5 +145,45 @@ describe("ShowcaseNavigator", () => {
 
     expect(pushState).not.toHaveBeenCalled();
     expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("does not move focus to the homepage title during initial restoration", async () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) =>
+      window.setTimeout(() => callback(performance.now()), 0),
+    );
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation((handle) =>
+      window.clearTimeout(handle),
+    );
+    render(<ShowcaseNavigator pages={pages} user={null} />);
+
+    await act(() => new Promise((resolve) => window.setTimeout(resolve, 50)));
+    await act(() => new Promise((resolve) => window.setTimeout(resolve, 650)));
+
+    expect(focus).not.toHaveBeenCalled();
+  });
+
+  it("moves focus only when a page link is activated from the keyboard", async () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) =>
+      window.setTimeout(() => callback(performance.now()), 0),
+    );
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation((handle) =>
+      window.clearTimeout(handle),
+    );
+    render(<ShowcaseNavigator pages={pages} user={null} />);
+    await act(() => new Promise((resolve) => window.setTimeout(resolve, 50)));
+
+    fireEvent.click(screen.getByRole("link", { name: "团队" }), {
+      detail: 1,
+    });
+    await act(() => new Promise((resolve) => window.setTimeout(resolve, 650)));
+    expect(focus).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("link", { name: "首页" }), {
+      detail: 0,
+    });
+    await act(() => new Promise((resolve) => window.setTimeout(resolve, 650)));
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
   });
 });
