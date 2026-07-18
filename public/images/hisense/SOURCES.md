@@ -4,11 +4,10 @@ Captured on 2026-07-18 for the user-authorized OneCare competition prototype.
 
 ## OneCare home hero
 
-- Source page: <https://www.hisense-usa.com/>
-- Original asset: <https://static.wixstatic.com/media/991681_91fbfcac1b334c4faa6d555f3285c862~mv2.png/v1/fill/w_2816,h_1048,al_c,q_95,enc_avif,quality_auto/Landing%20Page-2%20extended%202.png>
-- Local file: `onecare-home.jpg`
-- Use: full-width homepage hero, center crop on desktop and mobile.
-- Processing: converted from the served PNG to JPEG at quality 78; image content was not otherwise altered.
+- Source: user-provided Hisense FIFA sponsorship screenshot, received 2026-07-19.
+- Local file: `onecare-home.png`
+- Use: full-width homepage hero, left-anchored crop on desktop and mobile.
+- Processing: stored byte-for-byte as provided; image content was not altered.
 
 ## Smart refrigerator
 

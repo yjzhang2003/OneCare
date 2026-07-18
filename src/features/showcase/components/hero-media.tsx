@@ -8,7 +8,7 @@ export function HeroMedia() {
         fill
         priority
         sizes="100vw"
-        src="/images/hisense/onecare-home.jpg"
+        src="/images/hisense/onecare-home.png"
       />
       <div className="showroom-hero__shade" />
     </div>

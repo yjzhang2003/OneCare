@@ -1810,7 +1810,7 @@ a {
 
 .showroom-hero__media img {
   object-fit: cover;
-  object-position: 50% center;
+  object-position: left center;
   transform: scale(1.08);
   animation: showroom-image-settle 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
@@ -2572,7 +2572,7 @@ a {
   }
 
   .showroom-hero__media img {
-    object-position: 49% center;
+    object-position: left center;
     transform: scale(1.18);
   }
 
