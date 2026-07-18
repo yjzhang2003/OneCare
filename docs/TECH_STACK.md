@@ -57,6 +57,8 @@ Feishu's one-click agent-application SDK remains outside the intended product fl
 
 Vercel is the selected host for the Next.js application and Node.js Route Handlers. Production secrets are configured as Vercel environment variables and are never passed as public `NEXT_PUBLIC_*` values.
 
+The Feishu event callback has a stricter network placement requirement than the rest of the site. `vercel.json` deploys only `app/api/feishu/events/route.ts` to Hong Kong (`hkg1`) so Feishu's China-side verification and event delivery do not traverse to Vercel's default Washington, D.C. (`iad1`) compute region. Other Node.js routes retain the project default. Deployment inspection must confirm the emitted `api/feishu/events` function region before production callback validation.
+
 The first production deployment establishes the canonical domain. The exact `/api/auth/feishu/callback` URL on that domain must then be added to the Feishu developer console and stored as `FEISHU_REDIRECT_URI` before the final production deployment.
 
 Authentication routes explicitly use the Node.js runtime. The repository pins Node 24 and overrides Next.js's transitive PostCSS dependency to a compatible patched release because the upstream pinned version is affected by GHSA-qx2v-qp2m-jg93.
@@ -73,7 +75,7 @@ PostgreSQL and Drizzle remain the intended system-of-record stack when persisten
 
 The bot script is deterministic and stateless. It offers a welcome menu, fixed knowledge-base troubleshooting, an “已解决” result, a clearly simulated “转人工” summary, and restart. It does not call an LLM, retrieve a knowledge base, read IoT data, create a work order, or persist message text, user identifiers, tokens, or event IDs. Without durable event-ID storage, an extreme Feishu retry can produce a duplicate demonstration reply. This is acceptable only for the current prototype and must be replaced with deduplication before real service operations.
 
-The endpoint code does not by itself activate a production bot. Activation still requires a stable public Production callback, matching server secrets, minimum message permissions, `im.message.receive_v1` subscription, a published application version, the correct availability scope, and acceptance testing by a real enterprise member. A Vercel Preview protected by Deployment Protection cannot be configured as the live callback.
+The endpoint code and regional placement do not by themselves activate a production bot. Activation still requires a stable public Production callback, matching server secrets, successful Feishu URL Verification within three seconds, minimum message permissions, `im.message.receive_v1` subscription, a published application version, the correct availability scope, and acceptance testing by a real enterprise member. A Vercel Preview protected by Deployment Protection cannot be configured as the live callback.
 
 ## Testing Baseline
 

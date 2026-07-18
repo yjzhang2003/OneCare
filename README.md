@@ -81,7 +81,7 @@ https://onecare-loop.vercel.app/api/auth/feishu/callback
 6. 发布新版本，并把应用可用范围覆盖所有允许体验的成员；
 7. 使用真实企业成员完成 OAuth、机器人搜索、单聊和回复验收。
 
-事件接口会验证请求签名、Verification Token 和 Encrypt Key，只处理单聊文本，并在三秒响应要求内先确认事件，再通过 Next.js `after()` 完成短回复任务。Vercel Preview 受 Deployment Protection 保护，不能用作飞书事件回调地址；分享链接只用于页面确认。
+事件接口会验证请求签名、Verification Token 和 Encrypt Key，只处理单聊文本，并在三秒响应要求内先确认事件，再通过 Next.js `after()` 完成短回复任务。为减少飞书中国侧到 Vercel 默认美国区域的跨境延迟，`vercel.json` 只将该事件函数部署到香港 `hkg1`；网站与 OAuth 函数不受此配置影响。Vercel Preview 受 Deployment Protection 保护，不能用作飞书事件回调地址；分享链接只用于页面确认。
 
 ## 验证
 
@@ -105,6 +105,8 @@ npm audit --omit=dev
 5. 更新 Vercel 的 `FEISHU_REDIRECT_URI` 后再次生产部署。
 
 `FEISHU_APP_SECRET`、`SESSION_SECRET`、`FEISHU_EVENT_VERIFICATION_TOKEN` 和 `FEISHU_EVENT_ENCRYPT_KEY` 应在 Vercel 标记为 Sensitive。环境变量更新只对后续部署生效。Preview 不复制 Production 密钥；页面仍可用于视觉验收，但 OAuth 和机器人回调会显示安全配置错误或保持不可用。
+
+部署后可用 `vercel inspect <deployment> --json` 检查 `api/feishu/events` 的 `deployedTo` 是否为 `hkg1`。只有区域、Production 环境变量和飞书后台 URL Verification 都通过后，才能将事件订阅视为已打通。
 
 `npm run test:runtime` 会先执行生产构建，再在本地启动 `next start` 验证认证 Route Handlers。该检查用于捕获只在 Next.js 生产 Bundle 中出现、普通模块单测无法复现的运行时兼容问题。
 
