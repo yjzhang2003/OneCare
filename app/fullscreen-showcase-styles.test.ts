@@ -194,4 +194,18 @@ describe("fullscreen showcase stylesheet", () => {
     );
     expect(css).not.toMatch(/\.feishu-[^{:]+::after\s*\{[^}]*content:/);
   });
+
+  it("organizes detailed team cards and the responsive two-row footer", () => {
+    expect(css).toMatch(/\.team-card__section\s+ul\s*\{/);
+    expect(css).toMatch(
+      /\.landing-shell \.public-footer\s*\{[^}]*align-items:\s*stretch/,
+    );
+    expect(css).toMatch(
+      /\.landing-shell \.footer-top,\s*\.landing-shell \.footer-bottom\s*\{[\s\S]*?grid-template-columns:/,
+    );
+    expect(css).toMatch(/\.footer-bottom\s*\{[\s\S]*?border-top:/);
+    expect(css).toMatch(
+      /@media \(max-width: 640px\)[\s\S]*?\.landing-shell \.footer-top[\s\S]*?grid-template-columns:\s*1fr/,
+    );
+  });
 });
