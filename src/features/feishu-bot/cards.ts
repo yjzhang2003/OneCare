@@ -22,13 +22,33 @@ function markdown(content: string): CardElement {
 }
 
 function field(label: string, value: string): CardElement {
-  return markdown(`**${label}**\n${value}`);
+  return {
+    tag: "div",
+    text: { tag: "lark_md", content: `**${label}**\n${value}` },
+  };
+}
+
+function detailBlock(
+  content: string,
+  fields: ReadonlyArray<readonly [string, string]>,
+): CardElement {
+  return {
+    tag: "div",
+    text: { tag: "lark_md", content },
+    fields: fields.map(([label, value]) => ({
+      is_short: true,
+      text: { tag: "lark_md", content: `**${label}**\n${value}` },
+    })),
+  };
 }
 
 function callbackButton(
   text: string,
   action: OneCareCardAction,
-  options: Readonly<{ type?: "primary" | "default"; disabled?: boolean }> = {},
+  options: Readonly<{
+    type?: "primary_filled" | "default";
+    disabled?: boolean;
+  }> = {},
 ): CardElement {
   return {
     tag: "button",
@@ -89,23 +109,33 @@ function cardRoot(input: Readonly<{
   subtitle: string;
   elements: readonly CardElement[];
   completed?: boolean;
+  template?: string;
+  icon?: string;
+  status: string;
+  statusColor: string;
 }>): FeishuCard {
   return {
     schema: "2.0",
     config: {
       update_multi: true,
-      width_mode: "fill",
+      width_mode: "default",
       summary: { content: `${input.title} · 万护 OneCare 演示` },
     },
     header: {
       title: { tag: "plain_text", content: input.title },
       subtitle: { tag: "plain_text", content: input.subtitle },
-      template: input.completed ? "green" : "turquoise",
+      template: input.completed ? "green" : (input.template ?? "turquoise"),
       icon: {
         tag: "standard_icon",
-        token: input.completed ? "done_outlined" : "home_outlined",
-        color: input.completed ? "green" : "turquoise",
+        token: input.completed ? "done_colorful" : (input.icon ?? "myai_colorful"),
       },
+      text_tag_list: [
+        {
+          tag: "text_tag",
+          text: { tag: "plain_text", content: input.status },
+          color: input.completed ? "green" : input.statusColor,
+        },
+      ],
       padding: "12px 12px 12px 12px",
     },
     body: {
@@ -121,28 +151,28 @@ function workbenchCard(): FeishuCard {
   return cardRoot({
     title: "万护 OneCare",
     subtitle: "员工协同工作台 · 演示",
+    status: "演示工作台",
+    statusColor: "turquoise",
+    icon: "myai_colorful",
     elements: [
-      markdown(
+      detailBlock(
         "**问题出现前，服务已经开始。**\nAI 串联客服、工程师与运营岗位，让同一案例沿一条服务链路推进。",
-      ),
-      columns(
-        field("当前案例", `${ONECARE_CASE_ID}\n冷藏室温度持续偏高`),
-        field("当前阶段", "AI 已完成预诊\n等待客服确认"),
+        [
+          ["当前案例", `${ONECARE_CASE_ID}\n冷藏室温度持续偏高`],
+          ["当前阶段", "AI 已完成预诊\n等待客服确认"],
+        ],
       ),
       markdown("**选择工作入口**"),
       columns(
-        callbackButton("客服 · 待确认服务", "open_pending", { type: "primary" }),
+        callbackButton("客服 · 待确认服务", "open_pending", {
+          type: "primary_filled",
+        }),
         callbackButton("工程师 · 今日任务", "open_tasks"),
-      ),
-      columns(
-        callbackButton("AI 预诊与配件", "open_diagnosis"),
         callbackButton("运营后台", "open_operations"),
       ),
       columns(
-        callbackButton("查询服务进度", "open_progress"),
-        callbackButton("查看服务结果", "open_result"),
+        websiteButton(),
       ),
-      websiteButton(),
       note("所有内容均为演示数据，不会写入真实服务系统。"),
     ],
   });
@@ -152,6 +182,10 @@ function operationsCard(): FeishuCard {
   return cardRoot({
     title: "运营后台",
     subtitle: "服务闭环与 VOC 风险 · 演示",
+    status: "闭环监控 · 演示",
+    statusColor: "blue",
+    template: "blue",
+    icon: "chart_colorful",
     elements: [
       columns(
         field("主动预警", "1 个\n正在流转"),
@@ -161,8 +195,10 @@ function operationsCard(): FeishuCard {
       field("VOC 聚集主题", "冷藏温度偏高反馈近期出现聚集趋势"),
       field("闭环提醒", "若 30 分钟内未确认，系统将触发跨岗位协同提醒"),
       columns(
-        callbackButton("查看当前进度", "open_progress", { type: "primary" }),
-        callbackButton("查看待确认服务", "open_pending"),
+        callbackButton("查看当前进度", "open_progress", {
+          type: "primary_filled",
+        }),
+        websiteButton(),
       ),
       note("运营指标与风险均为演示数据。"),
     ],
@@ -173,6 +209,10 @@ function pendingCard(): FeishuCard {
   return cardRoot({
     title: "待确认服务",
     subtitle: "客服工作台 · 演示",
+    status: "待客服确认",
+    statusColor: "yellow",
+    template: "yellow",
+    icon: "myai_colorful",
     elements: [
       field("用户问题", "冷藏室温度持续偏高"),
       columns(
@@ -181,8 +221,10 @@ function pendingCard(): FeishuCard {
       ),
       field("AI 建议", "先用知识库辅助用户自查门体密封与温控设置；若仍异常，再创建服务工单。"),
       columns(
-        callbackButton("创建演示工单", "create_ticket", { type: "primary" }),
-        callbackButton("查看服务进度", "open_progress"),
+        callbackButton("创建演示工单", "create_ticket", {
+          type: "primary_filled",
+        }),
+        callbackButton("查看 AI 预诊与配件", "open_diagnosis"),
       ),
       note("操作只更新演示卡片，不会创建真实工单。"),
     ],
@@ -195,6 +237,10 @@ function ticketCard(state: OneCareCardState): FeishuCard {
     title: completed ? "演示工单已创建" : "创建服务工单",
     subtitle: "客服工作台 · 演示",
     completed,
+    status: completed ? "已创建 · 演示" : "待创建",
+    statusColor: completed ? "green" : "orange",
+    template: "orange",
+    icon: "todo_colorful",
     elements: [
       columns(
         field("工单号", ONECARE_CASE_ID),
@@ -202,10 +248,14 @@ function ticketCard(state: OneCareCardState): FeishuCard {
       ),
       field("故障描述", "冷藏室温度持续偏高，知识库自查后仍未恢复"),
       field("派工建议", "安排工程师携带冷藏室温度传感器备件上门核验"),
-      callbackButton(
-        completed ? "创建完成" : "确认创建演示工单",
-        "create_ticket",
-        { type: "primary", disabled: completed },
+      columns(
+        callbackButton(
+          completed ? "创建完成" : "确认创建演示工单",
+          "create_ticket",
+          { type: "primary_filled", disabled: completed },
+        ),
+        callbackButton("查询服务进度", "open_progress"),
+        callbackButton("查看工程师任务", "open_tasks"),
       ),
       note(
         completed
@@ -220,12 +270,18 @@ function progressCard(): FeishuCard {
   return cardRoot({
     title: "服务进度",
     subtitle: `${ONECARE_CASE_ID} · 演示`,
+    status: "客服确认中",
+    statusColor: "blue",
+    template: "blue",
+    icon: "todo_colorful",
     elements: [
       markdown(
         "🟢 **发现异常**　设备信号触发主动预警\n\n🟢 **完成预诊**　生成自查建议与备件清单\n\n🟠 **客服确认**　当前阶段\n\n⚪ **预约上门**　等待推进",
       ),
       columns(
-        callbackButton("查看 AI 预诊", "open_diagnosis", { type: "primary" }),
+        callbackButton("查看工程师任务", "open_tasks", {
+          type: "primary_filled",
+        }),
         callbackButton("查看运营风险", "open_operations"),
       ),
       note("案例尚未进入真实服务系统。"),
@@ -237,6 +293,10 @@ function tasksCard(): FeishuCard {
   return cardRoot({
     title: "今日任务",
     subtitle: "工程师工作台 · 演示",
+    status: "待上门 · 演示",
+    statusColor: "blue",
+    template: "blue",
+    icon: "todo_colorful",
     elements: [
       columns(
         field("今日上门", "1 项"),
@@ -245,7 +305,9 @@ function tasksCard(): FeishuCard {
       field("任务案例", `${ONECARE_CASE_ID}\n冷藏室温度持续偏高`),
       field("服务地点", "青岛市 · 详细地址已脱敏"),
       columns(
-        callbackButton("查看预诊与配件", "open_diagnosis", { type: "primary" }),
+        callbackButton("查看预诊与配件", "open_diagnosis", {
+          type: "primary_filled",
+        }),
         callbackButton("查看服务结果", "open_result"),
       ),
       note("任务信息为演示数据。"),
@@ -259,14 +321,20 @@ function diagnosisCard(state: OneCareCardState): FeishuCard {
     title: completed ? "配件准备已确认" : "AI 预诊与配件",
     subtitle: "工程师工作台 · 演示",
     completed,
+    status: completed ? "配件已确认 · 演示" : "待核验",
+    statusColor: completed ? "green" : "turquoise",
+    icon: "myai_colorful",
     elements: [
       field("可能原因", "温度传感器漂移 / 门体密封异常 / 风道循环受阻"),
       field("建议携带", "冷藏室温度传感器、密封检测工具、风道清洁组件"),
       field("上门前核验", "设备型号、历史告警与用户自查结果"),
-      callbackButton(
-        completed ? "配件已确认" : "确认配件准备完成",
-        "confirm_parts",
-        { type: "primary", disabled: completed },
+      columns(
+        callbackButton(
+          completed ? "配件已确认" : "确认配件准备完成",
+          "confirm_parts",
+          { type: "primary_filled", disabled: completed },
+        ),
+        callbackButton("返回今日任务", "open_tasks"),
       ),
       note(completed ? "演示确认已记录。" : "确认不会触发真实配件出库。"),
     ],
@@ -279,13 +347,20 @@ function resultCard(state: OneCareCardState): FeishuCard {
     title: completed ? "服务结果已提交" : "提交服务结果",
     subtitle: "工程师工作台 · 演示",
     completed,
+    status: completed ? "已提交 · 演示" : "待提交",
+    statusColor: completed ? "green" : "yellow",
+    template: "yellow",
+    icon: "todo_colorful",
     elements: [
       field("处理结果", "完成传感器核验与风道清理，温度恢复观察中"),
       field("闭环动作", "服务完成后自动触发回访与满意度评价"),
-      callbackButton(
-        completed ? "结果已提交" : "提交演示服务结果",
-        "submit_result",
-        { type: "primary", disabled: completed },
+      columns(
+        callbackButton(
+          completed ? "结果已提交" : "提交演示服务结果",
+          "submit_result",
+          { type: "primary_filled", disabled: completed },
+        ),
+        callbackButton("查看运营闭环", "open_operations"),
       ),
       note(completed ? "演示结果已记录。" : "不会写入真实服务或回访系统。"),
     ],

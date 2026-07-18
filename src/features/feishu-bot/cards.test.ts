@@ -43,10 +43,22 @@ describe("OneCare Feishu Card 2.0 builders", () => {
 
     expect(message.msgType).toBe("interactive");
     expect(card.schema).toBe("2.0");
+    expect((card.config as Record<string, unknown>).width_mode).toBe("default");
     expect(card.header).toBeTruthy();
     expect(card.body).toBeTruthy();
     expect(message.content).toContain("演示");
     expect(collectTaggedValues(card, "hr")).toEqual([]);
+    expect(
+      ((card.body as Record<string, unknown>).elements as unknown[]).length,
+    ).toBeLessThanOrEqual(5);
+    expect(
+      ((card.header as Record<string, unknown>).text_tag_list as unknown[])
+        .length,
+    ).toBeGreaterThan(0);
+    expect(
+      (collectTaggedValues(card, "button") as Array<Record<string, unknown>>)
+        .filter((button) => button.type === "primary_filled").length,
+    ).toBeLessThanOrEqual(1);
   });
 
   it("uses only allowlisted callback actions with the fixed demo case", () => {
@@ -87,6 +99,32 @@ describe("OneCare Feishu Card 2.0 builders", () => {
         default_url: "https://onecare.ohmyfeishu.top/",
       }),
     ]);
+  });
+
+  it.each([
+    ["workbench", ["open_pending", "open_tasks", "open_operations"]],
+    ["pending", ["create_ticket", "open_diagnosis"]],
+    ["ticket", ["create_ticket", "open_progress", "open_tasks"]],
+    ["progress", ["open_tasks", "open_operations"]],
+    ["tasks", ["open_diagnosis", "open_result"]],
+    ["diagnosis", ["confirm_parts", "open_tasks"]],
+    ["result", ["submit_result", "open_operations"]],
+    ["operations", ["open_progress"]],
+  ] as const)("exposes the approved %s card actions", (view, expectedActions) => {
+    const card = JSON.parse(createCardMessage(view).content) as unknown;
+    const actualActions = collectTaggedValues(card, "button").flatMap(
+      (button) => {
+        const behaviors = (button as Record<string, unknown>).behaviors;
+        if (!Array.isArray(behaviors)) return [];
+        return behaviors.flatMap((behavior) => {
+          const record = behavior as Record<string, unknown>;
+          if (record.type !== "callback") return [];
+          return [(record.value as Record<string, unknown>).action];
+        });
+      },
+    );
+
+    expect(actualActions).toEqual(expectedActions);
   });
 
   it.each([
