@@ -33,6 +33,15 @@ describe("LandingContent", () => {
       "#team",
     );
 
+    const topNavigation = screen.getByRole("navigation", {
+      name: "主页章节",
+    });
+    ["首页", "四个视角", "五层引擎", "团队"].forEach((label) => {
+      expect(topNavigation).toContainElement(
+        screen.getAllByRole("link", { name: label })[0],
+      );
+    });
+
     expect(
       screen.getByRole("tablist", { name: "OneCare 服务角色" }),
     ).toBeInTheDocument();
@@ -73,6 +82,13 @@ describe("LandingContent", () => {
     ).toBeInTheDocument();
     expect(container.querySelector('a[href^="/experience/"]')).toBeNull();
     expect(container.querySelector(".role-card, .signal-flow")).toBeNull();
+    expect(
+      container.querySelector(".session-copy, .showroom-hero__case"),
+    ).toBeNull();
+    expect(
+      screen.queryByText("方案原型 · 未接入真实业务数据"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("冰箱温控异常")).not.toBeInTheDocument();
   });
 
   it("moves between perspective tabs with the keyboard", () => {
@@ -118,7 +134,7 @@ describe("LandingContent", () => {
       />,
     );
 
-    expect(screen.getByText("服务运营员，欢迎回来")).toBeInTheDocument();
+    expect(screen.queryByText("服务运营员，欢迎回来")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "进入工作台" })).toHaveAttribute(
       "href",
       "/dashboard",
