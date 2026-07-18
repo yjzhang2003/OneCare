@@ -36,7 +36,7 @@ const defaultDependencies: CallbackDependencies = {
 };
 
 function errorResponse(request: Request, code: AuthErrorCode): NextResponse {
-  const errorUrl = new URL("/", request.url);
+  const errorUrl = new URL("/login", request.url);
   errorUrl.searchParams.set("auth_error", code);
   const response = NextResponse.redirect(errorUrl, 302);
   response.cookies.delete(OAUTH_STATE_COOKIE);
@@ -68,7 +68,9 @@ export function createCallbackHandler(
       const accessToken = await dependencies.exchangeCode({ code, env });
       const user = await dependencies.fetchUser(accessToken);
       const session = dependencies.makeSession(user, env.sessionSecret);
-      const response = NextResponse.redirect(new URL("/dashboard", request.url), 302);
+      const successUrl = new URL("/login", request.url);
+      successUrl.searchParams.set("auth", "success");
+      const response = NextResponse.redirect(successUrl, 302);
       response.cookies.set(SESSION_COOKIE, session, sessionCookieOptions());
       response.cookies.delete(OAUTH_STATE_COOKIE);
       return response;

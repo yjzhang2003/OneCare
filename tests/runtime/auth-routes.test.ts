@@ -100,7 +100,7 @@ describe("built Next.js authentication routes", () => {
 
     expect(response.status).toBe(302);
     const errorLocation = new URL(response.headers.get("location")!);
-    expect(errorLocation.pathname).toBe("/");
+    expect(errorLocation.pathname).toBe("/login");
     expect(errorLocation.searchParams.get("auth_error")).toBe("invalid_state");
     expect(response.headers.get("set-cookie")).toContain(
       "auto_insight_oauth_state=;",
@@ -138,9 +138,9 @@ describe("built Next.js authentication routes", () => {
     });
 
     expect(dashboard.status).toBe(307);
-    expect(dashboard.headers.get("location")).toBe("/");
+    expect(dashboard.headers.get("location")).toBe(`${baseUrl}/login`);
     expect(logout.status).toBe(302);
-    expect(new URL(logout.headers.get("location")!).pathname).toBe("/");
+    expect(new URL(logout.headers.get("location")!).pathname).toBe("/login");
     expect(logout.headers.get("set-cookie")).toContain(
       "auto_insight_session=;",
     );

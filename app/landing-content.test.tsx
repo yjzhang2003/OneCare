@@ -43,8 +43,12 @@ describe("LandingContent", () => {
       "href",
       "#home",
     );
-    const login = screen.getByRole("link", { name: "使用飞书登录" });
-    expect(login).toHaveAttribute("href", "/api/auth/feishu/start");
+    const login = screen.getByRole("link", { name: "使用飞书体验" });
+    expect(login).toHaveAttribute("href", "/login");
+    expect(screen.getByRole("link", { name: "飞书体验" })).toHaveAttribute(
+      "href",
+      "/login",
+    );
 
     expect(screen.getByRole("link", { name: "四个视角" })).toHaveAttribute(
       "href",
@@ -181,7 +185,7 @@ describe("LandingContent", () => {
     );
   });
 
-  it("returns signed-in visitors to the workspace", () => {
+  it("returns signed-in visitors to the Feishu experience gateway", () => {
     render(
       <LandingContent
         user={{ openId: "ou_onecare", name: "服务运营员" }}
@@ -189,9 +193,13 @@ describe("LandingContent", () => {
     );
 
     expect(screen.queryByText("服务运营员，欢迎回来")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "进入工作台" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "使用飞书体验" })).toHaveAttribute(
       "href",
-      "/dashboard",
+      "/login",
+    );
+    expect(screen.getByRole("link", { name: "飞书体验" })).toHaveAttribute(
+      "href",
+      "/login",
     );
   });
 

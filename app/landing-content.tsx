@@ -30,7 +30,6 @@ type LandingContentProps = {
 
 export function LandingContent({ user, authError }: LandingContentProps) {
   const errorMessage = authError ? errorMessages[authError] : undefined;
-  const workspaceHref = user ? "/dashboard" : "/api/auth/feishu/start";
 
   return (
     <div className="landing-shell" id="top">
@@ -58,8 +57,8 @@ export function LandingContent({ user, authError }: LandingContentProps) {
               <a className="primary-action" href="#perspectives">
                 查看四个视角
               </a>
-              <a className="secondary-action" href={workspaceHref}>
-                {user ? "进入工作台" : "使用飞书登录"}
+              <a className="secondary-action" href="/login">
+                使用飞书体验
               </a>
             </div>
           </div>
