@@ -83,6 +83,45 @@ function groupLifecycleBody() {
   };
 }
 
+function cardActionBody(overrides?: {
+  action?: string;
+  caseId?: string;
+  tag?: string;
+  appId?: string;
+  tenantKey?: string;
+  token?: string;
+  chatId?: string;
+  messageId?: string;
+  operatorId?: string;
+}) {
+  return {
+    schema: "2.0",
+    header: {
+      event_id: "evt_card_action",
+      event_type: "card.action.trigger",
+      create_time: "1784371200000",
+      token: overrides?.token ?? env.verificationToken,
+      app_id: overrides?.appId ?? env.appId,
+      tenant_key: overrides?.tenantKey ?? "tenant_onecare",
+    },
+    event: {
+      operator: { open_id: overrides?.operatorId ?? "ou_onecare" },
+      token: "card-update-token",
+      action: {
+        tag: overrides?.tag ?? "button",
+        value: {
+          action: overrides?.action ?? "open_pending",
+          case_id: overrides?.caseId ?? "OC-240718-037",
+        },
+      },
+      context: {
+        open_chat_id: overrides?.chatId ?? "oc_onecare_chat",
+        open_message_id: overrides?.messageId ?? "om_onecare_card",
+      },
+    },
+  };
+}
+
 function signedHeaders(rawBody: string, valid = true): Headers {
   const timestamp = "1784371200";
   const nonce = "onecare-nonce";
@@ -143,6 +182,54 @@ describe("parseFeishuEvent", () => {
       kind: "entered",
       chatId: "oc_onecare_chat",
     });
+  });
+
+  it("accepts an authenticated allowlisted Card 2.0 button action", async () => {
+    const rawBody = JSON.stringify(cardActionBody());
+
+    await expect(
+      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({
+      kind: "card_action",
+      action: "open_pending",
+      chatId: "oc_onecare_chat",
+      messageId: "om_onecare_card",
+    });
+  });
+
+  it.each([
+    ["unknown action", { action: "delete_case" }],
+    ["wrong demo case", { caseId: "OC-other" }],
+    ["non-button action", { tag: "select_static" }],
+    ["missing chat id", { chatId: "" }],
+    ["missing message id", { messageId: "" }],
+    ["missing operator id", { operatorId: "" }],
+  ])("rejects a verified card callback with %s", async (_label, overrides) => {
+    const rawBody = JSON.stringify(cardActionBody(overrides));
+
+    await expect(
+      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({ kind: "invalid_card_action" });
+  });
+
+  it.each([
+    ["wrong app id", { appId: "cli_other" }],
+    ["missing tenant", { tenantKey: "" }],
+    ["wrong token", { token: "wrong-token" }],
+  ])("denies a card callback with %s", async (_label, overrides) => {
+    const rawBody = JSON.stringify(cardActionBody(overrides));
+
+    await expect(
+      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({ kind: "unauthorized" });
+  });
+
+  it("denies a card callback with a bad request signature", async () => {
+    const rawBody = JSON.stringify(cardActionBody());
+
+    await expect(
+      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody, false), env }),
+    ).resolves.toEqual({ kind: "unauthorized" });
   });
 
   it("ignores a chat entry event without a usable chat id", async () => {

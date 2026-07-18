@@ -4,14 +4,27 @@ import {
   AESCipher,
   EventDispatcher,
   LoggerLevel,
+  normalizeCardAction,
 } from "@larksuiteoapi/node-sdk";
 
 import type { BotEnv } from "../../lib/env";
+import {
+  ONECARE_CARD_ACTIONS,
+  ONECARE_CASE_ID,
+  type OneCareCardAction,
+} from "./card-types";
 
 export type FeishuEventOutcome =
   | Readonly<{ kind: "challenge"; challenge: string }>
   | Readonly<{ kind: "message"; messageId: string; text: string }>
   | Readonly<{ kind: "entered"; chatId: string }>
+  | Readonly<{
+      kind: "card_action";
+      action: OneCareCardAction;
+      chatId: string;
+      messageId: string;
+    }>
+  | Readonly<{ kind: "invalid_card_action" }>
   | Readonly<{ kind: "ignored" }>
   | Readonly<{ kind: "unauthorized" }>;
 
@@ -85,6 +98,58 @@ function payloadToken(payload: JsonObject): unknown {
   return isJsonObject(payload.header) ? payload.header.token : undefined;
 }
 
+function authorizedEventHeader(payload: JsonObject, env: BotEnv): boolean {
+  if (!isJsonObject(payload.header)) return false;
+
+  const tenantKey = payload.header.tenant_key;
+  return (
+    safeEqual(payload.header.app_id, env.appId) &&
+    typeof tenantKey === "string" &&
+    tenantKey.trim().length > 0 &&
+    typeof payload.header.event_id === "string" &&
+    payload.header.event_id.trim().length > 0
+  );
+}
+
+function isOneCareCardAction(value: unknown): value is OneCareCardAction {
+  return (
+    typeof value === "string" &&
+    (ONECARE_CARD_ACTIONS as readonly string[]).includes(value)
+  );
+}
+
+function parseCardAction(payload: JsonObject): FeishuEventOutcome {
+  if (!isJsonObject(payload.header) || !isJsonObject(payload.event)) {
+    return { kind: "invalid_card_action" };
+  }
+  if (payload.header.event_type !== "card.action.trigger") {
+    return { kind: "invalid_card_action" };
+  }
+
+  const normalized = normalizeCardAction(
+    payload.event as Parameters<typeof normalizeCardAction>[0],
+  );
+  if (!normalized || normalized.action.tag !== "button") {
+    return { kind: "invalid_card_action" };
+  }
+  if (!isJsonObject(normalized.action.value)) {
+    return { kind: "invalid_card_action" };
+  }
+
+  const action = normalized.action.value.action;
+  const caseId = normalized.action.value.case_id;
+  if (!isOneCareCardAction(action) || caseId !== ONECARE_CASE_ID) {
+    return { kind: "invalid_card_action" };
+  }
+
+  return {
+    kind: "card_action",
+    action,
+    chatId: normalized.chatId,
+    messageId: normalized.messageId,
+  };
+}
+
 function textFromContent(content: string): string | null {
   try {
     const parsed = JSON.parse(content) as unknown;
@@ -124,15 +189,23 @@ export async function parseFeishuEvent({
 
   if (
     !signatureMatches(rawBody, headers, env.encryptKey) ||
-    !safeEqual(payloadToken(payload), env.verificationToken)
+    !safeEqual(payloadToken(payload), env.verificationToken) ||
+    !authorizedEventHeader(payload, env)
   ) {
     return { kind: "unauthorized" };
+  }
+
+  if (
+    isJsonObject(payload.header) &&
+    payload.header.event_type === "card.action.trigger"
+  ) {
+    return parseCardAction(payload);
   }
 
   const dispatcher = new EventDispatcher({
     verificationToken: env.verificationToken,
     encryptKey: env.encryptKey,
-    loggerLevel: LoggerLevel.error,
+    loggerLevel: LoggerLevel.fatal,
   }).register({
     "im.message.receive_v1": (event: ReceiveMessageEvent) => {
       const message = event.message;
