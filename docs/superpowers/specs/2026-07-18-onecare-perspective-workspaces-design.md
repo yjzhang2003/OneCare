@@ -342,3 +342,11 @@
 - 用户、客服、工程师和后台的核心交互全部完成，切换后状态保持，重置行为有效；
 - `prefers-reduced-motion: reduce` 下工作台过场时长为 `0s`；
 - 浏览器控制台无错误、警告、hydration 异常或资源 404。
+
+非 Production Preview 已发布到 Vercel：
+
+- Deployment ID：`dpl_ARARYHR36C3p66PkniWQbmiaDbTq`，状态为 `Ready`；
+- 稳定 Preview 域名 `onecare-homepage-preview.vercel.app` 已指向该部署，未使用 `--prod`；
+- Vercel Share 设置为“Anyone with the link can view and comment”，限时 Share Link 在未登录访问下成功打开页面；
+- 部署版页面标题为“万护 OneCare｜AI 用户服务闭环引擎”，并确认包含“爱家服务助手”“智能服务坐席”“一次上门工作台”“VOC 闭环驾驶舱”；
+- 部署版 DOM 不包含 `.showroom-hero__pulse`，首页温度脉冲已移除。

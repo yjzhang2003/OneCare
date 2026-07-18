@@ -467,12 +467,16 @@ git add README.md docs/superpowers/specs/2026-07-18-onecare-perspective-workspac
 git commit -m "docs: document perspective workspace demos"
 ```
 
-- [ ] **Step 5: 发布并验证 Preview**
+- [x] **Step 5: 发布并验证 Preview**
 
 运行 `vercel deploy --yes`，等待 Ready 后把 `onecare-homepage-preview.vercel.app` 指向新部署；若有 Deployment Protection，生成限时 Share Link。不得使用 `--prod`。验证 HTTP 200、四个工作台名称、全部核心交互和 pulse DOM 缺失。
 
-- [ ] **Step 6: 最终状态检查**
+结果：非 Production Deployment `dpl_ARARYHR36C3p66PkniWQbmiaDbTq` 为 `Ready`，稳定 Preview 域名已重新指向该部署；Share Link 在未登录访问下成功打开并验证四个工作台名称，且 `.showroom-hero__pulse` 不存在。Share token 不写入仓库。
+
+- [x] **Step 6: 最终状态检查**
 
 Run: `git status --short --branch && git log -8 --oneline`
 
 Expected: 工作树干净，分支为 `codex/onecare-perspective-workspaces`，只包含本规格范围。
+
+结果：最终文档提交后重新检查分支、工作树和最近提交；功能分支保持本地，不推送、不创建 PR、不合并。
