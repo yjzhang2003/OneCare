@@ -49,7 +49,7 @@ describe("ShowcaseNavigator", () => {
       "href",
       "#perspectives",
     );
-    expect(screen.getByRole("link", { name: "五层引擎" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "闭环架构" })).toHaveAttribute(
       "href",
       "#architecture",
     );

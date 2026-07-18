@@ -77,9 +77,12 @@ describe("fullscreen showcase stylesheet", () => {
       /\.customer-prompts\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
     );
 
+    const architectureStylesStart = css.indexOf(
+      "/* OneCare closed-loop architecture */",
+    );
     const mobileStyles = css.slice(
-      css.lastIndexOf("@media (max-width: 640px)"),
-      css.lastIndexOf("@media (prefers-reduced-motion: reduce)"),
+      css.lastIndexOf("@media (max-width: 640px)", architectureStylesStart),
+      architectureStylesStart,
     );
     expect(mobileStyles).toMatch(
       /\.customer-phone\s*\{[^}]*min-height:\s*0[^}]*max-height:\s*none/,
@@ -89,6 +92,33 @@ describe("fullscreen showcase stylesheet", () => {
     );
     expect(mobileStyles).toMatch(
       /\.perspective-workspace-viewport\s*\{[^}]*min-height:\s*calc\(100dvh - 244px\)/,
+    );
+  });
+
+  it("lays out the closed-loop architecture across desktop and narrow screens", () => {
+    expect(css).toMatch(
+      /\.service-architecture-panel\s*\{[^}]*border-radius:\s*28px/,
+    );
+    expect(css).toMatch(
+      /\.architecture-layers\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+    );
+    expect(css).toMatch(
+      /\.decision-paths\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+    );
+    expect(css).toMatch(
+      /\.closed-loop-steps\s*\{[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/,
+    );
+    expect(css).toMatch(
+      /\.pilot-targets__grid\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/,
+    );
+    expect(css).toMatch(
+      /max-width:\s*1100px[\s\S]*?\.architecture-layers[\s\S]*?grid-template-columns:\s*1fr/,
+    );
+    expect(css).toMatch(
+      /max-width:\s*640px[\s\S]*?\.pilot-targets__grid[\s\S]*?grid-template-columns:\s*1fr/,
+    );
+    expect(css).toMatch(
+      /prefers-reduced-motion:\s*reduce[\s\S]*?\.architecture-signal[\s\S]*?animation:\s*none/,
     );
   });
 

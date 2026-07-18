@@ -7,24 +7,47 @@ export type Perspective = Readonly<{
   capabilities: readonly string[];
 }>;
 
-export type ServiceLayer = Readonly<{
-  index: string;
-  title: string;
-  english: string;
-  input: string;
-  action: string;
-  output: string;
+export type ServiceIdentity = Readonly<{
+  label: string;
+  description: string;
 }>;
 
-export type ScenarioStep = Readonly<{
-  layer: string;
+export type ConnectedSystem = Readonly<{
+  id: "aijia" | "customer-service" | "iot" | "engineer" | "parts";
+  label: string;
+  description: string;
+}>;
+
+export type ArchitectureLayer = Readonly<{
+  index: string;
+  title: string;
+  summary: string;
+  capabilities: readonly string[];
+}>;
+
+export type DecisionPath = Readonly<{
+  id: "self-service" | "human-review";
+  title: string;
+  criteria: string;
+  action: string;
+}>;
+
+export type ClosedLoopStep = Readonly<{
+  index: string;
   title: string;
   description: string;
 }>;
 
-export type Outcome = Readonly<{
-  emphasis: string;
+export type PilotTarget = Readonly<{
   label: string;
+  value: string;
+  status: "试点目标";
+}>;
+
+export type RolloutStage = Readonly<{
+  index: string;
+  title: string;
+  description: string;
 }>;
 
 export type TeamMember = Readonly<{
@@ -68,81 +91,149 @@ export const perspectives: readonly Perspective[] = [
   },
 ] as const;
 
-export const serviceLayers: readonly ServiceLayer[] = [
+export const serviceIdentities: readonly ServiceIdentity[] = [
+  {
+    label: "用户 ID",
+    description: "识别服务对象与连续服务关系",
+  },
+  {
+    label: "设备 ID",
+    description: "关联设备状态、型号与历史记录",
+  },
+  {
+    label: "服务事件 ID",
+    description: "串联本次问题从发现到回访的全部信息",
+  },
+] as const;
+
+export const connectedSystems: readonly ConnectedSystem[] = [
+  {
+    id: "aijia",
+    label: "海信爱家",
+    description: "计划承接用户入口、设备绑定与服务进度",
+  },
+  {
+    id: "customer-service",
+    label: "400 客服",
+    description: "计划同步用户诉求、审核记录与服务交接",
+  },
+  {
+    id: "iot",
+    label: "IoT 平台",
+    description: "计划提供设备运行趋势与异常预警线索",
+  },
+  {
+    id: "engineer",
+    label: "工程师",
+    description: "计划连接上门任务、诊断证据与维修结果",
+  },
+  {
+    id: "parts",
+    label: "备件系统",
+    description: "计划提供库存与配件匹配信息",
+  },
+] as const;
+
+export const architectureLayers: readonly ArchitectureLayer[] = [
   {
     index: "01",
-    title: "感知",
-    english: "SENSE",
-    input: "IoT 设备信号、用户声音、服务记录",
-    action: "统一采集并识别异常与意图",
-    output: "可处理的问题信号",
+    title: "数据与知识层",
+    summary: "计划汇聚服务证据与知识，为预警、问诊和执行提供可信依据。",
+    capabilities: [
+      "设备运行数据、用户反馈与历史工单",
+      "备件库存、产品说明书与维修案例",
+      "基于 IoT 异常趋势形成设备健康预警线索",
+    ],
   },
   {
     index: "02",
-    title: "诊断",
-    english: "DIAGNOSE",
-    input: "问题信号、历史案例、设备知识",
-    action: "风险判断、原因推断、置信度评估",
-    output: "诊断建议与信息缺口",
+    title: "智能编排层",
+    summary: "拟完成判断、资源匹配与过程追踪，并把人工审核纳入决策边界。",
+    capabilities: [
+      "多模态问诊、问题分级与置信度判断",
+      "结构化工单生成、工程师与配件匹配",
+      "全流程追踪、异常识别与介入触发",
+    ],
   },
   {
     index: "03",
-    title: "编排",
-    english: "ORCHESTRATE",
-    input: "诊断建议、人员、配件、时效规则",
-    action: "任务拆解、角色路由、资源匹配",
-    output: "可执行的服务计划",
+    title: "多角色应用层",
+    summary: "计划为用户、客服和工程师提供连续但职责清楚的服务触点。",
+    capabilities: [
+      "用户：自助服务、问题补充与结果确认",
+      "客服：服务方案审核、补充判断与协同派单",
+      "工程师：诊断辅助、配件核验与维修反馈",
+    ],
+  },
+] as const;
+
+export const decisionPaths: readonly DecisionPath[] = [
+  {
+    id: "self-service",
+    title: "AI 自助解决",
+    criteria: "标准化、低风险且置信度达到规则要求",
+    action: "AI 计划提供可执行的自助建议，并由用户确认处理结果。",
+  },
+  {
+    id: "human-review",
+    title: "人工审核后执行",
+    criteria: "复杂、低置信度或高风险",
+    action:
+      "拟形成包含用户描述、设备数据、历史记录和已完成操作的服务方案，经人工审核后再执行。",
+  },
+] as const;
+
+export const closedLoopSteps: readonly ClosedLoopStep[] = [
+  {
+    index: "01",
+    title: "智能分流",
+    description: "计划按问题标准化程度、风险和置信度选择处理路径。",
+  },
+  {
+    index: "02",
+    title: "人工审核",
+    description: "复杂或高风险方案由客服等责任角色确认后执行。",
+  },
+  {
+    index: "03",
+    title: "自动编排",
+    description: "拟连接工单、工程师、配件和服务时效，形成执行计划。",
   },
   {
     index: "04",
-    title: "服务",
-    english: "SERVE",
-    input: "服务计划、用户偏好、现场反馈",
-    action: "智能客服辅助、工程师执行、进度同步",
-    output: "解决结果与用户确认",
+    title: "异常介入",
+    description: "计划在超时、资源不匹配或执行异常时触发人工介入。",
   },
   {
     index: "05",
-    title: "学习",
-    english: "LEARN",
-    input: "处理结果、回访、满意度、VOC",
-    action: "效果评估、知识沉淀、问题聚类",
-    output: "下一轮预诊与产品改善",
+    title: "结果反馈与持续优化",
+    description: "拟用客服对话、维修结果和回访优化问诊规则与维修知识。",
   },
 ] as const;
 
-export const scenarioSteps: readonly ScenarioStep[] = [
-  {
-    layer: "感知",
-    title: "异常信号出现",
-    description: "设备温度波动与用户历史反馈形成异常信号。",
-  },
-  {
-    layer: "诊断",
-    title: "形成预诊建议",
-    description: "AI 给出传感器或风道相关建议，并标注待确认信息。",
-  },
-  {
-    layer: "编排",
-    title: "匹配服务资源",
-    description: "系统匹配工程师、建议配件和可预约时间。",
-  },
-  {
-    layer: "服务",
-    title: "带着诊断结果上门",
-    description: "用户收到连续进度，工程师完成服务并记录结果。",
-  },
-  {
-    layer: "学习",
-    title: "沉淀改善线索",
-    description: "回访进入 VOC 聚类，更新案例知识与产品改善线索。",
-  },
+export const pilotTargets: readonly PilotTarget[] = [
+  { label: "首次响应时间", value: "降低 30%–50%", status: "试点目标" },
+  { label: "工单整理时间", value: "降低 40%", status: "试点目标" },
+  { label: "平均服务周期", value: "缩短 20%", status: "试点目标" },
+  { label: "重复上门率", value: "降低 15%", status: "试点目标" },
 ] as const;
 
-export const outcomes: readonly Outcome[] = [
-  { emphasis: "更短", label: "服务周期" },
-  { emphasis: "更低", label: "重复上门" },
-  { emphasis: "更高", label: "用户满意" },
+export const rolloutStages: readonly RolloutStage[] = [
+  {
+    index: "01",
+    title: "API 轻量接入",
+    description: "计划先连接试点所需的最小数据与服务接口。",
+  },
+  {
+    index: "02",
+    title: "聚焦试点",
+    description: "从单一重点产品和代表性区域开始验证。",
+  },
+  {
+    index: "03",
+    title: "验证后推广",
+    description: "在口径、流程与效果得到验证后逐步推广。",
+  },
 ] as const;
 
 export const teamMembers: readonly TeamMember[] = [
