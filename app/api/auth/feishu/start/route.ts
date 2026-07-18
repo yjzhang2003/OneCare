@@ -41,7 +41,7 @@ export function createStartHandler(
       );
       return response;
     } catch {
-      const errorUrl = new URL("/", request.url);
+      const errorUrl = new URL("/login", request.url);
       errorUrl.searchParams.set("auth_error", "configuration_error");
       return NextResponse.redirect(errorUrl, 302);
     }

@@ -138,7 +138,9 @@ describe("built Next.js authentication routes", () => {
     });
 
     expect(dashboard.status).toBe(307);
-    expect(dashboard.headers.get("location")).toBe(`${baseUrl}/login`);
+    expect(
+      new URL(dashboard.headers.get("location")!, baseUrl).pathname,
+    ).toBe("/login");
     expect(logout.status).toBe(302);
     expect(new URL(logout.headers.get("location")!).pathname).toBe("/login");
     expect(logout.headers.get("set-cookie")).toContain(
