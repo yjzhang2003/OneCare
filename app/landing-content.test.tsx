@@ -23,6 +23,14 @@ describe("LandingContent", () => {
       "万护 ONECARE",
     );
     expect(
+      screen
+        .getByLabelText("万护 OneCare 首页")
+        .querySelector('[data-tone="light"]'),
+    ).not.toBeNull();
+    expect(screen.getAllByTestId("onecare-logo").length).toBeGreaterThanOrEqual(
+      2,
+    );
+    expect(
       screen.getByText(/万护 OneCare 面向海信智能家庭场景/),
     ).toBeInTheDocument();
 

@@ -56,7 +56,7 @@
 - Produces: `OneCareLogo({ tone, size?, decorative? })`。
 - Consumes: `ONECARE_LOGO_LIGHT_SRC` 与 `ONECARE_LOGO_DARK_SRC`，分别对应深色背景白图形、浅色背景黑图形。
 
-- [ ] **Step 1: 写 Logo 与公共品牌位失败测试**
+- [x] **Step 1: 写 Logo 与公共品牌位失败测试**
 
 ```tsx
 render(<OneCareLogo tone="light" />);
@@ -78,7 +78,7 @@ expect(
 expect(screen.getAllByTestId("onecare-logo").length).toBeGreaterThanOrEqual(2);
 ```
 
-- [ ] **Step 2: 确认 RED**
+- [x] **Step 2: 确认 RED**
 
 Run:
 
@@ -88,7 +88,7 @@ npx vitest run src/features/showcase/components/onecare-logo.test.tsx app/landin
 
 Expected: FAIL，因为 `OneCareLogo` 和两枚本地资产尚不存在，顶栏仍显示 `1C`。
 
-- [ ] **Step 3: 写最小 Logo 实现**
+- [x] **Step 3: 写最小 Logo 实现**
 
 `brand-assets.ts` 将以下两个用户文件逐字节编码为 `data:image/png;base64,...` 常量：
 
@@ -128,7 +128,7 @@ export function OneCareLogo({
 
 公共顶栏将 `wordmark-mark` 的 `1C` 替换为 `<OneCareLogo decorative size={42} tone="light" />`；页脚品牌标题前加入同一白色版本。保留“万护 ONECARE”和现有链接可访问名称。
 
-- [ ] **Step 4: 确认 GREEN**
+- [x] **Step 4: 确认 GREEN**
 
 Run:
 
@@ -138,7 +138,7 @@ npx vitest run src/features/showcase/components/onecare-logo.test.tsx app/landin
 
 Expected: 两个测试文件全部通过。
 
-- [ ] **Step 5: 提交 Task 1**
+- [x] **Step 5: 提交 Task 1**
 
 ```bash
 git add src/features/showcase/brand-assets.ts src/features/showcase/components/onecare-logo.tsx src/features/showcase/components/onecare-logo.test.tsx src/features/showcase/components/site-header.tsx src/features/showcase/components/site-footer.tsx app/landing-content.test.tsx
