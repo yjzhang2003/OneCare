@@ -66,7 +66,7 @@ describe("LandingContent", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("01 · 四个视角")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "五层引擎" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "闭环架构" })).toHaveAttribute(
       "href",
       "#architecture",
     );
@@ -78,7 +78,7 @@ describe("LandingContent", () => {
     const topNavigation = screen.getByRole("navigation", {
       name: "主页章节",
     });
-    ["首页", "四个视角", "五层引擎", "团队"].forEach((label) => {
+    ["首页", "四个视角", "闭环架构", "团队"].forEach((label) => {
       expect(topNavigation).toContainElement(
         screen.getAllByRole("link", { name: label })[0],
       );
@@ -99,23 +99,32 @@ describe("LandingContent", () => {
       "智能服务坐席",
     );
 
-    fireEvent.click(screen.getByRole("link", { name: "五层引擎" }));
-    expect(screen.getByText("02 · 五层引擎")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "闭环架构" }));
+    expect(screen.getByText("02 · 闭环架构")).toBeInTheDocument();
     expect(
-      screen.getByRole("list", { name: "万护 OneCare 五层服务蓝图" }),
+      screen.getByRole("navigation", { name: "闭环架构章节" }),
     ).toBeInTheDocument();
-    ["感知", "诊断", "编排", "服务", "学习"].forEach((name) => {
+    expect(
+      screen.getByRole("region", { name: "万护 OneCare 三层闭环架构" }),
+    ).toBeInTheDocument();
+    ["数据与知识层", "智能编排层", "多角色应用层"].forEach((name) => {
       expect(screen.getByRole("heading", { name })).toBeInTheDocument();
     });
 
-    ["更短服务周期", "更低重复上门", "更高用户满意"].forEach(
-      (outcome) => {
-        expect(screen.getByText(outcome)).toBeInTheDocument();
-      },
-    );
+    ["用户 ID", "设备 ID", "服务事件 ID"].forEach((identity) => {
+      expect(screen.getByText(identity)).toBeInTheDocument();
+    });
+    expect(screen.getByRole("heading", { name: "人工审核后执行" })).toBeInTheDocument();
+
+    expect(screen.getByRole("heading", { name: "6 个月试点目标" })).toBeInTheDocument();
+    expect(screen.getByText("降低 30%–50%")).toBeInTheDocument();
+    expect(screen.getByText("降低 15%")).toBeInTheDocument();
+    expect(screen.getByText(/测量口径待试点启动前确认/)).toBeInTheDocument();
     expect(container.querySelector("#architecture")).toContainElement(
-      screen.getByText("更短服务周期"),
+      screen.getByText("降低 30%–50%"),
     );
+    expect(screen.queryByText("感知")).not.toBeInTheDocument();
+    expect(screen.queryByText("更高用户满意")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("link", { name: "团队" }));
     expect(screen.getByText("03 · 团队")).toBeInTheDocument();

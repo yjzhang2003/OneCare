@@ -16,7 +16,7 @@ export function SiteFooter() {
       </p>
       <nav aria-label="页尾导航">
         <a href="#perspectives">四个视角</a>
-        <a href="#architecture">五层引擎</a>
+        <a href="#architecture">闭环架构</a>
         <a href="#team">团队</a>
       </nav>
       <a className="back-to-top" href="#home" aria-label="返回首页">

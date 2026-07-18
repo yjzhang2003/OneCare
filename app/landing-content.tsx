@@ -1,16 +1,19 @@
 import type { AuthUser } from "../src/features/auth/types";
 import {
-  outcomes,
+  architectureLayers,
+  closedLoopSteps,
+  connectedSystems,
+  decisionPaths,
+  pilotTargets,
   perspectives,
-  scenarioSteps,
-  serviceLayers,
+  rolloutStages,
+  serviceIdentities,
   teamMembers,
 } from "../src/features/showcase/content";
 import { HeroMedia } from "../src/features/showcase/components/hero-media";
-import { OutcomeStatement } from "../src/features/showcase/components/outcome-statement";
+import { ArchitectureChapters } from "../src/features/showcase/components/architecture-chapters";
 import { PerspectiveTabs } from "../src/features/showcase/components/perspective-tabs";
 import { SectionFrame } from "../src/features/showcase/components/section-frame";
-import { ServiceBlueprint } from "../src/features/showcase/components/service-blueprint";
 import { SiteFooter } from "../src/features/showcase/components/site-footer";
 import { ShowcaseNavigator } from "../src/features/showcase/components/showcase-navigator";
 import { ShowcasePageHeading } from "../src/features/showcase/components/showcase-page-heading";
@@ -81,27 +84,20 @@ export function LandingContent({ user, authError }: LandingContentProps) {
               <SectionFrame
           id="architecture-content"
           index="02"
-                label="五层引擎"
-          title="感知—诊断—编排—服务—学习"
-          intro="一次服务不是五个孤立模块，而是一条从问题信号到持续改善的闭环蓝图。"
+                label="闭环架构"
+          title="统一服务事件，驱动三层协同闭环"
+          intro="万护拟通过统一的用户、设备与服务事件标识，轻量连接海信爱家、400 客服、IoT、工程师和备件系统，让一次问题在数据、决策和执行之间连续流转。"
         >
-          <ServiceBlueprint layers={serviceLayers} events={scenarioSteps} />
+          <ArchitectureChapters
+            decisions={decisionPaths}
+            identities={serviceIdentities}
+            layers={architectureLayers}
+            loopSteps={closedLoopSteps}
+            stages={rolloutStages}
+            systems={connectedSystems}
+            targets={pilotTargets}
+          />
         </SectionFrame>
-
-        <section
-          className="outcome-section"
-          aria-labelledby="outcome-title"
-        >
-          <div>
-                    <p>方案目标</p>
-            <h2 id="outcome-title">一次就好</h2>
-            <p>以下是万护 OneCare 的方案目标，不代表已经实现的生产指标。</p>
-          </div>
-          <OutcomeStatement outcomes={outcomes} />
-          <p className="outcome-loop">
-            本次解决 → 知识沉淀 → 下一次更早发现
-          </p>
-        </section>
             </div>
           ),
           team: (
