@@ -41,6 +41,7 @@ export type ClosedLoopStep = Readonly<{
 export type PilotTarget = Readonly<{
   label: string;
   value: string;
+  stretchValue?: string;
   status: "试点目标";
 }>;
 
@@ -215,10 +216,20 @@ export const closedLoopSteps: readonly ClosedLoopStep[] = [
 ] as const;
 
 export const pilotTargets: readonly PilotTarget[] = [
-  { label: "首次响应时间", value: "降低 30%–50%", status: "试点目标" },
-  { label: "工单整理时间", value: "降低 40%", status: "试点目标" },
-  { label: "平均服务周期", value: "缩短 20%", status: "试点目标" },
-  { label: "重复上门率", value: "降低 15%", status: "试点目标" },
+  { label: "首次有效响应时间", value: "相对降低 30%–50%", status: "试点目标" },
+  {
+    label: "人工工单整理时间",
+    value: "承诺降低 35%",
+    stretchValue: "拉伸至 40%",
+    status: "试点目标",
+  },
+  {
+    label: "平均服务周期",
+    value: "承诺缩短 15%",
+    stretchValue: "拉伸至 20%",
+    status: "试点目标",
+  },
+  { label: "30 日重复上门率", value: "相对降低 15%", status: "试点目标" },
 ] as const;
 
 export const rolloutStages: readonly RolloutStage[] = [

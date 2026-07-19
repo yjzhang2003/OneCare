@@ -152,6 +152,15 @@ describe("fullscreen showcase stylesheet", () => {
       /\.pilot-targets__grid\s*\{[^}]*gap:\s*clamp\([^}]*border:\s*0/,
     );
     expect(css).toMatch(
+      /\.pilot-targets__stretch\s*\{[^}]*display:\s*block[^}]*color:\s*var\(--onecare-ink\)/,
+    );
+    expect(css).toMatch(
+      /\.pilot-targets__label\s*\{[^}]*min-height:\s*0/,
+    );
+    expect(css).toMatch(
+      /\.pilot-targets__grid-label\s*\{[^}]*color:\s*var\(--onecare-teal-dark\)/,
+    );
+    expect(css).toMatch(
       /\.closed-loop-steps\s*\{[^}]*position:\s*relative/,
     );
     expect(css).toMatch(

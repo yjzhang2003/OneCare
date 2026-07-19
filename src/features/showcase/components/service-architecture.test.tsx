@@ -68,8 +68,13 @@ describe("PilotTargets", () => {
     expect(
       screen.getByText(/实际基线和测量口径待试点启动前确认/),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("试点目标")).toHaveLength(4);
-    expect(screen.getByText("降低 30%–50%")).toBeInTheDocument();
+    expect(screen.getAllByText("试点目标")).toHaveLength(1);
+    expect(screen.getByText("相对降低 30%–50%")).toBeInTheDocument();
+    expect(screen.getByText("承诺降低 35%")).toBeInTheDocument();
+    expect(screen.getByText("拉伸至 40%")).toBeInTheDocument();
+    expect(screen.getByText("承诺缩短 15%")).toBeInTheDocument();
+    expect(screen.getByText("拉伸至 20%")).toBeInTheDocument();
+    expect(screen.getByText("相对降低 15%")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "轻量开始，验证后逐步推广" }),
     ).toBeInTheDocument();

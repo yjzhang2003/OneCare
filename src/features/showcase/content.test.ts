@@ -53,11 +53,17 @@ describe("closed-loop architecture content", () => {
   });
 
   it("records four unmeasured six-month pilot targets and the rollout order", () => {
-    expect(pilotTargets.map((target) => [target.label, target.value])).toEqual([
-      ["首次响应时间", "降低 30%–50%"],
-      ["工单整理时间", "降低 40%"],
-      ["平均服务周期", "缩短 20%"],
-      ["重复上门率", "降低 15%"],
+    expect(
+      pilotTargets.map((target) => [
+        target.label,
+        target.value,
+        target.stretchValue,
+      ]),
+    ).toEqual([
+      ["首次有效响应时间", "相对降低 30%–50%", undefined],
+      ["人工工单整理时间", "承诺降低 35%", "拉伸至 40%"],
+      ["平均服务周期", "承诺缩短 15%", "拉伸至 20%"],
+      ["30 日重复上门率", "相对降低 15%", undefined],
     ]);
     expect(pilotTargets.every((target) => target.status === "试点目标")).toBe(
       true,
