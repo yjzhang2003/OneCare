@@ -16,15 +16,20 @@ export function PilotTargets({ targets, stages }: PilotTargetsProps) {
         </p>
       </div>
 
+      <p className="pilot-targets__grid-label">试点目标</p>
       <div className="pilot-targets__grid">
         {targets.map((target) => (
           <p
-            aria-label={`${target.label}${target.value}，${target.status}`}
+            aria-label={`${target.label}${target.value}${
+              target.stretchValue ? `，${target.stretchValue}` : ""
+            }，${target.status}`}
             key={target.label}
           >
-            <small>{target.status}</small>
+            <span className="pilot-targets__label">{target.label}</span>
             <strong>{target.value}</strong>
-            <span>{target.label}</span>
+            {target.stretchValue ? (
+              <span className="pilot-targets__stretch">{target.stretchValue}</span>
+            ) : null}
           </p>
         ))}
       </div>

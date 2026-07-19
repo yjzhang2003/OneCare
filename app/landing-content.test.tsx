@@ -117,11 +117,15 @@ describe("LandingContent", () => {
     expect(screen.getByRole("heading", { name: "人工审核后执行" })).toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "6 个月试点目标" })).toBeInTheDocument();
-    expect(screen.getByText("降低 30%–50%")).toBeInTheDocument();
-    expect(screen.getByText("降低 15%")).toBeInTheDocument();
+    expect(screen.getByText("相对降低 30%–50%")).toBeInTheDocument();
+    expect(screen.getByText("承诺降低 35%")).toBeInTheDocument();
+    expect(screen.getByText("拉伸至 40%")).toBeInTheDocument();
+    expect(screen.getByText("承诺缩短 15%")).toBeInTheDocument();
+    expect(screen.getByText("拉伸至 20%")).toBeInTheDocument();
+    expect(screen.getByText("相对降低 15%")).toBeInTheDocument();
     expect(screen.getByText(/测量口径待试点启动前确认/)).toBeInTheDocument();
     expect(container.querySelector("#architecture")).toContainElement(
-      screen.getByText("降低 30%–50%"),
+      screen.getByText("相对降低 30%–50%"),
     );
     expect(screen.queryByText("感知")).not.toBeInTheDocument();
     expect(screen.queryByText("更高用户满意")).not.toBeInTheDocument();

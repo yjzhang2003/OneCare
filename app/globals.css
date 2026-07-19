@@ -5330,11 +5330,18 @@ a {
   border-radius: 28px;
 }
 
+.pilot-targets__grid-label {
+  margin: 42px 0 0;
+  color: var(--onecare-teal-dark);
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .pilot-targets__grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: clamp(18px, 2.5vw, 36px);
-  margin-top: 48px;
+  margin-top: 12px;
   border: 0;
 }
 
@@ -5342,26 +5349,33 @@ a {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 9px;
+  gap: 6px;
   margin: 0;
   padding: 24px 0 0;
   border-top: 1px solid var(--onecare-ink);
-}
-
-.pilot-targets__grid small {
-  color: var(--onecare-teal-dark);
-  font-size: 14px;
-  font-weight: 600;
 }
 
 .pilot-targets__grid strong {
   font-size: clamp(25px, 2.6vw, 36px);
   font-weight: 650;
   letter-spacing: -0.035em;
+  line-height: 1.2;
 }
 
-.pilot-targets__grid span {
+.pilot-targets__label {
+  min-height: 0;
+  color: var(--onecare-muted);
   font-size: 16px;
+  line-height: 1.5;
+}
+
+.pilot-targets__stretch {
+  display: block;
+  margin-top: 2px;
+  color: var(--onecare-ink);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .rollout-path {
