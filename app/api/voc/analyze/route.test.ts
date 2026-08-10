@@ -4,6 +4,7 @@ import {
   buildPendingShard,
   createAnalyzeRoute,
   GET,
+  listOwnerRules,
   parseOwnerRules,
   POST,
   resolveTagSource,
@@ -274,6 +275,133 @@ describe("parseOwnerRules", () => {
 
   it("drops malformed items instead of throwing", () => {
     expect(parseOwnerRules([null, "x", 42, {}, { fields: null }])).toEqual([]);
+  });
+});
+
+const ownerBitableEnv = {
+  appToken: "bascn_demo",
+  vocTableId: "tblvoc",
+  ownerTableId: "tblowner",
+};
+const ownerToken = async () => "t1";
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+// Fetch-level coverage for listOwnerRules, mirroring the fetcher-injection
+// pattern client.test.ts already uses for createBitableClient — bitableEnv
+// and token are passed in directly (not read from process.env or a module
+// singleton), so this needs no real env vars and no live Base call. Behavior
+// asserted here is exactly what the function already did; nothing here
+// changes what a non-zero code, a malformed response, or a rejecting
+// fetcher does.
+describe("listOwnerRules", () => {
+  it("builds the URL from app_token and the owner table id with an Authorization header and a timeout signal", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: 0, data: { items: [] } }),
+    );
+
+    await listOwnerRules(
+      ownerBitableEnv,
+      ownerToken,
+      fetcher as unknown as typeof fetch,
+    );
+
+    const [url, init] = fetcher.mock.calls[0];
+    expect(url).toBe(
+      "https://open.feishu.cn/open-apis/bitable/v1/apps/bascn_demo/tables/tblowner/records?user_id_type=open_id&page_size=100",
+    );
+    expect(init?.headers).toMatchObject({ Authorization: "Bearer t1" });
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("returns the parsed rules from a successful response", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({
+        code: 0,
+        data: {
+          items: [
+            { fields: { 负责范围: "APP", 负责人: [{ id: "ou_a" }], 兜底: false } },
+          ],
+        },
+      }),
+    );
+
+    await expect(
+      listOwnerRules(ownerBitableEnv, ownerToken, fetcher as unknown as typeof fetch),
+    ).resolves.toEqual([{ scope: "APP", openId: "ou_a", fallback: false }]);
+  });
+
+  it("drops a non-object item in the response instead of throwing", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({
+        code: 0,
+        data: {
+          items: [
+            null,
+            { fields: { 负责范围: "门店", 负责人: [{ id: "ou_b" }], 兜底: true } },
+          ],
+        },
+      }),
+    );
+
+    await expect(
+      listOwnerRules(ownerBitableEnv, ownerToken, fetcher as unknown as typeof fetch),
+    ).resolves.toEqual([{ scope: "门店", openId: "ou_b", fallback: true }]);
+  });
+
+  it("throws when the business code is non-zero", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: 99991663, msg: "forbidden" }),
+    );
+
+    await expect(
+      listOwnerRules(ownerBitableEnv, ownerToken, fetcher as unknown as typeof fetch),
+    ).rejects.toThrow(/99991663/);
+  });
+
+  it("throws with an unknown code when the payload is not an object", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse([]),
+    );
+
+    await expect(
+      listOwnerRules(ownerBitableEnv, ownerToken, fetcher as unknown as typeof fetch),
+    ).rejects.toThrow(/unknown/);
+  });
+
+  it("treats a response with no data as an empty list instead of throwing", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: 0 }),
+    );
+
+    await expect(
+      listOwnerRules(ownerBitableEnv, ownerToken, fetcher as unknown as typeof fetch),
+    ).resolves.toEqual([]);
+  });
+
+  it("treats a non-array items field as an empty list instead of throwing", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: 0, data: { items: "not-an-array" } }),
+    );
+
+    await expect(
+      listOwnerRules(ownerBitableEnv, ownerToken, fetcher as unknown as typeof fetch),
+    ).resolves.toEqual([]);
+  });
+
+  it("propagates a rejection when the fetcher itself throws", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => {
+      throw new Error("network down");
+    });
+
+    await expect(
+      listOwnerRules(ownerBitableEnv, ownerToken, fetcher as unknown as typeof fetch),
+    ).rejects.toThrow("network down");
   });
 });
 

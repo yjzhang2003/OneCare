@@ -43,6 +43,7 @@ import {
   readBitableEnv,
   readBotEnv,
   readTaggingEnv,
+  type BitableEnv,
   type TaggingEnv,
 } from "../../../../src/lib/env";
 
@@ -409,13 +410,26 @@ export function parseOwnerRules(items: readonly unknown[]): readonly OwnerRule[]
   });
 }
 
-async function listOwnerRules(): Promise<readonly OwnerRule[]> {
-  const bitableEnv = readBitableEnv();
-  const token = await getTokenProvider()();
+// Same DI shape as client.ts's createBitableClient(env, token, fetcher):
+// bitableEnv and token are explicit parameters, not read from process.env or
+// a module singleton inside the function body, and fetcher defaults to the
+// real fetch. Before this, the network path itself — URL construction, the
+// auth header, the timeout, the code!==0 branch, and malformed-response
+// handling — was exercised only by the live Base round-trip, because there
+// was no way to hand this function a fake fetcher without also faking real
+// env vars and the token cache singleton. Semantics are unchanged from
+// before this refactor; this only makes them injectable so client.test.ts's
+// established pattern can lock them down.
+export async function listOwnerRules(
+  bitableEnv: BitableEnv,
+  token: TenantTokenProvider,
+  fetcher: typeof fetch = fetch,
+): Promise<readonly OwnerRule[]> {
+  const tokenValue = await token();
   const url = `${BASE_URL}/bitable/v1/apps/${bitableEnv.appToken}/tables/${bitableEnv.ownerTableId}/records?user_id_type=open_id&page_size=100`;
 
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
+  const response = await fetcher(url, {
+    headers: { Authorization: `Bearer ${tokenValue}` },
     signal: AbortSignal.timeout(BITABLE_TIMEOUT_MS),
   });
   const payload: unknown = await response.json();
@@ -525,7 +539,7 @@ const defaultDependencies: AnalyzeRouteDependencies = {
   shardSize: SHARD_SIZE,
   listPending: listPendingRecords,
   tag: (records) => getTaggingProvider().tag(records),
-  ownerRules: listOwnerRules,
+  ownerRules: () => listOwnerRules(readBitableEnv(), getTokenProvider()),
   updateRecord: (recordId, fields) =>
     getBitableClient().updateRecord(recordId, fields),
   // A getter (like cronSecret) so each Cron tick — not each import — gets a
