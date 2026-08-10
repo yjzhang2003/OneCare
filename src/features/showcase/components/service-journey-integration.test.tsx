@@ -8,29 +8,33 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { perspectives } from "../content";
-import type { VocMetrics } from "../../voc/metrics";
+import type { VocMetricsResult } from "../../voc/metrics";
 import { PerspectiveTabs } from "./perspective-tabs";
 
-// A real VocMetrics shape (task 14): OperationsWorkspace reads this instead
-// of the removed vocTopics fixture. These tests never assert on the VOC
-// panel's own numbers, so any well-formed value works here.
-const metrics: VocMetrics = {
-  total: 3,
-  byPolarity: { 好评: 1, 中评: 1, 差评: 1 },
-  dimensionTop: [
-    { dimension: "维修时间", count: 2 },
-    { dimension: "服务态度", count: 1 },
-  ],
-  byChannel: [{ channel: "电商评价", count: 3 }],
-  negativeShare: 0.67,
-  ticketsOpened: 2,
-  ticketsClosed: 1,
-  closureRate: 0.5,
-  averageClosureHours: 12,
-  taggingAttempted: 3,
-  taggingSucceeded: 2,
-  taggingFailed: 1,
-  taggingPending: 0,
+// A real VocMetricsResult shape (task 14, fix round 1 added the
+// "unavailable" branch): OperationsWorkspace reads this instead of the
+// removed vocTopics fixture. These tests never assert on the VOC panel's
+// own numbers, so any well-formed "ok" value works here.
+const metrics: VocMetricsResult = {
+  status: "ok",
+  metrics: {
+    total: 3,
+    byPolarity: { 好评: 1, 中评: 1, 差评: 1 },
+    dimensionTop: [
+      { dimension: "维修时间", count: 2 },
+      { dimension: "服务态度", count: 1 },
+    ],
+    byChannel: [{ channel: "电商评价", count: 3 }],
+    negativeShare: 0.67,
+    ticketsOpened: 2,
+    ticketsClosed: 1,
+    closureRate: 0.5,
+    averageClosureHours: 12,
+    taggingAttempted: 3,
+    taggingSucceeded: 2,
+    taggingFailed: 1,
+    taggingPending: 0,
+  },
 };
 
 const scrollToDescriptor = Object.getOwnPropertyDescriptor(

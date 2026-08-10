@@ -7,7 +7,7 @@ import {
   initialServiceJourneyState,
   serviceJourneyReducer,
 } from "../service-journey";
-import type { VocMetrics } from "../../voc/metrics";
+import type { VocMetricsResult } from "../../voc/metrics";
 import { AgentWorkspace } from "./agent-workspace";
 import { CustomerWorkspace } from "./customer-workspace";
 import { EngineerWorkspace } from "./engineer-workspace";
@@ -15,7 +15,7 @@ import { OperationsWorkspace } from "./operations-workspace";
 
 type PerspectiveTabsProps = {
   perspectives: readonly Perspective[];
-  metrics: VocMetrics;
+  metrics: VocMetricsResult;
 };
 
 const workspaceIds = ["customer", "agent", "engineer", "operations"] as const;

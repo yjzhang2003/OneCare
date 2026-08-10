@@ -1,5 +1,5 @@
 import type { AuthUser } from "../src/features/auth/types";
-import type { VocMetrics } from "../src/features/voc/metrics";
+import type { VocMetricsResult } from "../src/features/voc/metrics";
 import {
   architectureLayers,
   closedLoopSteps,
@@ -38,8 +38,11 @@ type LandingContentProps = {
   // one layer up instead of inside this component so LandingContent stays a
   // plain synchronous component — landing-content.test.tsx renders it
   // directly with @testing-library/react, which cannot render an async
-  // component.
-  metrics: VocMetrics;
+  // component. A `VocMetricsResult` (not a bare `VocMetrics`) because
+  // getVocDashboardMetrics() never throws — a failed read must not fail
+  // this page's render, so the "did it work" branch is a value every
+  // consumer down the chain has to handle explicitly.
+  metrics: VocMetricsResult;
 };
 
 export function LandingContent({ user, authError, metrics }: LandingContentProps) {

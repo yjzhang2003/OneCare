@@ -35,6 +35,19 @@ export type VocMetricsOptions = Readonly<{
   manualMinutesPerRecord?: number;
 }>;
 
+// Every UI surface that reads VOC metrics (the public dashboard, the home
+// page's showcase) sits behind a live, cross-border Bitable read that can
+// fail transiently. None of them may let that failure become a build error
+// or a page crash, and none may render 0s that look like real data when the
+// read failed — so the result of "try to get metrics" is a first-class,
+// explicit value instead of a thrown exception a caller might forget to
+// catch. Deliberately carries no error detail: this travels all the way to
+// a public, unauthenticated page, and an infrastructure error string is not
+// something to hand an anonymous visitor.
+export type VocMetricsResult =
+  | Readonly<{ status: "ok"; metrics: VocMetrics }>
+  | Readonly<{ status: "unavailable" }>;
+
 const TAGGED_STATES: ReadonlySet<VocState> = new Set<VocState>([
   "已分析",
   "无需跟进",

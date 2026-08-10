@@ -1,6 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createDashboardRoute } from "./route";
+import { createDashboardRoute, getVocDashboardMetrics } from "./route";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const records = [
   {
@@ -56,5 +60,35 @@ describe("createDashboardRoute", () => {
     });
 
     expect((await route()).status).toBe(503);
+  });
+});
+
+describe("getVocDashboardMetrics", () => {
+  // This is the function the home page and the dashboard page call directly,
+  // with no try/catch of their own — a build-breaking regression here (task
+  // 14 fix round 1: a bad FEISHU_BITABLE_APP_TOKEN or FEISHU_APP_SECRET took
+  // down `next build` for "/" itself, not just the dashboard) would not show
+  // up in createDashboardRoute's own tests above, since that route already
+  // had its own try/catch. This must never throw. `readRecords` here mirrors
+  // the `{ ok: true | false }` shape readVocRecordsCached itself resolves to
+  // (never a rejection) — the same shape production wiring's `listAll`
+  // adapter and getVocDashboardMetrics both consume.
+  it("resolves ok with real numbers when the read succeeds", async () => {
+    const readRecords = vi.fn(async () => ({ ok: true as const, records }));
+
+    const result = await getVocDashboardMetrics(readRecords);
+
+    expect(result).toEqual({
+      status: "ok",
+      metrics: expect.objectContaining({ total: 1, ticketsClosed: 1 }),
+    });
+  });
+
+  it("resolves unavailable instead of throwing when the read fails", async () => {
+    const readRecords = vi.fn(async () => ({ ok: false as const }));
+
+    await expect(getVocDashboardMetrics(readRecords)).resolves.toEqual({
+      status: "unavailable",
+    });
   });
 });

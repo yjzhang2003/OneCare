@@ -8,7 +8,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { initialServiceJourneyState } from "../service-journey";
-import type { VocMetrics } from "../../voc/metrics";
+import type { VocMetrics, VocMetricsResult } from "../../voc/metrics";
 import { AgentWorkspace } from "./agent-workspace";
 import { CustomerWorkspace } from "./customer-workspace";
 import { EngineerWorkspace } from "./engineer-workspace";
@@ -36,6 +36,13 @@ const metrics: VocMetrics = {
   taggingFailed: 8,
   taggingPending: 6,
 };
+
+// task 14 fix round 1: a live Bitable/token failure must render an explicit
+// "unavailable" state, never throw and never show 0s that could pass for
+// real data. `metricsOk`/`metricsUnavailable` name the two VocMetricsResult
+// branches every metrics-consuming component must now handle.
+const metricsOk: VocMetricsResult = { status: "ok", metrics };
+const metricsUnavailable: VocMetricsResult = { status: "unavailable" };
 
 const scrollToDescriptor = Object.getOwnPropertyDescriptor(
   HTMLElement.prototype,
@@ -247,7 +254,7 @@ describe("perspective workspaces", () => {
     const { rerender } = render(
       <OperationsWorkspace
         journey={{ customerReply: "饮料不够凉", stage: "serviceCompleted" }}
-        metrics={metrics}
+        metrics={metricsOk}
         onCreateImprovementTask={onCreateImprovementTask}
         onReset={onReset}
       />,
@@ -261,6 +268,20 @@ describe("perspective workspaces", () => {
       "href",
       "/login?from=operations",
     );
+
+    // task 14 fix round 1: the top summary row used to mix real numbers with
+    // hardcoded demo tiles (e.g. an invented "重复上门风险" with no basis in
+    // VocMetrics) side by side, with no way to tell which was which. Every
+    // tile is now derived from the same real fixture (150 opened - 129
+    // closed = 21 pending; 8 tagging failures; 2 dimensions; 86% closure).
+    expect(screen.getByText("待闭环")).toBeInTheDocument();
+    expect(screen.getByText("21")).toBeInTheDocument();
+    expect(screen.getByText("打标失败")).toBeInTheDocument();
+    expect(screen.getByText("高频问题维度数")).toBeInTheDocument();
+    expect(screen.getByText("闭环达成率")).toBeInTheDocument();
+    expect(screen.getByText("86%")).toBeInTheDocument();
+    expect(screen.queryByText("重复上门风险")).not.toBeInTheDocument();
+
     expect(screen.getByText("128 条相关反馈")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "服务态度" }));
@@ -272,7 +293,7 @@ describe("perspective workspaces", () => {
     rerender(
       <OperationsWorkspace
         journey={{ customerReply: "饮料不够凉", stage: "improvementCreated" }}
-        metrics={metrics}
+        metrics={metricsOk}
         onCreateImprovementTask={onCreateImprovementTask}
         onReset={onReset}
       />,
@@ -282,5 +303,41 @@ describe("perspective workspaces", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "重新演示" }));
     expect(onReset).toHaveBeenCalledOnce();
+  });
+
+  // task 14 fix round 1: a live Bitable/token failure must never crash this
+  // panel and must never render 0s or any other number that could pass for
+  // real data — it must show an explicit, honest "unavailable" notice.
+  it("shows an explicit unavailable notice instead of zeros when metrics failed to load", () => {
+    const onCreateImprovementTask = vi.fn();
+    const onReset = vi.fn();
+
+    render(
+      <OperationsWorkspace
+        journey={{ customerReply: "饮料不够凉", stage: "serviceCompleted" }}
+        metrics={metricsUnavailable}
+        onCreateImprovementTask={onCreateImprovementTask}
+        onReset={onReset}
+      />,
+    );
+
+    expect(screen.getByText("VOC 闭环驾驶舱")).toBeInTheDocument();
+    expect(screen.getAllByText(/指标暂不可用/).length).toBeGreaterThan(0);
+
+    // None of the real-data-shaped content from the "ok" fixture may appear.
+    expect(screen.queryByText("维修时间")).not.toBeInTheDocument();
+    expect(screen.queryByText("服务态度")).not.toBeInTheDocument();
+    expect(screen.queryByText(/条相关反馈/)).not.toBeInTheDocument();
+    expect(screen.queryByText("反馈总量")).not.toBeInTheDocument();
+    expect(screen.queryByText("待闭环")).not.toBeInTheDocument();
+    expect(screen.queryByText("打标失败")).not.toBeInTheDocument();
+    expect(screen.queryByText("闭环达成率")).not.toBeInTheDocument();
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
+
+    // The journey-driven closure panel is unrelated to VOC metrics and must
+    // keep working exactly as before.
+    fireEvent.click(screen.getByRole("button", { name: "创建改善任务" }));
+    expect(onCreateImprovementTask).toHaveBeenCalledOnce();
   });
 });

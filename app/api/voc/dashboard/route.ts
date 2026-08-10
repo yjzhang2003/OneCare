@@ -9,8 +9,8 @@ import {
 import type { VocRecord } from "../../../../src/features/bitable/field-map";
 import {
   aggregateVocMetrics,
-  type VocMetrics,
   type VocMetricsInput,
+  type VocMetricsResult,
 } from "../../../../src/features/voc/metrics";
 import { readBitableEnv, readBotEnv } from "../../../../src/lib/env";
 
@@ -104,6 +104,21 @@ function getBitableClient(): BitableClient {
   return bitableClient;
 }
 
+// The result of the one network call this route makes. A plain boolean
+// discriminant rather than a thrown exception, because — confirmed
+// empirically in task 14 fix round 1 — a `"use cache"` function that throws
+// fails `next build` outright under Cache Components, *regardless* of
+// whether the awaiting caller catches the rejection. (`FEISHU_BITABLE_APP_
+// TOKEN=bogus npm run build` still failed prerendering — sometimes reported
+// against "/", sometimes against "/dashboard/voc" depending on which route
+// Next's cache-population pass reached first — even with a try/catch one
+// level up in what is now getVocDashboardMetrics.) The fix is that the code
+// running *inside* the `use cache` boundary itself must never throw; the
+// catch has to live here, not in a caller.
+type VocRecordsRead =
+  | Readonly<{ ok: true; records: readonly DashboardRecord[] }>
+  | Readonly<{ ok: false }>;
+
 // The only network call this route makes, cached so an anonymous visitor
 // opening this public page never triggers a fresh cross-border Bitable read
 // on their own — every open within the cache window is served from Next's
@@ -112,13 +127,21 @@ function getBitableClient(): BitableClient {
 // reflected without a long redeploy-shaped wait. Exported (not just used
 // internally) so app/dashboard/voc/page.tsx reads through this exact same
 // cached function rather than re-fetching over HTTP from a server component,
-// and so both consumers share one cache entry instead of two.
-export async function listAllVocRecordsCached(): Promise<
-  readonly DashboardRecord[]
-> {
+// and so all consumers share one cache entry instead of several.
+export async function readVocRecordsCached(): Promise<VocRecordsRead> {
   "use cache";
   cacheLife("minutes");
-  return getBitableClient().listRecords();
+  try {
+    const records = await getBitableClient().listRecords();
+    return { ok: true, records };
+  } catch (error) {
+    // Server-side log only. The reason can carry Bitable error codes or
+    // token-exchange failure detail, which — like the raw VOC content this
+    // route already refuses to leak — has no business reaching an
+    // anonymous, unauthenticated visitor of a public page.
+    console.error("VOC Bitable read failed:", errorReason(error));
+    return { ok: false };
+  }
 }
 
 // Nobody has measured how long a human spent triaging a VOC record by hand
@@ -130,7 +153,19 @@ export async function listAllVocRecordsCached(): Promise<
 export const ASSUMED_MANUAL_MINUTES_PER_RECORD = 5;
 
 const defaultDependencies: DashboardRouteDependencies = {
-  listAll: listAllVocRecordsCached,
+  // A thin adapter back onto the throw-based `listAll` contract
+  // createDashboardRoute's own try/catch (and its tests) already expect and
+  // exercise — that contract is deliberately left unchanged by this fix.
+  // The throw here happens in a plain function, not inside "use cache", so
+  // it is an ordinary rejected promise createDashboardRoute's try/catch
+  // handles exactly as before; it never reaches Next's cache machinery.
+  listAll: async () => {
+    const result = await readVocRecordsCached();
+    if (!result.ok) {
+      throw new Error("VOC Bitable read failed");
+    }
+    return result.records;
+  },
   manualMinutesPerRecord: ASSUMED_MANUAL_MINUTES_PER_RECORD,
 };
 
@@ -140,9 +175,26 @@ export const GET = createDashboardRoute(defaultDependencies);
 // baseline, same aggregation the JSON API uses — a judge comparing the
 // rendered page against a direct `curl /api/voc/dashboard` sees identical
 // numbers because both paths run through this one function.
-export async function getVocDashboardMetrics(): Promise<VocMetrics> {
-  const records = await listAllVocRecordsCached();
-  return aggregateVocMetrics(records.map(toMetricsInput), {
+//
+// Never throws. This is called directly inside the home page's and the
+// dashboard page's top-level render (no try/catch of their own, and no
+// Suspense boundary to fall back to), so a thrown error here would fail
+// that whole page's render — and because this route is eagerly prerendered,
+// it would fail `next build` outright. A single flaky Feishu token exchange
+// must never be able to block a deploy of the site's own home page.
+// `readRecords` is injectable (defaulting to the real cached reader) so
+// this failure path is exercised directly in tests without needing a fake
+// network layer.
+export async function getVocDashboardMetrics(
+  readRecords: () => Promise<VocRecordsRead> = readVocRecordsCached,
+): Promise<VocMetricsResult> {
+  const result = await readRecords();
+  if (!result.ok) {
+    return { status: "unavailable" };
+  }
+
+  const metrics = aggregateVocMetrics(result.records.map(toMetricsInput), {
     manualMinutesPerRecord: ASSUMED_MANUAL_MINUTES_PER_RECORD,
   });
+  return { status: "ok", metrics };
 }

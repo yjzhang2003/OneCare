@@ -1,3 +1,4 @@
+import type { VocMetricsResult } from "../../../src/features/voc/metrics";
 import { getVocDashboardMetrics } from "../../api/voc/dashboard/route";
 
 // Percentage formatting only ever touches ratios already computed by
@@ -11,9 +12,123 @@ function hours(value: number): string {
   return value.toFixed(1);
 }
 
-export default async function VocDashboardPage() {
-  const metrics = await getVocDashboardMetrics();
+const dashboardStyles = `
+  .voc-dashboard {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+    color: #1a1d1f;
+    line-height: 1.6;
+  }
+  .voc-dashboard h1 {
+    font-size: 28px;
+    margin-bottom: 4px;
+  }
+  .voc-dashboard__lede {
+    color: #55595e;
+    max-width: 640px;
+    margin-bottom: 32px;
+  }
+  .voc-dashboard section {
+    border: 1px solid #e2e5e8;
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+  }
+  .voc-dashboard h2 {
+    font-size: 16px;
+    margin: 0 0 12px;
+  }
+  .voc-dashboard__stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+  .voc-dashboard__stat {
+    min-width: 140px;
+  }
+  .voc-dashboard__stat span {
+    display: block;
+    font-size: 13px;
+    color: #767b80;
+  }
+  .voc-dashboard__stat strong {
+    font-size: 24px;
+  }
+  .voc-dashboard table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  .voc-dashboard th,
+  .voc-dashboard td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid #eef0f1;
+  }
+  .voc-dashboard__assumption {
+    font-size: 13px;
+    color: #8a6d1a;
+    background: #fdf6e3;
+    border: 1px solid #f0dfa4;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 12px;
+  }
+  .voc-dashboard__note {
+    font-size: 12px;
+    color: #8a8f94;
+    margin-top: 24px;
+  }
+  .voc-dashboard__unavailable {
+    border-color: #f0dfa4;
+    background: #fdf6e3;
+    color: #6b5610;
+  }
+`;
 
+// The shared shell every state (ok or unavailable) renders inside, so the
+// "this page never leaks raw content" framing sentence and the page title
+// are never duplicated or allowed to drift between the two branches.
+function DashboardShell({ children }: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <main className="voc-dashboard">
+      <style>{dashboardStyles}</style>
+      <h1>VOC 闭环看板</h1>
+      <p className="voc-dashboard__lede">
+        本页只读、无需登录，直接对飞书多维表格现有记录做数字聚合，不展示任何用户原文、姓名、电话、地址或工单
+        record_id。所有数字均可与多维表格中的记录数逐一核对。
+      </p>
+      {children}
+    </main>
+  );
+}
+
+// Pulled out of the page's default export so it is testable without a real
+// (or faked) network layer: feed it a VocMetricsResult directly and assert
+// on the rendered output. A failed read must never render 0s or any other
+// number that could pass for real data — it renders no numeric sections at
+// all, only an explicit "unavailable" notice.
+export function renderVocDashboard(result: VocMetricsResult) {
+  if (result.status === "unavailable") {
+    return (
+      <DashboardShell>
+        <section
+          aria-labelledby="voc-dashboard-unavailable"
+          className="voc-dashboard__unavailable"
+          role="status"
+        >
+          <h2 id="voc-dashboard-unavailable">指标暂不可用</h2>
+          <p>
+            本次未能从飞书多维表格读取到最新数据，因此暂不展示任何统计数字——这不代表
+            Base 中没有记录，只代表这一次读取失败。请稍后刷新本页重试。
+          </p>
+        </section>
+      </DashboardShell>
+    );
+  }
+
+  const metrics = result.metrics;
   const negativeCount = metrics.byPolarity.差评 + metrics.byPolarity.中评;
   const taggingProcessed = metrics.taggingSucceeded + metrics.taggingFailed;
   const taggingCoverage =
@@ -24,83 +139,7 @@ export default async function VocDashboardPage() {
     taggingProcessed === 0 ? 0 : metrics.taggingSucceeded / taggingProcessed;
 
   return (
-    <main className="voc-dashboard">
-      <style>{`
-        .voc-dashboard {
-          max-width: 960px;
-          margin: 0 auto;
-          padding: 48px 24px 96px;
-          color: #1a1d1f;
-          line-height: 1.6;
-        }
-        .voc-dashboard h1 {
-          font-size: 28px;
-          margin-bottom: 4px;
-        }
-        .voc-dashboard__lede {
-          color: #55595e;
-          max-width: 640px;
-          margin-bottom: 32px;
-        }
-        .voc-dashboard section {
-          border: 1px solid #e2e5e8;
-          border-radius: 12px;
-          padding: 20px 24px;
-          margin-bottom: 20px;
-        }
-        .voc-dashboard h2 {
-          font-size: 16px;
-          margin: 0 0 12px;
-        }
-        .voc-dashboard__stats {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 24px;
-        }
-        .voc-dashboard__stat {
-          min-width: 140px;
-        }
-        .voc-dashboard__stat span {
-          display: block;
-          font-size: 13px;
-          color: #767b80;
-        }
-        .voc-dashboard__stat strong {
-          font-size: 24px;
-        }
-        .voc-dashboard table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 14px;
-        }
-        .voc-dashboard th,
-        .voc-dashboard td {
-          text-align: left;
-          padding: 6px 8px;
-          border-bottom: 1px solid #eef0f1;
-        }
-        .voc-dashboard__assumption {
-          font-size: 13px;
-          color: #8a6d1a;
-          background: #fdf6e3;
-          border: 1px solid #f0dfa4;
-          border-radius: 8px;
-          padding: 10px 14px;
-          margin-top: 12px;
-        }
-        .voc-dashboard__note {
-          font-size: 12px;
-          color: #8a8f94;
-          margin-top: 24px;
-        }
-      `}</style>
-
-      <h1>VOC 闭环看板</h1>
-      <p className="voc-dashboard__lede">
-        本页只读、无需登录，直接对飞书多维表格现有记录做数字聚合，不展示任何用户原文、姓名、电话、地址或工单
-        record_id。所有数字均可与多维表格中的记录数逐一核对。
-      </p>
-
+    <DashboardShell>
       <section aria-labelledby="voc-dashboard-total">
         <h2 id="voc-dashboard-total">总量与情绪极性</h2>
         <div className="voc-dashboard__stats">
@@ -260,6 +299,11 @@ export default async function VocDashboardPage() {
           <p>未配置人工处理基线，不计算人效数字。</p>
         )}
       </section>
-    </main>
+    </DashboardShell>
   );
+}
+
+export default async function VocDashboardPage() {
+  const result = await getVocDashboardMetrics();
+  return renderVocDashboard(result);
 }
