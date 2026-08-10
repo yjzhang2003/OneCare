@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  VOC_ACTIONS,
   VOC_STATE_SEQUENCE,
+  VOC_STATES,
   transition,
   type TransitionContext,
   type VocAction,
@@ -95,5 +97,90 @@ describe("transition", () => {
 
     const rollback = transition("分析失败", "重试", base);
     expect(rollback.kind).toBe("ok");
+  });
+
+  // Guardrail for the 待分析 + 重试 idempotence case
+  it("rejects retry from initial state with zero retries (caller bug)", () => {
+    const result = transition("待分析", "重试", { ...base, retryCount: 0 });
+
+    expect(result.kind).toBe("rejected");
+  });
+
+  it("treats retry from initial state as noop when retryCount >= 1 (idempotent replay)", () => {
+    const result = transition("待分析", "重试", { ...base, retryCount: 1 });
+
+    expect(result).toEqual({ kind: "noop", state: "待分析" });
+  });
+
+  it("rejects retry from initial state when ceiling is reached, even for replay", () => {
+    const result = transition("待分析", "重试", { ...base, retryCount: 5 });
+
+    expect(result.kind).toBe("rejected");
+    if (result.kind !== "rejected") return;
+    expect(result.reason).toContain("重试");
+  });
+
+  it("still allows normal retry from analysis-failure state under ceiling", () => {
+    const result = transition("分析失败", "重试", { ...base, retryCount: 1 });
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    expect(result.next).toBe("待分析");
+  });
+
+  it("guards all other idempotent replays against guard violations", () => {
+    // 已分析 + 需建单 without owner → rejected, not noop
+    const noOwner = transition("待跟进", "需建单", {
+      ...base,
+      hasOwner: false,
+    });
+    expect(noOwner.kind).toBe("rejected");
+
+    // 跟进中 + 提交跟进结果 with empty note → rejected, not noop
+    const emptyNote = transition("待闭环", "提交跟进结果", {
+      ...base,
+      followUpNote: "",
+    });
+    expect(emptyNote.kind).toBe("rejected");
+  });
+
+  it("exhaustively checks all 64 state-action combinations for correct noop behavior", () => {
+    // Exactly 8 combinations should return noop (or possibly rejected if guards fail)
+    const noopCombinations = new Set([
+      "已分析|打标成功",
+      "分析失败|打标失败",
+      "待跟进|需建单",
+      "无需跟进|无需建单",
+      "跟进中|开始跟进",
+      "待闭环|提交跟进结果",
+      "已闭环|确认闭环",
+      // 待分析|重试 is special-cased above
+    ]);
+
+    const contextForRetryFromInitial = { ...base, retryCount: 1 };
+
+    let noopCount = 0;
+    for (const state of VOC_STATES) {
+      for (const action of VOC_ACTIONS) {
+        const ctx =
+          action === "重试" && state === "待分析"
+            ? contextForRetryFromInitial
+            : base;
+        const result = transition(state, action, ctx);
+
+        if (result.kind === "noop") {
+          noopCount++;
+          // Only these combinations should return noop
+          const key = `${state}|${action}`;
+          expect(
+            noopCombinations.has(key) || (action === "重试" && state === "待分析"),
+            `Unexpected noop: ${key}`,
+          ).toBe(true);
+        }
+      }
+    }
+
+    // We expect exactly 8 noops (the 7 normal ones + 待分析|重试)
+    expect(noopCount).toBe(8);
   });
 });

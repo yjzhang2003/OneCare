@@ -102,24 +102,51 @@ export function transition(
   action: VocAction,
   context: TransitionContext,
 ): TransitionResult {
-  // Feishu card buttons get double-clicked and retried on the wire, so landing
-  // on the action's target state again is success, not an error.
-  const alreadyThere = RULES.find(
-    (rule) => rule.action === action && rule.to === current,
-  );
-  if (alreadyThere) {
+  // Special case: 待分析 is both the initial state and the target of "分析失败 + 重试"
+  // Feishu may retry the 重试 action after we've already moved back to 待分析.
+  // We must distinguish:
+  // - retryCount === 0: never failed, so retry is a caller bug
+  // - retryCount >= 1: failed and replayed, so this is an idempotent replay
+  // But even replays must respect the retry ceiling.
+  if (action === "重试" && current === "待分析") {
+    if (context.retryCount === 0) {
+      return { kind: "rejected", reason: "未经分析失败，不能重试" };
+    }
+    if (context.retryCount >= RETRY_CEILING) {
+      return { kind: "rejected", reason: `重试次数已达上限 ${RETRY_CEILING}` };
+    }
     return { kind: "noop", state: current };
   }
 
+  // Try normal forward transition: from → to
   const rule = RULES.find((r) => r.from === current && r.action === action);
-  if (!rule) {
-    return { kind: "rejected", reason: `${current} 不支持动作 ${action}` };
+  if (rule) {
+    // Check guard conditions
+    const violation = rule.guard?.(context) ?? null;
+    if (violation) {
+      return { kind: "rejected", reason: violation };
+    }
+
+    // If already at target state, this is a replay
+    if (rule.to === current) {
+      return { kind: "noop", state: current };
+    }
+
+    return { kind: "ok", next: rule.to };
   }
 
-  const violation = rule.guard?.(context) ?? null;
-  if (violation) {
-    return { kind: "rejected", reason: violation };
+  // Try idempotent replay: another rule exists for this action with target = current state
+  const replayRule = RULES.find(
+    (r) => r.action === action && r.to === current,
+  );
+  if (replayRule) {
+    // Guard conditions apply to replays too
+    const violation = replayRule.guard?.(context) ?? null;
+    if (violation) {
+      return { kind: "rejected", reason: violation };
+    }
+    return { kind: "noop", state: current };
   }
 
-  return { kind: "ok", next: rule.to };
+  return { kind: "rejected", reason: `${current} 不支持动作 ${action}` };
 }
