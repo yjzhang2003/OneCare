@@ -20,6 +20,8 @@
 - 外部调用显式超时：多维表格 10s，打标 25s。
 - 枚举值逐字使用规格 §3.2 的中文字面量，不得改写或翻译。
 - 完成判定命令：`npm test`、`npm run test:runtime`、`npm run lint`、`npm run typecheck`、`npm run build`、`npm audit --omit=dev`。
+- **对真实 Base 做往返验证时，单选与多选字段只能填已存在的选项值。** 多维表格在写入未知选项值时会**自动把它加进字段的选项列表**，而删除记录**不会**连带删除该选项——结果是记录数归零、schema 却被永久污染。Task 8 就这样往 `渠道` 里留下了一个 `task8-roundtrip-verify` 选项，事后要手工 PUT 整份 options 才能还原。往返验证请用 §3.2 已定义的枚举值。
+- **tenant_access_token 不得落盘。** 只在单条命令内用 `$(...)` 取用，不要 `> token.txt`、不要写进 scratchpad 文件。它有效期两小时，落盘就是一份可被读取的活凭据。
 - **假 mock 必须声明参数类型，不得对 `.mock.calls[n]` 做元组强转。** `vi.fn(async () => ...)` 推断出的调用签名是零参，`.mock.calls[0]` 类型是 `[]`，再 `as [string, RequestInit]` 会触发 `TS2352` 并让 `npm run typecheck` 变红——`vitest run` 不做类型检查，所以测试全绿也发现不了。正确写法是把参数类型写进 `vi.fn`：`vi.fn(async (_url: string, _init?: RequestInit) => ...)`，之后直接解构、无需强转。仓库既有先例见 `src/features/auth/feishu.test.ts:17` 的 `fetchReturning`。
 
 ## 阶段与外部依赖
