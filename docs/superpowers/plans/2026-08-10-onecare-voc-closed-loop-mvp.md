@@ -1751,21 +1751,30 @@ silently tagging with the wrong track is worse than failing to start."
 
 **先决条件**：两张 Base 表已建好、应用已加为协作者、`app_token` 与 `table_id` 已拿到。
 
-- [ ] **Step 1: 用真实 Base 确认响应结构**
+- [x] **Step 1: 用真实 Base 确认响应结构（已于 2026-08-10 完成，结论如下，无需重做）**
 
-在写映射前，先拿真实响应对齐字段类型。多选字段返回数组、单选返回字符串、人员字段返回对象数组——这三者猜错会导致静默写空。
+Base 已按本计划建好，两张表的字段与 §3.2 / §3.4 一致：
 
-```bash
-TOKEN=$(curl -s -X POST 'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal' \
-  -H 'Content-Type: application/json' \
-  -d '{"app_id":"'"$FEISHU_APP_ID"'","app_secret":"'"$FEISHU_APP_SECRET"'"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_access_token"])')
-
-curl -s "https://open.feishu.cn/open-apis/bitable/v1/apps/$FEISHU_BITABLE_APP_TOKEN/tables/$FEISHU_BITABLE_TABLE_VOC/records?page_size=1&user_id_type=open_id" \
-  -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+```
+FEISHU_BITABLE_APP_TOKEN=FxPtbftLBaErhUsvEBGcA746nDb
+FEISHU_BITABLE_TABLE_VOC=tblRdlrQJPofRrGe
+FEISHU_BITABLE_TABLE_OWNER=tblkFCjYfJOsqg3v
 ```
 
-把真实的 `fields` 结构记录到本任务下，并据此确定 `toVocRecord` 的解包方式。若某字段类型与本计划假设不符，改 `field-map.ts` 与其测试即可，不影响 Task 1–7。
+写入一条真实记录再读回，得到四条与直觉相反的结论。**四条全部会静默失败——不报错、不抛异常，单测还能全绿。**
+
+| 字段类型 | 声明 | 读回的真实形状 | 天真写法的后果 |
+| --- | --- | --- | --- |
+| 单选 | type 3 | `"差评"` 字符串 | 无问题 |
+| 多选 | type 4 | `["失望","着急"]` 数组 | 无问题 |
+| **数字** | type 2 | **`"2"` 字符串** | `typeof === "number"` 判定失败 → `null`。`重试次数` 恒为 0，**重试上限永不触发，失败记录无限重试** |
+| **日期** | type 5 | **`1769133600000` 数字**（epoch 毫秒） | `typeof === "string"` 判定失败 → `""` → `null`。**所有时长指标静默归零** |
+| **人员（读）** | type 11 | **`[{email,en_name,id,name}]`，键名是 `id` 不是 `open_id`** | 读 `open_id` 得空数组 → `ownerOpenIds` 恒空 → **每次卡片操作都被判「你不是负责人」，MVP 唯一的硬证据 100% 失效** |
+| **人员（写）** | type 11 | **只接受 `[{ id: openId }]`** | `[{open_id}]` 与 `["ou_..."]` 均返回 `1254066 UserFieldConvFail` |
+
+本任务的 `numberish()` / `isoDate()` / `openIds()` 三个辅助函数就是为这四条而存在，对应的四条回归测试也已写进 Step 2。**不要"简化"它们回 `typeof` 单判**。
+
+真实 open_id 可用 `ou_eb72146ed98d08d12452e2b4aef70e78`（应用自身身份，已验证可写入人员字段）。
 
 - [ ] **Step 2: Write the failing test**
 
@@ -1785,8 +1794,12 @@ describe("toVocRecord", () => {
         [VOC_FIELD_NAMES.state]: "待跟进",
         [VOC_FIELD_NAMES.polarity]: "差评",
         [VOC_FIELD_NAMES.dimensions]: ["维修时间", "服务态度"],
-        [VOC_FIELD_NAMES.owner]: [{ open_id: "ou_owner" }],
-        [VOC_FIELD_NAMES.retryCount]: 1,
+        [VOC_FIELD_NAMES.owner]: [
+          { email: "", en_name: "OneCare", id: "ou_owner", name: "OneCare" },
+        ],
+        [VOC_FIELD_NAMES.retryCount]: "1",
+        [VOC_FIELD_NAMES.rating]: "2",
+        [VOC_FIELD_NAMES.ticketOpenedAt]: 1769133600000,
       },
       "rec1",
     );
@@ -1801,7 +1814,57 @@ describe("toVocRecord", () => {
       dimensions: ["维修时间", "服务态度"],
       ownerOpenIds: ["ou_owner"],
       retryCount: 1,
+      rating: 2,
+      ticketOpenedAt: "2026-01-23T02:00:00.000Z",
     });
+  });
+
+  // The next four tests encode calibration against the live Base on 2026-08-10.
+  // Every one of them fails against a naive typeof-based unpacker, and none of
+  // the failures are visible without real Bitable responses.
+  it("reads a Number field that comes back as a string", () => {
+    const record = toVocRecord(
+      { [VOC_FIELD_NAMES.retryCount]: "3", [VOC_FIELD_NAMES.rating]: "5" },
+      "rec1",
+    );
+
+    expect(record.retryCount).toBe(3);
+    expect(record.rating).toBe(5);
+  });
+
+  it("reads a DateTime field that comes back as epoch milliseconds", () => {
+    expect(
+      toVocRecord({ [VOC_FIELD_NAMES.closedAt]: 1769220000000 }, "rec1").closedAt,
+    ).toBe("2026-01-24T02:00:00.000Z");
+  });
+
+  it("reads a User field keyed by id rather than open_id", () => {
+    expect(
+      toVocRecord(
+        {
+          [VOC_FIELD_NAMES.owner]: [
+            { email: "", en_name: "A", id: "ou_a", name: "A" },
+            { email: "", en_name: "B", id: "ou_b", name: "B" },
+          ],
+        },
+        "rec1",
+      ).ownerOpenIds,
+    ).toEqual(["ou_a", "ou_b"]);
+  });
+
+  it("ignores a User entry that carries open_id but no id", () => {
+    expect(
+      toVocRecord(
+        { [VOC_FIELD_NAMES.owner]: [{ open_id: "ou_legacy" }] },
+        "rec1",
+      ).ownerOpenIds,
+    ).toEqual([]);
+  });
+
+  it("nulls an unparseable date instead of inventing one", () => {
+    expect(
+      toVocRecord({ [VOC_FIELD_NAMES.closedAt]: "not a date" }, "rec1").closedAt,
+    ).toBeNull();
   });
 
   it("defaults an unset state to 待分析 so untouched rows are pickable", () => {
@@ -2034,8 +2097,29 @@ function text(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function numberOrNull(value: unknown): number | null {
-  return typeof value === "number" ? value : null;
+// Calibrated against the live Base on 2026-08-10. A Bitable Number field is
+// declared type 2 but reads back as a STRING ("2", "0"), so a typeof === number
+// check silently yields null — and for 重试次数 that means the retry ceiling
+// never trips and a failed record retries forever.
+function numberish(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+// Calibrated: a DateTime field reads back as epoch MILLISECONDS (number), not
+// an ISO string. Downstream metrics take ISO strings, so normalise here.
+function isoDate(value: unknown): string | null {
+  const ms = numberish(value);
+  if (ms !== null) return new Date(ms).toISOString();
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  }
+  return null;
 }
 
 function stringArray(value: unknown): readonly string[] {
@@ -2044,13 +2128,17 @@ function stringArray(value: unknown): readonly string[] {
     : [];
 }
 
+// Calibrated: a User field reads back as [{ email, en_name, id, name }] — the
+// key is `id`, NOT `open_id`. Reading open_id yields an empty owner list, which
+// makes every card action fail the ownership check while unit tests built on
+// hand-written {open_id} fixtures stay green.
 function openIds(value: unknown): readonly string[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) =>
     typeof item === "object" &&
     item !== null &&
-    typeof (item as { open_id?: unknown }).open_id === "string"
-      ? [(item as { open_id: string }).open_id]
+    typeof (item as { id?: unknown }).id === "string"
+      ? [(item as { id: string }).id]
       : [],
   );
 }
@@ -2079,14 +2167,14 @@ export function toVocRecord(
     channel: text(fields[VOC_FIELD_NAMES.channel]),
     category: text(fields[VOC_FIELD_NAMES.category]),
     content: text(fields[VOC_FIELD_NAMES.content]),
-    rating: numberOrNull(fields[VOC_FIELD_NAMES.rating]),
+    rating: numberish(fields[VOC_FIELD_NAMES.rating]),
     state,
     polarity,
     dimensions,
     ownerOpenIds: openIds(fields[VOC_FIELD_NAMES.owner]),
-    retryCount: numberOrNull(fields[VOC_FIELD_NAMES.retryCount]) ?? 0,
-    ticketOpenedAt: text(fields[VOC_FIELD_NAMES.ticketOpenedAt]) || null,
-    closedAt: text(fields[VOC_FIELD_NAMES.closedAt]) || null,
+    retryCount: numberish(fields[VOC_FIELD_NAMES.retryCount]) ?? 0,
+    ticketOpenedAt: isoDate(fields[VOC_FIELD_NAMES.ticketOpenedAt]),
+    closedAt: isoDate(fields[VOC_FIELD_NAMES.closedAt]),
   };
 }
 
