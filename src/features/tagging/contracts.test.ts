@@ -127,4 +127,78 @@ describe("parseTagPayload", () => {
 
     expect(outcomes[0]?.kind).toBe("failed");
   });
+
+  it("fails a record with an empty string in dimensions", () => {
+    const outcomes = parseTagPayload(
+      payload([{ ...good, dimensions: [""] }]),
+      ["rec1"],
+    );
+
+    expect(outcomes[0]).toMatchObject({ kind: "failed", recordId: "rec1" });
+    if (outcomes[0]?.kind !== "failed") return;
+    expect(outcomes[0].reason).toContain("dimensions");
+  });
+
+  it("fails a record with empty string among valid dimensions", () => {
+    const outcomes = parseTagPayload(
+      payload([{ ...good, dimensions: ["维修时间", ""] }]),
+      ["rec1"],
+    );
+
+    expect(outcomes[0]?.kind).toBe("failed");
+  });
+
+  it("fails a record with empty string before valid dimensions", () => {
+    const outcomes = parseTagPayload(
+      payload([{ ...good, dimensions: ["", "维修时间"] }]),
+      ["rec1"],
+    );
+
+    expect(outcomes[0]?.kind).toBe("failed");
+  });
+
+  it("still accepts an empty dimensions array", () => {
+    const outcomes = parseTagPayload(
+      payload([{ ...good, dimensions: [] }]),
+      ["rec1"],
+    );
+
+    expect(outcomes[0]?.kind).toBe("tagged");
+  });
+
+  it("rejects sentiment with empty string elements", () => {
+    const outcomes = parseTagPayload(
+      payload([{ ...good, sentiment: [""] }]),
+      ["rec1"],
+    );
+
+    expect(outcomes[0]).toMatchObject({ kind: "failed", recordId: "rec1" });
+  });
+
+  it("rejects sentiment with mixed empty and valid strings", () => {
+    const outcomes = parseTagPayload(
+      payload([{ ...good, sentiment: ["失望", ""] }]),
+      ["rec1"],
+    );
+
+    expect(outcomes[0]?.kind).toBe("failed");
+  });
+
+  it("rejects replies with empty tone", () => {
+    const outcomes = parseTagPayload(
+      payload([{ ...good, replies: [{ tone: "", text: "非常抱歉" }] }]),
+      ["rec1"],
+    );
+
+    expect(outcomes[0]?.kind).toBe("failed");
+  });
+
+  it("rejects replies with empty text", () => {
+    const outcomes = parseTagPayload(
+      payload([{ ...good, replies: [{ tone: "致歉安抚", text: "" }] }]),
+      ["rec1"],
+    );
+
+    expect(outcomes[0]?.kind).toBe("failed");
+  });
 });

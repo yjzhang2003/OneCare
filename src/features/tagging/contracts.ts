@@ -48,6 +48,9 @@ function parseReplies(value: unknown): readonly VocReply[] | null {
     if (typeof item.tone !== "string" || typeof item.text !== "string") {
       return null;
     }
+    if (item.tone.trim().length === 0 || item.text.trim().length === 0) {
+      return null;
+    }
     replies.push({ tone: item.tone, text: item.text });
   }
   return replies;
@@ -73,7 +76,7 @@ function validate(entry: Record<string, unknown>, recordId: string): TagOutcome 
   const unknownDimension = dimensions.find(
     (item) => !(VOC_DIMENSIONS as readonly string[]).includes(item),
   );
-  if (unknownDimension) {
+  if (unknownDimension !== undefined) {
     return {
       kind: "failed",
       recordId,
@@ -84,6 +87,9 @@ function validate(entry: Record<string, unknown>, recordId: string): TagOutcome 
   const sentiment = stringList(entry.sentiment) ?? null;
   if (!sentiment) {
     return { kind: "failed", recordId, reason: "sentiment 必须是字符串数组" };
+  }
+  if (sentiment.some((item) => item.trim().length === 0)) {
+    return { kind: "failed", recordId, reason: "sentiment 不能包含空字符串" };
   }
 
   if (typeof entry.summary !== "string" || entry.summary.trim().length === 0) {
