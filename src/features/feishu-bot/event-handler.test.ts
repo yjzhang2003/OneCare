@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import type { BotEnv } from "../../lib/env";
+import { VOC_CARD_ACTIONS } from "./card-types";
 import { parseFeishuEvent } from "./event-handler";
 
 const env: BotEnv = {
@@ -86,6 +87,7 @@ function groupLifecycleBody() {
 function cardActionBody(overrides?: {
   action?: string;
   caseId?: string;
+  recordId?: string;
   tag?: string;
   appId?: string;
   tenantKey?: string;
@@ -112,6 +114,11 @@ function cardActionBody(overrides?: {
         value: {
           action: overrides?.action ?? "open_pending",
           case_id: overrides?.caseId ?? "OC-240718-037",
+          // Demo card buttons never send a record_id at all (see cards.ts),
+          // so this key is only added when a test explicitly asks for one.
+          ...(overrides?.recordId !== undefined
+            ? { record_id: overrides.recordId }
+            : {}),
         },
       },
       context: {
@@ -120,6 +127,22 @@ function cardActionBody(overrides?: {
       },
     },
   };
+}
+
+function vocCardActionOutcome(overrides: {
+  action?: string;
+  recordId?: string;
+  operatorId?: string;
+}) {
+  const rawBody = JSON.stringify(
+    cardActionBody({
+      action: "voc_start_follow_up",
+      recordId: "rec12345",
+      operatorId: "ou_owner",
+      ...overrides,
+    }),
+  );
+  return parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env });
 }
 
 function signedHeaders(rawBody: string, valid = true): Headers {
@@ -192,6 +215,10 @@ describe("parseFeishuEvent", () => {
     ).resolves.toEqual({
       kind: "card_action",
       action: "open_pending",
+      // The demo cards address a fixed case number, not a real Bitable row,
+      // so a demo action carries no record id or operator identity.
+      recordId: "",
+      operatorOpenId: "",
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });
@@ -289,5 +316,47 @@ describe("parseFeishuEvent", () => {
     await expect(
       parseFeishuEvent({ rawBody: "not-json", headers: new Headers(), env }),
     ).resolves.toEqual({ kind: "ignored" });
+  });
+});
+
+describe("parseFeishuEvent VOC card actions", () => {
+  it("carries the record id and the operator open id", async () => {
+    await expect(
+      vocCardActionOutcome({
+        action: "voc_start_follow_up",
+        recordId: "rec12345",
+        operatorId: "ou_owner",
+      }),
+    ).resolves.toEqual({
+      kind: "card_action",
+      action: "voc_start_follow_up",
+      recordId: "rec12345",
+      operatorOpenId: "ou_owner",
+      chatId: "oc_onecare_chat",
+      messageId: "om_onecare_card",
+    });
+  });
+
+  it.each(VOC_CARD_ACTIONS)(
+    "accepts the %s action given a valid record id and operator",
+    async (action) => {
+      await expect(
+        vocCardActionOutcome({ action }),
+      ).resolves.toMatchObject({ kind: "card_action", action });
+    },
+  );
+
+  it.each([
+    ["an empty record id", { recordId: "" }],
+    [
+      "a record id that is not a Bitable record id",
+      { recordId: "OC-240718-037" },
+    ],
+    ["a missing or empty operator open id", { operatorId: "" }],
+    ["an action outside the whitelist", { action: "drop_table" }],
+  ])("rejects a VOC card action with %s", async (_label, overrides) => {
+    await expect(vocCardActionOutcome(overrides)).resolves.toEqual({
+      kind: "invalid_card_action",
+    });
   });
 });

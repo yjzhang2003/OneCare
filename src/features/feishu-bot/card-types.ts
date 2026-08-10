@@ -14,6 +14,15 @@ export const ONECARE_CARD_ACTIONS = [
 
 export type OneCareCardAction = (typeof ONECARE_CARD_ACTIONS)[number];
 
+export const VOC_CARD_ACTIONS = [
+  "voc_start_follow_up",
+  "voc_submit_follow_up",
+  "voc_confirm_closure",
+  "voc_mark_no_action",
+] as const;
+
+export type VocCardAction = (typeof VOC_CARD_ACTIONS)[number];
+
 export type OneCareCardView =
   | "workbench"
   | "operations"

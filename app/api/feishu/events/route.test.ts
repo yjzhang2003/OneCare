@@ -178,6 +178,8 @@ describe("POST /api/feishu/events", () => {
     const setup = dependencies({
       kind: "card_action",
       action: "open_pending",
+      recordId: "",
+      operatorOpenId: "",
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });
@@ -210,6 +212,8 @@ describe("POST /api/feishu/events", () => {
     const setup = dependencies({
       kind: "card_action",
       action: "create_ticket",
+      recordId: "",
+      operatorOpenId: "",
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });
@@ -251,10 +255,33 @@ describe("POST /api/feishu/events", () => {
     expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
   });
 
+  it("returns a neutral toast for a verified VOC action pending Task 12 dispatch", async () => {
+    const setup = dependencies({
+      kind: "card_action",
+      action: "voc_start_follow_up",
+      recordId: "rec12345",
+      operatorOpenId: "ou_owner",
+      chatId: "oc_onecare_chat",
+      messageId: "om_onecare_card",
+    });
+
+    const response = await createFeishuEventRoute(setup.dependencies)(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      toast: { type: "info", content: "暂不支持该操作" },
+    });
+    expect(setup.dependencies.resolveAction).not.toHaveBeenCalled();
+    expect(setup.dependencies.schedule).not.toHaveBeenCalled();
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+  });
+
   it("returns a safe toast when card construction fails", async () => {
     const setup = dependencies({
       kind: "card_action",
       action: "open_pending",
+      recordId: "",
+      operatorOpenId: "",
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });

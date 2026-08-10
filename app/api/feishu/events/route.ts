@@ -8,9 +8,10 @@ import {
   resolveCardAction,
   type CardActionResult,
 } from "../../../../src/features/feishu-bot/card-actions";
-import type {
-  FeishuOutboundMessage,
-  OneCareCardAction,
+import {
+  ONECARE_CARD_ACTIONS,
+  type FeishuOutboundMessage,
+  type OneCareCardAction,
 } from "../../../../src/features/feishu-bot/card-types";
 import { createWelcomeMessage } from "../../../../src/features/feishu-bot/cards";
 import {
@@ -68,6 +69,16 @@ function json(data: object, status = 200): Response {
   return Response.json(data, { status });
 }
 
+// The parsed card_action outcome now also carries the four real VOC actions
+// (Task 11), each with a verified record id and operator identity. Routing
+// those to real business logic — the actual authorization/dispatch work —
+// is Task 12. Until then, treat them the same as any other unsupported
+// button so the route stays type-safe and never mis-dispatches a VOC action
+// through the demo-only resolver.
+function isOneCareCardAction(action: string): action is OneCareCardAction {
+  return (ONECARE_CARD_ACTIONS as readonly string[]).includes(action);
+}
+
 export function createFeishuEventRoute(
   dependencies: FeishuEventRouteDependencies = defaultDependencies,
 ) {
@@ -112,6 +123,12 @@ export function createFeishuEventRoute(
       }
 
       if (outcome.kind === "card_action") {
+        if (!isOneCareCardAction(outcome.action)) {
+          return json({
+            toast: { type: "info", content: "暂不支持该操作" },
+          });
+        }
+
         let result: CardActionResult;
         try {
           result = dependencies.resolveAction(outcome.action);

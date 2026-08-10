@@ -11,7 +11,9 @@ import type { BotEnv } from "../../lib/env";
 import {
   ONECARE_CARD_ACTIONS,
   ONECARE_CASE_ID,
+  VOC_CARD_ACTIONS,
   type OneCareCardAction,
+  type VocCardAction,
 } from "./card-types";
 
 export type FeishuEventOutcome =
@@ -20,7 +22,9 @@ export type FeishuEventOutcome =
   | Readonly<{ kind: "entered"; chatId: string }>
   | Readonly<{
       kind: "card_action";
-      action: OneCareCardAction;
+      action: OneCareCardAction | VocCardAction;
+      recordId: string;
+      operatorOpenId: string;
       chatId: string;
       messageId: string;
     }>
@@ -111,11 +115,30 @@ function authorizedEventHeader(payload: JsonObject, env: BotEnv): boolean {
   );
 }
 
+const RECORD_ID_PATTERN = /^rec[A-Za-z0-9]+$/;
+
 function isOneCareCardAction(value: unknown): value is OneCareCardAction {
   return (
     typeof value === "string" &&
     (ONECARE_CARD_ACTIONS as readonly string[]).includes(value)
   );
+}
+
+function isVocCardAction(value: unknown): value is VocCardAction {
+  return (
+    typeof value === "string" &&
+    (VOC_CARD_ACTIONS as readonly string[]).includes(value)
+  );
+}
+
+// The operator identity is read from the signed event payload, never from the
+// button's own value, so it cannot be forged by editing what the card sends
+// back.
+function readOperatorOpenId(payload: JsonObject): string {
+  if (!isJsonObject(payload.event)) return "";
+  const operator = payload.event.operator;
+  if (!isJsonObject(operator)) return "";
+  return typeof operator.open_id === "string" ? operator.open_id : "";
 }
 
 function parseCardAction(payload: JsonObject): FeishuEventOutcome {
@@ -137,17 +160,53 @@ function parseCardAction(payload: JsonObject): FeishuEventOutcome {
   }
 
   const action = normalized.action.value.action;
-  const caseId = normalized.action.value.case_id;
-  if (!isOneCareCardAction(action) || caseId !== ONECARE_CASE_ID) {
-    return { kind: "invalid_card_action" };
+
+  // The eight demo actions are gated by the fixed demo case number, exactly
+  // as before card actions carried a real record id. This behaviour is
+  // untouched: none of the demo cards send a record_id, so folding this
+  // check into the record-id validation below would break every demo
+  // button.
+  if (isOneCareCardAction(action)) {
+    const caseId = normalized.action.value.case_id;
+    if (caseId !== ONECARE_CASE_ID) {
+      return { kind: "invalid_card_action" };
+    }
+
+    return {
+      kind: "card_action",
+      action,
+      recordId: "",
+      operatorOpenId: "",
+      chatId: normalized.chatId,
+      messageId: normalized.messageId,
+    };
   }
 
-  return {
-    kind: "card_action",
-    action,
-    chatId: normalized.chatId,
-    messageId: normalized.messageId,
-  };
+  // The four real VOC actions address an actual Bitable row instead of the
+  // fixed demo case number, and require an operator identity taken from the
+  // signed event payload.
+  if (isVocCardAction(action)) {
+    const recordId = normalized.action.value.record_id;
+    const openId = readOperatorOpenId(payload);
+
+    if (typeof recordId !== "string" || !RECORD_ID_PATTERN.test(recordId)) {
+      return { kind: "invalid_card_action" };
+    }
+    if (openId.length === 0) {
+      return { kind: "invalid_card_action" };
+    }
+
+    return {
+      kind: "card_action",
+      action,
+      recordId,
+      operatorOpenId: openId,
+      chatId: normalized.chatId,
+      messageId: normalized.messageId,
+    };
+  }
+
+  return { kind: "invalid_card_action" };
 }
 
 function textFromContent(content: string): string | null {
