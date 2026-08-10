@@ -25,28 +25,28 @@ export function createAilyTaggingProvider(
     async tag(records) {
       if (records.length === 0) return [];
 
-      const requestedIds = records.map((record) => record.recordId);
-      const failAll = (reason: string): readonly TagOutcome[] =>
-        requestedIds.map((recordId) => ({ kind: "failed", recordId, reason }));
-
-      const url = SKILL_START_URL.replace(":app_id", config.ailyAppId).replace(
-        ":skill_id",
-        config.skillId,
-      );
-
-      // The official contract takes `input` as a JSON String, not a nested
-      // object; sending an object silently produces an empty skill input.
-      const input = JSON.stringify({
-        records: records.map((record) => ({
-          id: record.recordId,
-          content: record.content,
-          channel: record.channel,
-          category: record.category,
-          ...(record.rating === undefined ? {} : { rating: record.rating }),
-        })),
-      });
-
       try {
+        const requestedIds = records.map((record) => record.recordId);
+        const failAll = (reason: string): readonly TagOutcome[] =>
+          requestedIds.map((recordId) => ({ kind: "failed", recordId, reason }));
+
+        const url = SKILL_START_URL.replace(":app_id", config.ailyAppId).replace(
+          ":skill_id",
+          config.skillId,
+        );
+
+        // The official contract takes `input` as a JSON String, not a nested
+        // object; sending an object silently produces an empty skill input.
+        const input = JSON.stringify({
+          records: records.map((record) => ({
+            id: record.recordId,
+            content: record.content,
+            channel: record.channel,
+            category: record.category,
+            ...(record.rating === undefined ? {} : { rating: record.rating }),
+          })),
+        });
+
         const token = await config.tenantAccessToken();
         const response = await fetcher(url, {
           method: "POST",
@@ -83,7 +83,11 @@ export function createAilyTaggingProvider(
       } catch (error) {
         const reason =
           error instanceof Error ? error.message : "aily 调用失败";
-        return failAll(reason);
+        return records.map((_, index) => ({
+          kind: "failed" as const,
+          recordId: `unknown_${index}`,
+          reason,
+        }));
       }
     },
   };

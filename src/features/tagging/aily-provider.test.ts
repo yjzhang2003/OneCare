@@ -41,7 +41,7 @@ const successOutput = JSON.stringify({
 
 describe("createAilyTaggingProvider", () => {
   it("posts to the skill start endpoint with a bearer token", async () => {
-    const fetcher = vi.fn(async () =>
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
       jsonResponse({ code: 0, msg: "ok", data: { output: successOutput, status: "success" } }),
     );
 
@@ -49,26 +49,26 @@ describe("createAilyTaggingProvider", () => {
     await provider.tag(records);
 
     expect(fetcher).toHaveBeenCalledTimes(1);
-    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetcher.mock.calls[0];
     expect(url).toBe(
       "https://open.feishu.cn/open-apis/aily/v1/apps/spring_demo__c/skills/skill_demo/start",
     );
-    expect(init.method).toBe("POST");
+    expect(init?.method).toBe("POST");
     expect(
-      (init.headers as Record<string, string>).Authorization,
+      (init?.headers as Record<string, string>).Authorization,
     ).toBe("Bearer t-token");
   });
 
   it("serialises input as a JSON string rather than a nested object", async () => {
-    const fetcher = vi.fn(async () =>
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
       jsonResponse({ code: 0, data: { output: successOutput, status: "success" } }),
     );
 
     const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
     await provider.tag(records);
 
-    const [, init] = fetcher.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(init.body as string) as { input: unknown };
+    const [, init] = fetcher.mock.calls[0];
+    const body = JSON.parse(init?.body as string) as { input: unknown };
 
     expect(typeof body.input).toBe("string");
     expect(JSON.parse(body.input as string)).toEqual({
@@ -90,7 +90,7 @@ describe("createAilyTaggingProvider", () => {
   });
 
   it("returns tagged outcomes on success", async () => {
-    const fetcher = vi.fn(async () =>
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
       jsonResponse({ code: 0, data: { output: successOutput, status: "success" } }),
     );
 
@@ -101,7 +101,7 @@ describe("createAilyTaggingProvider", () => {
   });
 
   it("fails the batch on a non-zero business code", async () => {
-    const fetcher = vi.fn(async () =>
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
       jsonResponse({ code: 2700001, msg: "invalid param", data: {} }),
     );
 
@@ -114,7 +114,7 @@ describe("createAilyTaggingProvider", () => {
   });
 
   it("fails the batch when status is anything other than success", async () => {
-    const fetcher = vi.fn(async () =>
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
       jsonResponse({ code: 0, data: { output: successOutput, status: "running" } }),
     );
 
@@ -125,7 +125,7 @@ describe("createAilyTaggingProvider", () => {
   });
 
   it("fails the batch on a transport error", async () => {
-    const fetcher = vi.fn(async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => {
       throw new Error("socket hang up");
     });
 
@@ -136,7 +136,42 @@ describe("createAilyTaggingProvider", () => {
   });
 
   it("fails the batch on a non-ok HTTP status", async () => {
-    const fetcher = vi.fn(async () => jsonResponse({}, 500));
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => jsonResponse({}, 500));
+
+    const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
+    const outcomes = await provider.tag(records);
+
+    expect(outcomes[0]?.kind).toBe("failed");
+  });
+
+  it("does not throw when a record is null and returns failed outcomes", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: 0, data: { output: successOutput, status: "success" } }),
+    );
+
+    const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
+    const outcomes = await provider.tag([null as any]);
+
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]?.kind).toBe("failed");
+  });
+
+  it("does not throw when a record lacks recordId and returns failed outcomes", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: 0, data: { output: successOutput, status: "success" } }),
+    );
+
+    const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
+    const outcomes = await provider.tag([{} as any]);
+
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]?.kind).toBe("failed");
+  });
+
+  it("treats code as a number and fails the batch if code is a string", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: "0", data: { output: successOutput, status: "success" } }),
+    );
 
     const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
     const outcomes = await provider.tag(records);
@@ -145,7 +180,9 @@ describe("createAilyTaggingProvider", () => {
   });
 
   it("returns no outcomes for an empty batch and makes no call", async () => {
-    const fetcher = vi.fn();
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: 0, data: { output: successOutput, status: "success" } }),
+    );
 
     const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
     expect(await provider.tag([])).toEqual([]);
