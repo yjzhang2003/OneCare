@@ -2700,7 +2700,7 @@ so routing either resolves an owner or reports that it could not."
 > **校验必须按动作类型分流，不得一刀切。** `ONECARE_CASE_ID` 在 `cards.ts` 有 8 处引用，既是八类演示卡的展示文案，也是它们按钮的载荷（`cards.ts:66` 的 `value: { action, case_id: ONECARE_CASE_ID }`）。这八类卡按规格 §1.4 是**保留**的。若把 `event-handler.ts:141` 改成对所有动作都要求 `record_id`，演示卡的按钮会全部失效。
 >
 > 因此：
-> - `ONECARE_CARD_ACTIONS`（八个演示动作）→ **保持**现有的 `case_id === ONECARE_CASE_ID` 校验，行为不变，`ONECARE_CASE_ID` 常量保留
+> - `ONECARE_CARD_ACTIONS`（九个演示动作，注意是 9 个动作对应 8 个视图，两者数量不同）→ **保持**现有的 `case_id === ONECARE_CASE_ID` 校验，行为不变，`ONECARE_CASE_ID` 常量保留
 > - `VOC_CARD_ACTIONS`（四个新增真实动作）→ 要求 `record_id` 匹配 `/^rec[A-Za-z0-9]+$/` **且** `event.operator.open_id` 非空
 >
 > 两类动作的 outcome 都走 `card_action` 分支，但 `recordId` 与 `operatorOpenId` 只在 VOC 动作上有意义；演示动作的这两个字段填空串，由 Task 12 按动作类型分派到不同的处理函数。
