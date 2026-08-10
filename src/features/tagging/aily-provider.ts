@@ -23,12 +23,51 @@ export function createAilyTaggingProvider(
   return {
     name: "aily",
     async tag(records) {
-      if (records.length === 0) return [];
+      // Guard: records must be an array. If not, we don't know how many
+      // records were requested, so we return empty array.
+      if (!Array.isArray(records)) {
+        return [];
+      }
+
+      if (records.length === 0) {
+        return [];
+      }
+
+      // Extract recordIds outside try block so catch can access them.
+      // If extraction itself fails, we return empty array.
+      let recordIds: string[] = [];
+      let recordIdsComputed = false;
 
       try {
-        const requestedIds = records.map((record) => record.recordId);
+        // Validate recordId on all elements upfront. This ensures:
+        // 1. Every outcome has a recordId that is a non-empty string
+        // 2. We can diagnose malformed inputs without throwing
+        recordIds = records.map((record, index) => {
+          const recordId = (record as any)?.recordId;
+          if (typeof recordId === "string" && recordId.length > 0) {
+            return recordId;
+          }
+          // Placeholder for malformed recordId; allows diagnosis without throwing
+          return `invalid_${index}`;
+        });
+        recordIdsComputed = true;
+
+        // If any recordId is invalid, fail the batch with diagnostic reasons
+        const invalidIndices = recordIds
+          .map((id, i) => (id.startsWith("invalid_") ? i : -1))
+          .filter((i) => i !== -1);
+
+        if (invalidIndices.length > 0) {
+          return recordIds.map((recordId, index) => {
+            const reason = invalidIndices.includes(index)
+              ? `Input record lacks valid recordId (must be non-empty string)`
+              : `Batch fails because other records have invalid recordIds`;
+            return { kind: "failed" as const, recordId, reason };
+          });
+        }
+
         const failAll = (reason: string): readonly TagOutcome[] =>
-          requestedIds.map((recordId) => ({ kind: "failed", recordId, reason }));
+          recordIds.map((recordId) => ({ kind: "failed", recordId, reason }));
 
         const url = SKILL_START_URL.replace(":app_id", config.ailyAppId).replace(
           ":skill_id",
@@ -39,11 +78,11 @@ export function createAilyTaggingProvider(
         // object; sending an object silently produces an empty skill input.
         const input = JSON.stringify({
           records: records.map((record) => ({
-            id: record.recordId,
-            content: record.content,
-            channel: record.channel,
-            category: record.category,
-            ...(record.rating === undefined ? {} : { rating: record.rating }),
+            id: (record as any)?.recordId,
+            content: (record as any)?.content,
+            channel: (record as any)?.channel,
+            category: (record as any)?.category,
+            ...((record as any)?.rating === undefined ? {} : { rating: (record as any)?.rating }),
           })),
         });
 
@@ -79,15 +118,21 @@ export function createAilyTaggingProvider(
           return failAll(`aily status 非 success：${String(data.status)}`);
         }
 
-        return parseTagPayload(data.output, requestedIds);
+        return parseTagPayload(data.output, recordIds);
       } catch (error) {
         const reason =
           error instanceof Error ? error.message : "aily 调用失败";
-        return records.map((_, index) => ({
-          kind: "failed" as const,
-          recordId: `unknown_${index}`,
-          reason,
-        }));
+        // If we successfully computed recordIds, return failures for them.
+        // Otherwise, we don't know how many records were in the input, so
+        // return empty array.
+        if (recordIdsComputed && recordIds.length > 0) {
+          return recordIds.map((recordId) => ({
+            kind: "failed" as const,
+            recordId,
+            reason,
+          }));
+        }
+        return [];
       }
     },
   };

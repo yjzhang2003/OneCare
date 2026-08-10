@@ -144,7 +144,22 @@ describe("createAilyTaggingProvider", () => {
     expect(outcomes[0]?.kind).toBe("failed");
   });
 
-  it("does not throw when a record is null and returns failed outcomes", async () => {
+  it("does not throw on non-array inputs and returns empty array", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: 0, data: { output: successOutput, status: "success" } }),
+    );
+
+    const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
+
+    expect(await provider.tag(null as any)).toEqual([]);
+    expect(await provider.tag(undefined as any)).toEqual([]);
+    expect(await provider.tag("notanarray" as any)).toEqual([]);
+    expect(await provider.tag(42 as any)).toEqual([]);
+    expect(await provider.tag({} as any)).toEqual([]);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("does not throw on array with null element and returns outcome with valid recordId", async () => {
     const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
       jsonResponse({ code: 0, data: { output: successOutput, status: "success" } }),
     );
@@ -154,9 +169,13 @@ describe("createAilyTaggingProvider", () => {
 
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]?.kind).toBe("failed");
+    if (outcomes[0]?.kind === "failed") {
+      expect(typeof outcomes[0].recordId).toBe("string");
+      expect(outcomes[0].recordId.length).toBeGreaterThan(0);
+    }
   });
 
-  it("does not throw when a record lacks recordId and returns failed outcomes", async () => {
+  it("does not throw when record lacks recordId and returns outcome with valid recordId", async () => {
     const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
       jsonResponse({ code: 0, data: { output: successOutput, status: "success" } }),
     );
@@ -166,6 +185,42 @@ describe("createAilyTaggingProvider", () => {
 
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]?.kind).toBe("failed");
+    if (outcomes[0]?.kind === "failed") {
+      expect(typeof outcomes[0].recordId).toBe("string");
+      expect(outcomes[0].recordId.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("does not throw when recordId is empty string and returns outcome with valid recordId", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: 0, data: { output: successOutput, status: "success" } }),
+    );
+
+    const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
+    const outcomes = await provider.tag([{ recordId: "" } as any]);
+
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]?.kind).toBe("failed");
+    if (outcomes[0]?.kind === "failed") {
+      expect(typeof outcomes[0].recordId).toBe("string");
+      expect(outcomes[0].recordId.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("does not throw when recordId is non-string and returns outcome with valid recordId", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: 0, data: { output: successOutput, status: "success" } }),
+    );
+
+    const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
+    const outcomes = await provider.tag([{ recordId: 123 } as any]);
+
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]?.kind).toBe("failed");
+    if (outcomes[0]?.kind === "failed") {
+      expect(typeof outcomes[0].recordId).toBe("string");
+      expect(outcomes[0].recordId.length).toBeGreaterThan(0);
+    }
   });
 
   it("treats code as a number and fails the batch if code is a string", async () => {
