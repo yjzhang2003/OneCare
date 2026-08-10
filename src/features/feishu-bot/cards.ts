@@ -1,5 +1,5 @@
 import type { VocRecord } from "../bitable/field-map";
-import type { TagResult } from "../tagging/contracts";
+import type { TagResult, VocReply } from "../tagging/contracts";
 import type { VocState } from "../voc/service-event";
 import {
   ONECARE_CASE_ID,
@@ -453,12 +453,36 @@ const STATUS_COLOR_BY_STATE: Readonly<Record<VocState, string>> = {
   已闭环: "green",
 };
 
+// VOC content is free text a user typed into a review box, so its length is
+// unbounded. Spec §6.1 calls for "原始内容（截断）" precisely because an
+// untruncated multi-thousand-character complaint would blow past what a
+// mobile Card 2.0 body renders cleanly and crowd out the AI summary, the
+// dimensions, and the reply suggestions that share the same card. 200
+// characters is roughly the length of a fully-detailed complaint paragraph —
+// enough for the owner to triage without reading the raw transcript here (the
+// full text still lives in the Base row itself).
+export const VOC_TICKET_CONTENT_LIMIT = 200;
+
+function truncateContent(content: string): string {
+  return content.length > VOC_TICKET_CONTENT_LIMIT
+    ? `${content.slice(0, VOC_TICKET_CONTENT_LIMIT)}…`
+    : content;
+}
+
+// Mirrors the "【语气】正文" join format field-map.ts's toTagFieldUpdate uses
+// when writing AI 回复话术 back to the Base, so the same reply set reads
+// identically whether it's viewed in the sheet or on this card.
+function repliesText(replies: readonly VocReply[]): string {
+  return replies.map((reply) => `【${reply.tone}】${reply.text}`).join("\n\n");
+}
+
 export function createVocTicketCard(
   record: VocRecord,
   tag: TagResult,
 ): FeishuCard {
   const completed = record.state === "已闭环";
   const next = NEXT_VOC_ACTION[record.state];
+  const content = truncateContent(record.content);
 
   return cardRoot({
     title: "VOC 工单",
@@ -469,15 +493,19 @@ export function createVocTicketCard(
     template: completed ? "green" : "orange",
     icon: "todo_colorful",
     elements: [
-      detailBlock(tag.summary || record.content, [
+      detailBlock(tag.summary || content, [
         ["渠道", record.channel],
         ["产品品类", record.category],
       ]),
-      field("原始反馈", record.content),
+      field("原始反馈", content),
+      field("情绪极性", tag.polarity),
       field(
         "问题维度",
         tag.dimensions.length > 0 ? tag.dimensions.join("、") : "—",
       ),
+      ...(tag.replies.length > 0
+        ? [field("AI 回复话术建议", repliesText(tag.replies))]
+        : []),
       ...(next
         ? [columns(vocActionButton(next.label, next.action, record.recordId))]
         : [note("当前状态无需操作。")]),

@@ -12,6 +12,7 @@ import {
   createCardMessage,
   createVocTicketCard,
   createWelcomeMessage,
+  VOC_TICKET_CONTENT_LIMIT,
 } from "./cards";
 
 const views: readonly OneCareCardView[] = [
@@ -242,5 +243,72 @@ describe("createVocTicketCard", () => {
       [],
     );
     expect((card.header as Record<string, unknown>).template).toBe("green");
+  });
+
+  it("truncates 原始内容 beyond the limit and drops the tail", () => {
+    const head = "反".repeat(VOC_TICKET_CONTENT_LIMIT);
+    const content = `${head}TAIL_MARKER`;
+
+    const card = createVocTicketCard(vocRecord({ content }), tagResult());
+    const json = JSON.stringify(card);
+
+    expect(json).not.toContain("TAIL_MARKER");
+    expect(json).toContain(`${head}…`);
+  });
+
+  it("does not add an ellipsis when 原始内容 is exactly at the limit", () => {
+    const content = "反".repeat(VOC_TICKET_CONTENT_LIMIT);
+
+    const card = createVocTicketCard(vocRecord({ content }), tagResult());
+    const json = JSON.stringify(card);
+
+    expect(json).toContain(content);
+    expect(json).not.toContain("…");
+  });
+
+  it("renders short 原始内容 unchanged", () => {
+    const card = createVocTicketCard(
+      vocRecord({ content: "太短了" }),
+      tagResult(),
+    );
+    const json = JSON.stringify(card);
+
+    expect(json).toContain("太短了");
+    expect(json).not.toContain("…");
+  });
+
+  it("does not throw when 原始内容 is empty", () => {
+    expect(() =>
+      createVocTicketCard(vocRecord({ content: "" }), tagResult()),
+    ).not.toThrow();
+  });
+
+  it("renders 情绪极性 from the tag result", () => {
+    const card = createVocTicketCard(vocRecord(), tagResult({ polarity: "中评" }));
+
+    expect(JSON.stringify(card)).toContain("中评");
+  });
+
+  it("renders every AI reply with its tone label", () => {
+    const card = createVocTicketCard(
+      vocRecord(),
+      tagResult({
+        replies: [
+          { tone: "安抚", text: "非常抱歉给您带来不便" },
+          { tone: "解决方案", text: "我们将在24小时内安排工程师上门" },
+        ],
+      }),
+    );
+    const json = JSON.stringify(card);
+
+    expect(json).toContain("【安抚】非常抱歉给您带来不便");
+    expect(json).toContain("【解决方案】我们将在24小时内安排工程师上门");
+  });
+
+  it("skips the AI reply block entirely when there are no replies", () => {
+    const card = createVocTicketCard(vocRecord(), tagResult({ replies: [] }));
+    const json = JSON.stringify(card);
+
+    expect(json).not.toContain("AI 回复话术建议");
   });
 });
