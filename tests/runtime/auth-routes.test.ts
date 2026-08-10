@@ -137,6 +137,18 @@ describe("built Next.js authentication routes", () => {
       redirect: "manual",
     });
 
+    // `/dashboard` is now a route-level redirect (`redirects()` in
+    // next.config.ts), not a rendered page calling `redirect()`. Under
+    // `cacheComponents`, the old page-level version got prerendered as
+    // static output and its redirect was baked into the RSC payload as a
+    // client-side navigation instead of a real HTTP redirect — a non-JS
+    // caller (this fetch with `redirect: "manual"`, same as curl) saw 200,
+    // not 307. A config-level redirect resolves before any route matching or
+    // rendering, so it is unaffected by that and always answers with a real
+    // HTTP redirect. 307 (not 308) matches next.config.ts's `permanent:
+    // false`, chosen because this is a legacy compatibility path, not a
+    // permanent URL-scheme decision, and 308/301 would let clients and
+    // crawlers cache the redirect past the point it could be undone.
     expect(dashboard.status).toBe(307);
     expect(
       new URL(dashboard.headers.get("location")!, baseUrl).pathname,
@@ -146,6 +158,24 @@ describe("built Next.js authentication routes", () => {
     expect(logout.headers.get("set-cookie")).toContain(
       "auto_insight_session=;",
     );
+  });
+
+  it("leaves the public VOC dashboard reachable after the /dashboard redirect change", async () => {
+    // next.config.ts's redirects() source is the exact path "/dashboard",
+    // not a prefix or wildcard, so it must not swallow this sibling route —
+    // the one page a competition judge can verify unaided. A regression here
+    // would mean the /dashboard fix silently broke the more important page.
+    const response = await fetch(`${baseUrl}/dashboard/voc`, {
+      redirect: "manual",
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("VOC 闭环看板");
+    // Not a substring assertion on `原始内容` or any record_id shape: this
+    // only proves the page rendered real content (its own heading), not that
+    // it withheld anything — that guarantee is covered by
+    // app/dashboard/voc/page.test.tsx's contract on the metrics type itself.
   });
 
   it("answers Feishu URL verification in the built runtime", async () => {
