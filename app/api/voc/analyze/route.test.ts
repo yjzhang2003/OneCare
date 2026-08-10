@@ -166,6 +166,17 @@ describe("createAnalyzeRoute", () => {
 
     expect(await response.json()).toMatchObject({ processed: 0 });
     expect(dependencies.tag).not.toHaveBeenCalled();
+    // Nothing to route means no reason to read the owner table at all.
+    expect(dependencies.ownerRules).not.toHaveBeenCalled();
+  });
+
+  it("calls ownerRules exactly once on the normal path", async () => {
+    const dependencies = deps();
+    await createAnalyzeRoute(dependencies)(
+      request({ authorization: "Bearer s3cret" }),
+    );
+
+    expect(dependencies.ownerRules).toHaveBeenCalledTimes(1);
   });
 
   it("keeps going when one record fails to write", async () => {
@@ -181,6 +192,90 @@ describe("createAnalyzeRoute", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ writeErrors: 1 });
+  });
+
+  // Read-before-acting: listPending and ownerRules are both read-and-decide
+  // dependencies this route needs before it can safely spend AI budget or
+  // write anything. 已分析 is a dead end (nothing ever re-fetches it), so a
+  // record tagged but then strandable for lack of a routable owner table
+  // read is worse than refusing the whole shard up front. A transient
+  // Bitable failure here must surface as an explicit 503, not an uncaught
+  // exception Next.js turns into an opaque 500, and must not touch tag() or
+  // updateRecord() at all.
+  describe("fails closed when a read dependency errors", () => {
+    it("returns 503 when ownerRules() throws, without tagging or writing anything", async () => {
+      const dependencies = deps({
+        ownerRules: vi.fn(async () => {
+          throw new Error("owner table rate limited");
+        }),
+      });
+
+      const response = await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({
+        error: "service_unavailable",
+        source: "ownerRules",
+      });
+      expect(dependencies.tag).not.toHaveBeenCalled();
+      expect(dependencies.updateRecord).not.toHaveBeenCalled();
+    });
+
+    it("returns 503 when ownerRules() returns a rejected promise, without tagging or writing anything", async () => {
+      const dependencies = deps({
+        ownerRules: vi.fn(() => Promise.reject(new Error("network down"))),
+      });
+
+      const response = await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({
+        error: "service_unavailable",
+        source: "ownerRules",
+      });
+      expect(dependencies.tag).not.toHaveBeenCalled();
+      expect(dependencies.updateRecord).not.toHaveBeenCalled();
+    });
+
+    it("returns 503 when listPending() throws, without tagging or writing anything", async () => {
+      const dependencies = deps({
+        listPending: vi.fn(async () => {
+          throw new Error("voc table rate limited");
+        }),
+      });
+
+      const response = await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({
+        error: "service_unavailable",
+        source: "listPending",
+      });
+      expect(dependencies.tag).not.toHaveBeenCalled();
+      expect(dependencies.updateRecord).not.toHaveBeenCalled();
+    });
+
+    it("still returns 401 when unauthorized, even though ownerRules() would throw", async () => {
+      const dependencies = deps({
+        ownerRules: vi.fn(async () => {
+          throw new Error("owner table rate limited");
+        }),
+      });
+
+      // No Authorization header at all — proves the auth check was not
+      // pushed later by this fix's reordering of the read dependencies.
+      const response = await createAnalyzeRoute(dependencies)(request());
+
+      expect(response.status).toBe(401);
+      expect(dependencies.listPending).not.toHaveBeenCalled();
+      expect(dependencies.ownerRules).not.toHaveBeenCalled();
+    });
   });
 });
 

@@ -134,13 +134,15 @@ function buildFailedFields(
 // Computes the whole 待分析 -> 已分析 -> {待跟进|无需跟进} chain in memory and
 // returns the single set of fields for the one `updateRecord` write the brief
 // calls for — Bitable has no transaction, so a two-write version could leave
-// a record stuck at 已分析 if the process died between them.
-async function buildTaggedFields(
+// a record stuck at 已分析 if the process died between them. Synchronous: the
+// caller resolves ownerRules once, upfront, before any record is tagged (see
+// createAnalyzeRoute), rather than this function lazily awaiting it per call.
+function buildTaggedFields(
   record: PendingRecord,
   result: TagResult,
-  getOwnerRules: () => Promise<readonly OwnerRule[]>,
+  ownerRules: readonly OwnerRule[],
   tagSource: string,
-): Promise<BitableFields> {
+): BitableFields {
   const { createTicket, severity } = triage({
     polarity: result.polarity,
     dimensions: result.dimensions,
@@ -171,8 +173,7 @@ async function buildTaggedFields(
     };
   }
 
-  const rules = await getOwnerRules();
-  const assignment = resolveOwner(rules, {
+  const assignment = resolveOwner(ownerRules, {
     channel: record.channel,
     category: record.category,
   });
@@ -196,14 +197,34 @@ async function buildTaggedFields(
   return { ...tagFields, [VOC_FIELD_NAMES.state]: afterTagging };
 }
 
+function serviceUnavailable(
+  source: "listPending" | "ownerRules",
+  error: unknown,
+): Response {
+  const reason = error instanceof Error ? error.message : String(error);
+  // No secret ever appears in these messages (listPending/ownerRules only
+  // ever throw Bitable business-code strings), so it's safe to surface the
+  // reason for whoever is reading Vercel's runtime logs for this Cron.
+  return json({ error: "service_unavailable", source, reason }, 503);
+}
+
 export function createAnalyzeRoute(dependencies: AnalyzeRouteDependencies) {
   return async function POST(request: Request): Promise<Response> {
+    // Authorization must stay the very first thing this handler does. Every
+    // read below can fail, but a request without the secret must never reach
+    // any of them regardless of how the rest of this function is reordered.
     const authorization = request.headers.get("authorization") ?? "";
     if (authorization !== `Bearer ${dependencies.cronSecret}`) {
       return json({ error: "unauthorized" }, 401);
     }
 
-    const records = await dependencies.listPending(dependencies.shardSize);
+    let records: readonly PendingRecord[];
+    try {
+      records = await dependencies.listPending(dependencies.shardSize);
+    } catch (error) {
+      return serviceUnavailable("listPending", error);
+    }
+
     if (records.length === 0) {
       const empty: AnalyzeResponseBody = {
         processed: 0,
@@ -212,6 +233,22 @@ export function createAnalyzeRoute(dependencies: AnalyzeRouteDependencies) {
         writeErrors: 0,
       };
       return json(empty);
+    }
+
+    // Read-before-acting: every critical read this shard needs is resolved
+    // up front, before tag() spends any AI budget and before any write is
+    // attempted. A transient Bitable failure here (rate limit, 5xx) must
+    // fail the whole shard rather than tag records it then can't route —
+    // 已分析 is a dead end (listPendingRecords only ever re-fetches 待分析
+    // and 分析失败; nothing ever revisits 已分析), so a record stranded
+    // there after already burning its one tagging attempt is worse than
+    // refusing the shard outright and letting the next Cron tick retry
+    // cleanly with nothing written yet.
+    let ownerRules: readonly OwnerRule[];
+    try {
+      ownerRules = await dependencies.ownerRules();
+    } catch (error) {
+      return serviceUnavailable("ownerRules", error);
     }
 
     // Read once per request, not once per record: dependencies.tagSource is a
@@ -228,17 +265,6 @@ export function createAnalyzeRoute(dependencies: AnalyzeRouteDependencies) {
     let failed = 0;
     let writeErrors = 0;
 
-    // Fetched at most once per shard call and shared by every record that
-    // needs it, rather than once per ticket-creating record: the owner table
-    // doesn't change mid-shard, and shards can carry more than one 差评.
-    let cachedOwnerRules: readonly OwnerRule[] | null = null;
-    async function getOwnerRules(): Promise<readonly OwnerRule[]> {
-      if (!cachedOwnerRules) {
-        cachedOwnerRules = await dependencies.ownerRules();
-      }
-      return cachedOwnerRules;
-    }
-
     for (const record of records) {
       const outcome =
         outcomeByRecordId.get(record.recordId) ??
@@ -251,12 +277,7 @@ export function createAnalyzeRoute(dependencies: AnalyzeRouteDependencies) {
       let fields: BitableFields;
       if (outcome.kind === "tagged") {
         tagged += 1;
-        fields = await buildTaggedFields(
-          record,
-          outcome.result,
-          getOwnerRules,
-          tagSource,
-        );
+        fields = buildTaggedFields(record, outcome.result, ownerRules, tagSource);
       } else {
         failed += 1;
         fields = buildFailedFields(outcome, record.retryCount, tagSource);
