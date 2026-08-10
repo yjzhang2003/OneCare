@@ -133,12 +133,14 @@ function isVocCardAction(value: unknown): value is VocCardAction {
 
 // The operator identity is read from the signed event payload, never from the
 // button's own value, so it cannot be forged by editing what the card sends
-// back.
+// back. Trimmed for the same reason authorizedEventHeader trims tenant_key:
+// this value becomes the identity source for card-action authorization
+// (Task 12), and a whitespace-only open_id must not pass as a real identity.
 function readOperatorOpenId(payload: JsonObject): string {
   if (!isJsonObject(payload.event)) return "";
   const operator = payload.event.operator;
   if (!isJsonObject(operator)) return "";
-  return typeof operator.open_id === "string" ? operator.open_id : "";
+  return typeof operator.open_id === "string" ? operator.open_id.trim() : "";
 }
 
 function parseCardAction(payload: JsonObject): FeishuEventOutcome {

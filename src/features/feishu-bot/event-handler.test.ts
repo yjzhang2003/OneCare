@@ -353,6 +353,10 @@ describe("parseFeishuEvent VOC card actions", () => {
       { recordId: "OC-240718-037" },
     ],
     ["a missing or empty operator open id", { operatorId: "" }],
+    // normalizeCardAction only checks truthiness, so a whitespace-only
+    // open_id ("   ") sails past it; only our own trim-then-check in
+    // readOperatorOpenId catches it.
+    ["a whitespace-only operator open id", { operatorId: "   " }],
     ["an action outside the whitelist", { action: "drop_table" }],
   ])("rejects a VOC card action with %s", async (_label, overrides) => {
     await expect(vocCardActionOutcome(overrides)).resolves.toEqual({

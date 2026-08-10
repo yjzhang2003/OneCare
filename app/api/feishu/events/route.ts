@@ -1,17 +1,24 @@
 import { after } from "next/server";
 
 import {
+  createBitableClient,
+  createTenantTokenProvider,
+  type BitableClient,
+} from "../../../../src/features/bitable/client";
+import {
   createBotReply,
   type BotReply,
 } from "../../../../src/features/feishu-bot/bot-script";
 import {
   resolveCardAction,
+  resolveVocCardAction,
   type CardActionResult,
 } from "../../../../src/features/feishu-bot/card-actions";
 import {
-  ONECARE_CARD_ACTIONS,
+  VOC_CARD_ACTIONS,
   type FeishuOutboundMessage,
   type OneCareCardAction,
+  type VocCardAction,
 } from "../../../../src/features/feishu-bot/card-types";
 import { createWelcomeMessage } from "../../../../src/features/feishu-bot/cards";
 import {
@@ -22,7 +29,11 @@ import {
   parseFeishuEvent,
   type FeishuEventOutcome,
 } from "../../../../src/features/feishu-bot/event-handler";
-import { readBotEnv, type BotEnv } from "../../../../src/lib/env";
+import {
+  readBitableEnv,
+  readBotEnv,
+  type BotEnv,
+} from "../../../../src/lib/env";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
@@ -48,10 +59,60 @@ type FeishuEventRouteDependencies = {
     chatId: string;
     message: FeishuOutboundMessage;
   }) => Promise<void>;
-  resolveAction: (action: OneCareCardAction) => CardActionResult;
+  resolveAction: (input: {
+    action: OneCareCardAction | VocCardAction;
+    recordId: string;
+    operatorOpenId: string;
+  }) => Promise<CardActionResult>;
   schedule: Scheduler;
   reportFailure: () => void;
 };
+
+function isVocCardAction(
+  action: OneCareCardAction | VocCardAction,
+): action is VocCardAction {
+  return (VOC_CARD_ACTIONS as readonly string[]).includes(action);
+}
+
+// Built once per server instance and reused across requests, exactly like
+// createTenantTokenProvider's own internal cache: a card callback has a
+// three second budget and cannot afford to re-read env vars or re-exchange a
+// token on every click. Constructed lazily (only when a VOC action actually
+// arrives) so a missing Bitable env var never breaks the nine demo actions,
+// which never touch it.
+let bitableClient: BitableClient | null = null;
+function getBitableClient(): BitableClient {
+  if (!bitableClient) {
+    const botEnv = readBotEnv();
+    const bitableEnv = readBitableEnv();
+    const tokenProvider = createTenantTokenProvider(
+      botEnv.appId,
+      botEnv.appSecret,
+    );
+    bitableClient = createBitableClient(bitableEnv, tokenProvider);
+  }
+  return bitableClient;
+}
+
+// The single dispatch point for every card click, demo or real: a VOC action
+// carries a real record id and operator identity and goes through the triple
+// check (Task 12); the nine demo actions keep using the untouched, synchronous
+// demo resolver.
+async function resolveAction(input: {
+  action: OneCareCardAction | VocCardAction;
+  recordId: string;
+  operatorOpenId: string;
+}): Promise<CardActionResult> {
+  if (isVocCardAction(input.action)) {
+    return resolveVocCardAction({
+      action: input.action,
+      recordId: input.recordId,
+      operatorOpenId: input.operatorOpenId,
+      bitable: getBitableClient(),
+    });
+  }
+  return resolveCardAction(input.action);
+}
 
 const defaultDependencies: FeishuEventRouteDependencies = {
   readEnv: () => readBotEnv(),
@@ -60,23 +121,13 @@ const defaultDependencies: FeishuEventRouteDependencies = {
   createWelcome: createWelcomeMessage,
   replyMessage: replyToFeishuMessage,
   sendMessage: sendFeishuMessage,
-  resolveAction: resolveCardAction,
+  resolveAction,
   schedule: (task) => after(task),
   reportFailure: () => console.error("[onecare-bot] reply_failed"),
 };
 
 function json(data: object, status = 200): Response {
   return Response.json(data, { status });
-}
-
-// The parsed card_action outcome now also carries the four real VOC actions
-// (Task 11), each with a verified record id and operator identity. Routing
-// those to real business logic — the actual authorization/dispatch work —
-// is Task 12. Until then, treat them the same as any other unsupported
-// button so the route stays type-safe and never mis-dispatches a VOC action
-// through the demo-only resolver.
-function isOneCareCardAction(action: string): action is OneCareCardAction {
-  return (ONECARE_CARD_ACTIONS as readonly string[]).includes(action);
 }
 
 export function createFeishuEventRoute(
@@ -123,15 +174,13 @@ export function createFeishuEventRoute(
       }
 
       if (outcome.kind === "card_action") {
-        if (!isOneCareCardAction(outcome.action)) {
-          return json({
-            toast: { type: "info", content: "暂不支持该操作" },
-          });
-        }
-
         let result: CardActionResult;
         try {
-          result = dependencies.resolveAction(outcome.action);
+          result = await dependencies.resolveAction({
+            action: outcome.action,
+            recordId: outcome.recordId,
+            operatorOpenId: outcome.operatorOpenId,
+          });
         } catch {
           return json({
             toast: { type: "error", content: "操作未完成，请稍后重试" },

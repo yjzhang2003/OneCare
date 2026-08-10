@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { BotEnv } from "../../../../src/lib/env";
 import type { FeishuEventOutcome } from "../../../../src/features/feishu-bot/event-handler";
 import type { CardActionResult } from "../../../../src/features/feishu-bot/card-actions";
+import type {
+  OneCareCardAction,
+  VocCardAction,
+} from "../../../../src/features/feishu-bot/card-types";
 import { createFeishuEventRoute } from "./route";
 
 const env: BotEnv = {
@@ -40,14 +44,20 @@ function dependencies(outcome: FeishuEventOutcome) {
       })),
       replyMessage: vi.fn(async () => undefined),
       sendMessage: vi.fn(async () => undefined),
-      resolveAction: vi.fn((): CardActionResult => ({
-        kind: "navigate" as const,
-        message: {
-          msgType: "interactive" as const,
-          content: JSON.stringify({ schema: "2.0", view: "pending" }),
-        },
-        toast: "已打开待确认服务",
-      })),
+      resolveAction: vi.fn(
+        async (_input: {
+          action: OneCareCardAction | VocCardAction;
+          recordId: string;
+          operatorOpenId: string;
+        }): Promise<CardActionResult> => ({
+          kind: "navigate" as const,
+          message: {
+            msgType: "interactive" as const,
+            content: JSON.stringify({ schema: "2.0", view: "pending" }),
+          },
+          toast: "已打开待确认服务",
+        }),
+      ),
       schedule: vi.fn((task: () => Promise<void>) => scheduled.push(task)),
       reportFailure: vi.fn(),
     },
@@ -195,9 +205,11 @@ describe("POST /api/feishu/events", () => {
 
     await setup.scheduled[0]();
 
-    expect(setup.dependencies.resolveAction).toHaveBeenCalledWith(
-      "open_pending",
-    );
+    expect(setup.dependencies.resolveAction).toHaveBeenCalledWith({
+      action: "open_pending",
+      recordId: "",
+      operatorOpenId: "",
+    });
     expect(setup.dependencies.sendMessage).toHaveBeenCalledWith({
       env,
       chatId: "oc_onecare_chat",
@@ -217,7 +229,7 @@ describe("POST /api/feishu/events", () => {
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });
-    setup.dependencies.resolveAction.mockReturnValueOnce({
+    setup.dependencies.resolveAction.mockResolvedValueOnce({
       kind: "update",
       response: {
         toast: { type: "success", content: "操作已记录（演示）" },
@@ -255,7 +267,7 @@ describe("POST /api/feishu/events", () => {
     expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
   });
 
-  it("returns a neutral toast for a verified VOC action pending Task 12 dispatch", async () => {
+  it("dispatches a VOC card action through resolveAction with its record id and operator", async () => {
     const setup = dependencies({
       kind: "card_action",
       action: "voc_start_follow_up",
@@ -264,14 +276,45 @@ describe("POST /api/feishu/events", () => {
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });
+    setup.dependencies.resolveAction.mockResolvedValueOnce({
+      kind: "update",
+      response: { toast: { type: "success", content: "已更新为跟进中" } },
+    });
 
     const response = await createFeishuEventRoute(setup.dependencies)(request());
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      toast: { type: "info", content: "暂不支持该操作" },
+      toast: { type: "success", content: "已更新为跟进中" },
     });
-    expect(setup.dependencies.resolveAction).not.toHaveBeenCalled();
+    expect(setup.dependencies.resolveAction).toHaveBeenCalledWith({
+      action: "voc_start_follow_up",
+      recordId: "rec12345",
+      operatorOpenId: "ou_owner",
+    });
+    expect(setup.dependencies.schedule).not.toHaveBeenCalled();
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("returns a safe toast when a VOC action's authorization or write fails unexpectedly", async () => {
+    const setup = dependencies({
+      kind: "card_action",
+      action: "voc_start_follow_up",
+      recordId: "rec12345",
+      operatorOpenId: "ou_owner",
+      chatId: "oc_onecare_chat",
+      messageId: "om_onecare_card",
+    });
+    setup.dependencies.resolveAction.mockImplementationOnce(() => {
+      throw new Error("private bitable failure details");
+    });
+
+    const response = await createFeishuEventRoute(setup.dependencies)(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      toast: { type: "error", content: "操作未完成，请稍后重试" },
+    });
     expect(setup.dependencies.schedule).not.toHaveBeenCalled();
     expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
   });

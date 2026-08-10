@@ -1,3 +1,6 @@
+import type { VocRecord } from "../bitable/field-map";
+import type { TagResult } from "../tagging/contracts";
+import type { VocState } from "../voc/service-event";
 import {
   ONECARE_CASE_ID,
   type FeishuCard,
@@ -5,6 +8,7 @@ import {
   type OneCareCardAction,
   type OneCareCardState,
   type OneCareCardView,
+  type VocCardAction,
 } from "./card-types";
 
 type CardElement = Record<string, unknown>;
@@ -400,4 +404,83 @@ export function createCardMessage(
 
 export function createWelcomeMessage(): FeishuOutboundMessage {
   return createCardMessage("workbench");
+}
+
+// Unlike callbackButton (which always ships the fixed demo case id), a VOC
+// ticket button addresses a real Bitable row: the callback's value carries
+// record_id instead of case_id, which is exactly what event-handler.ts's
+// isVocCardAction branch expects to read back.
+function vocActionButton(
+  text: string,
+  action: VocCardAction,
+  recordId: string,
+): CardElement {
+  return {
+    tag: "button",
+    text: { tag: "plain_text", content: text },
+    type: "primary_filled",
+    size: "medium",
+    width: "fill",
+    behaviors: [
+      {
+        type: "callback",
+        value: { action, record_id: recordId },
+      },
+    ],
+  };
+}
+
+// Only the action that is actually legal from the record's current state is
+// offered — the state machine (Task 2) is the single source of truth for
+// what happens next, so the card must not invite a click that resolveVocCardAction
+// (Task 12) is only going to reject.
+const NEXT_VOC_ACTION: Readonly<
+  Partial<Record<VocState, Readonly<{ label: string; action: VocCardAction }>>>
+> = {
+  待跟进: { label: "开始跟进", action: "voc_start_follow_up" },
+  跟进中: { label: "提交跟进结果", action: "voc_submit_follow_up" },
+  待闭环: { label: "确认闭环", action: "voc_confirm_closure" },
+};
+
+const STATUS_COLOR_BY_STATE: Readonly<Record<VocState, string>> = {
+  待分析: "turquoise",
+  分析失败: "red",
+  已分析: "turquoise",
+  无需跟进: "grey",
+  待跟进: "orange",
+  跟进中: "blue",
+  待闭环: "yellow",
+  已闭环: "green",
+};
+
+export function createVocTicketCard(
+  record: VocRecord,
+  tag: TagResult,
+): FeishuCard {
+  const completed = record.state === "已闭环";
+  const next = NEXT_VOC_ACTION[record.state];
+
+  return cardRoot({
+    title: "VOC 工单",
+    subtitle: `${record.channel} · ${record.category}`,
+    completed,
+    status: record.state,
+    statusColor: STATUS_COLOR_BY_STATE[record.state],
+    template: completed ? "green" : "orange",
+    icon: "todo_colorful",
+    elements: [
+      detailBlock(tag.summary || record.content, [
+        ["渠道", record.channel],
+        ["产品品类", record.category],
+      ]),
+      field("原始反馈", record.content),
+      field(
+        "问题维度",
+        tag.dimensions.length > 0 ? tag.dimensions.join("、") : "—",
+      ),
+      ...(next
+        ? [columns(vocActionButton(next.label, next.action, record.recordId))]
+        : [note("当前状态无需操作。")]),
+    ],
+  });
 }

@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 
+import type { VocRecord } from "../bitable/field-map";
+import type { TagResult } from "../tagging/contracts";
 import {
   ONECARE_CARD_ACTIONS,
   ONECARE_CASE_ID,
   type OneCareCardView,
+  type VocCardAction,
 } from "./card-types";
-import { createCardMessage, createWelcomeMessage } from "./cards";
+import {
+  createCardMessage,
+  createVocTicketCard,
+  createWelcomeMessage,
+} from "./cards";
 
 const views: readonly OneCareCardView[] = [
   "workbench",
@@ -148,5 +155,92 @@ describe("OneCare Feishu Card 2.0 builders", () => {
 
   it("uses the workbench as the welcome card", () => {
     expect(createWelcomeMessage()).toEqual(createCardMessage("workbench"));
+  });
+});
+
+function vocRecord(overrides: Partial<VocRecord> = {}): VocRecord {
+  return {
+    recordId: "rec1",
+    channel: "电商评价",
+    category: "冰箱",
+    content: "冷藏室温度持续偏高，用户已联系三次",
+    rating: 2,
+    state: "待跟进",
+    polarity: "差评",
+    dimensions: ["维修时间"],
+    ownerOpenIds: ["ou_owner"],
+    retryCount: 0,
+    ticketOpenedAt: "2026-01-23T02:00:00.000Z",
+    closedAt: null,
+    ...overrides,
+  };
+}
+
+function tagResult(overrides: Partial<TagResult> = {}): TagResult {
+  return {
+    recordId: "rec1",
+    sentiment: ["失望"],
+    polarity: "差评",
+    dimensions: ["维修时间"],
+    summary: "用户反馈冷藏室温度持续偏高，等待维修三天未解决",
+    replies: [{ tone: "安抚", text: "非常抱歉给您带来不便" }],
+    ...overrides,
+  };
+}
+
+describe("createVocTicketCard", () => {
+  it("is a real Card 2.0 payload that surfaces the record and the AI summary", () => {
+    const card = createVocTicketCard(vocRecord(), tagResult());
+
+    expect(card.schema).toBe("2.0");
+    expect(JSON.stringify(card)).toContain("电商评价");
+    expect(JSON.stringify(card)).toContain("冰箱");
+    expect(JSON.stringify(card)).toContain("冷藏室温度持续偏高，用户已联系三次");
+    expect(JSON.stringify(card)).toContain("用户反馈冷藏室温度持续偏高，等待维修三天未解决");
+  });
+
+  it.each([
+    ["待跟进", "开始跟进", "voc_start_follow_up"],
+    ["跟进中", "提交跟进结果", "voc_submit_follow_up"],
+    ["待闭环", "确认闭环", "voc_confirm_closure"],
+  ] satisfies ReadonlyArray<readonly [VocRecord["state"], string, VocCardAction]>)(
+    "addresses the specific record instead of the fixed demo case for %s",
+    (state, label, action) => {
+      const record = vocRecord({ state });
+      const card = createVocTicketCard(record, tagResult());
+
+      const buttons = collectTaggedValues(card, "button") as Array<
+        Record<string, unknown>
+      >;
+      const behaviors = buttons.flatMap((button) =>
+        Array.isArray(button.behaviors) ? button.behaviors : [],
+      ) as Array<Record<string, unknown>>;
+      const callback = behaviors.find(
+        (behavior) => behavior.type === "callback",
+      );
+
+      expect(callback?.value).toEqual({ action, record_id: record.recordId });
+      expect(JSON.stringify(card)).not.toContain(ONECARE_CASE_ID);
+      expect(JSON.stringify(card)).toContain(label);
+    },
+  );
+
+  it("shows no action button once the ticket is already closed", () => {
+    const card = createVocTicketCard(
+      vocRecord({ state: "已闭环", closedAt: "2026-01-24T00:00:00.000Z" }),
+      tagResult(),
+    );
+
+    const buttons = collectTaggedValues(card, "button") as Array<
+      Record<string, unknown>
+    >;
+    const callbacks = buttons.flatMap((button) =>
+      Array.isArray(button.behaviors) ? button.behaviors : [],
+    ) as Array<Record<string, unknown>>;
+
+    expect(callbacks.filter((behavior) => behavior.type === "callback")).toEqual(
+      [],
+    );
+    expect((card.header as Record<string, unknown>).template).toBe("green");
   });
 });
