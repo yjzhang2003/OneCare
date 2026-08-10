@@ -57,6 +57,17 @@ function text(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+// The Bitable client can hand back a missing/malformed payload (a deleted
+// record, a webhook retry with an empty body, a bad cast at the call site).
+// Every other branch in this file already answers "I couldn't read this
+// field" with a null/default instead of throwing; the whole-`fields` case
+// must do the same, or one bad payload crashes the entire sync loop instead
+// of just leaving one record un-decoded. Arrays are rejected too — a bare
+// array is not a fields object even though `typeof [] === "object"`.
+function isFieldsRecord(value: unknown): value is BitableFields {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 // Calibrated against the live Base on 2026-08-10. A Bitable Number field is
 // declared type 2 but reads back as a STRING ("2", "0"), so a typeof === number
 // check silently yields null — and for 重试次数 that means the retry ceiling
@@ -107,34 +118,36 @@ export function toVocRecord(
   fields: BitableFields,
   recordId: string,
 ): VocRecord {
-  const rawState = text(fields[VOC_FIELD_NAMES.state]);
+  const safeFields: BitableFields = isFieldsRecord(fields) ? fields : {};
+  const rawState = text(safeFields[VOC_FIELD_NAMES.state]);
   const state = (VOC_STATES as readonly string[]).includes(rawState)
     ? (rawState as VocState)
     : "待分析";
 
-  const rawPolarity = text(fields[VOC_FIELD_NAMES.polarity]);
+  const rawPolarity = text(safeFields[VOC_FIELD_NAMES.polarity]);
   const polarity = (VOC_POLARITIES as readonly string[]).includes(rawPolarity)
     ? (rawPolarity as VocPolarity)
     : null;
 
-  const dimensions = stringArray(fields[VOC_FIELD_NAMES.dimensions]).filter(
-    (item): item is VocDimension =>
-      (VOC_DIMENSIONS as readonly string[]).includes(item),
+  const dimensions = stringArray(
+    safeFields[VOC_FIELD_NAMES.dimensions],
+  ).filter((item): item is VocDimension =>
+    (VOC_DIMENSIONS as readonly string[]).includes(item),
   );
 
   return {
     recordId,
-    channel: text(fields[VOC_FIELD_NAMES.channel]),
-    category: text(fields[VOC_FIELD_NAMES.category]),
-    content: text(fields[VOC_FIELD_NAMES.content]),
-    rating: numberish(fields[VOC_FIELD_NAMES.rating]),
+    channel: text(safeFields[VOC_FIELD_NAMES.channel]),
+    category: text(safeFields[VOC_FIELD_NAMES.category]),
+    content: text(safeFields[VOC_FIELD_NAMES.content]),
+    rating: numberish(safeFields[VOC_FIELD_NAMES.rating]),
     state,
     polarity,
     dimensions,
-    ownerOpenIds: openIds(fields[VOC_FIELD_NAMES.owner]),
-    retryCount: numberish(fields[VOC_FIELD_NAMES.retryCount]) ?? 0,
-    ticketOpenedAt: isoDate(fields[VOC_FIELD_NAMES.ticketOpenedAt]),
-    closedAt: isoDate(fields[VOC_FIELD_NAMES.closedAt]),
+    ownerOpenIds: openIds(safeFields[VOC_FIELD_NAMES.owner]),
+    retryCount: numberish(safeFields[VOC_FIELD_NAMES.retryCount]) ?? 0,
+    ticketOpenedAt: isoDate(safeFields[VOC_FIELD_NAMES.ticketOpenedAt]),
+    closedAt: isoDate(safeFields[VOC_FIELD_NAMES.closedAt]),
   };
 }
 

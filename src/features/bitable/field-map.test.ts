@@ -113,6 +113,41 @@ describe("toVocRecord", () => {
   it("defaults retry count to zero", () => {
     expect(toVocRecord({}, "rec1").retryCount).toBe(0);
   });
+
+  // A malformed payload (deleted record, empty webhook retry body, a bad cast
+  // upstream) must decode like an empty object instead of throwing — every
+  // other branch in this file already answers "can't read this" with a
+  // null/default, and the whole-`fields` case should not be the one exception
+  // that crashes the sync loop.
+  it("treats a null fields payload as empty instead of throwing", () => {
+    const record = toVocRecord(null as never, "rec1");
+    expect(record.state).toBe("待分析");
+    expect(record.recordId).toBe("rec1");
+  });
+
+  it("treats an undefined fields payload as empty instead of throwing", () => {
+    const record = toVocRecord(undefined as never, "rec1");
+    expect(record.state).toBe("待分析");
+    expect(record.recordId).toBe("rec1");
+  });
+
+  it("treats a string fields payload as empty instead of throwing", () => {
+    const record = toVocRecord("notanobject" as never, "rec1");
+    expect(record.state).toBe("待分析");
+    expect(record.recordId).toBe("rec1");
+  });
+
+  it("treats a number fields payload as empty instead of throwing", () => {
+    const record = toVocRecord(42 as never, "rec1");
+    expect(record.state).toBe("待分析");
+    expect(record.recordId).toBe("rec1");
+  });
+
+  it("treats an array fields payload as empty rather than valid fields", () => {
+    const record = toVocRecord([] as never, "rec1");
+    expect(record.state).toBe("待分析");
+    expect(record.recordId).toBe("rec1");
+  });
 });
 
 describe("toTagFieldUpdate", () => {
