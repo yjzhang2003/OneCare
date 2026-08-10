@@ -1,11 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createAnalyzeRoute, GET, POST } from "./route";
+import {
+  buildPendingShard,
+  createAnalyzeRoute,
+  GET,
+  parseOwnerRules,
+  POST,
+  resolveTagSource,
+} from "./route";
 
 function deps(overrides: Record<string, unknown> = {}) {
   return {
     cronSecret: "s3cret",
     shardSize: 2,
+    tagSource: "field-shortcut",
     listPending: vi.fn(async () => [
       {
         recordId: "rec1",
@@ -90,6 +98,21 @@ describe("createAnalyzeRoute", () => {
     expect(fields["负责人"]).toEqual([{ id: "ou_backstop" }]);
   });
 
+  // Spec §3.2: 打标来源 must be written on every AI result, success or
+  // failure, so a row is explainable and traceable to whichever track
+  // produced it. The route only forwards dependencies.tagSource verbatim —
+  // the "aily:<skill_id>@<批次号>" vs "field-shortcut" formatting itself is
+  // resolveTagSource's job and is locked separately below.
+  it("writes 打标来源 from dependencies onto a tagged record", async () => {
+    const dependencies = deps({ tagSource: "aily:skill_x@1700000000000" });
+    await createAnalyzeRoute(dependencies)(
+      request({ authorization: "Bearer s3cret" }),
+    );
+
+    const [, fields] = dependencies.updateRecord.mock.calls[0];
+    expect(fields["打标来源"]).toBe("aily:skill_x@1700000000000");
+  });
+
   it("marks a failed record so the next shard can retake it", async () => {
     const dependencies = deps({
       tag: vi.fn(async () => [
@@ -112,6 +135,25 @@ describe("createAnalyzeRoute", () => {
     expect(fields["流程状态"]).toBe("分析失败");
     expect(fields["失败原因"]).toBe("模型未返回该 id");
     expect(fields["重试次数"]).toBe(1);
+    expect(fields["打标来源"]).toBe("field-shortcut");
+  });
+
+  // brief's given 6 tests all supply a backstop rule, so resolveOwner never
+  // actually returns null anywhere in the suite — the hasOwner guard that
+  // keeps a ticket-worthy record at 已分析 was correct but unlocked by any
+  // test.
+  it("keeps a ticket-worthy record at 已分析 when no owner or backstop resolves", async () => {
+    const dependencies = deps({ ownerRules: vi.fn(async () => []) });
+    const response = await createAnalyzeRoute(dependencies)(
+      request({ authorization: "Bearer s3cret" }),
+    );
+
+    expect(await response.json()).toMatchObject({ tagged: 1, failed: 0 });
+
+    const [, fields] = dependencies.updateRecord.mock.calls[0];
+    expect(fields["流程状态"]).toBe("已分析");
+    expect(fields["负责人"]).toBeUndefined();
+    expect(fields["建单时间"]).toBeUndefined();
   });
 
   it("returns early when the shard is empty", async () => {
@@ -149,5 +191,105 @@ describe("route exports", () => {
   // fires. Both verbs must resolve to the exact same handler.
   it("wires GET to the same handler as POST", () => {
     expect(GET).toBe(POST);
+  });
+});
+
+function pendingRecord(overrides: Record<string, unknown> = {}) {
+  return {
+    recordId: "rec1",
+    channel: "电商评价",
+    category: "冰箱",
+    content: "内容",
+    rating: 2,
+    state: "分析失败" as const,
+    retryCount: 0,
+    ...overrides,
+  };
+}
+
+describe("buildPendingShard", () => {
+  // Before this fix, 分析失败 -> 重试 -> 待分析 (and its retryCount < 3 guard)
+  // was dead code: nothing in the repo ever called it. These tests exercise
+  // the real transition(), not a re-implemented numeric comparison.
+  it("returns pending unchanged once it already fills the shard", () => {
+    const pending = [pendingRecord({ recordId: "p1", state: "待分析" })];
+    const failedCandidates = [pendingRecord({ recordId: "f1", retryCount: 1 })];
+
+    expect(buildPendingShard(pending, failedCandidates, 1)).toEqual(pending);
+  });
+
+  it("resets a retry-eligible 分析失败 record to 待分析 to fill a remaining slot", () => {
+    const pending = [pendingRecord({ recordId: "p1", state: "待分析" })];
+    const failedCandidates = [
+      pendingRecord({ recordId: "f1", state: "分析失败", retryCount: 1 }),
+    ];
+
+    const shard = buildPendingShard(pending, failedCandidates, 2);
+
+    expect(shard).toHaveLength(2);
+    expect(shard[1]).toMatchObject({ recordId: "f1", state: "待分析" });
+  });
+
+  it("leaves a record at the retry ceiling out of the shard entirely", () => {
+    const failedCandidates = [
+      pendingRecord({ recordId: "f1", state: "分析失败", retryCount: 3 }),
+    ];
+
+    expect(buildPendingShard([], failedCandidates, 5)).toEqual([]);
+  });
+
+  it("stops filling once the shard is full even with more eligible candidates", () => {
+    const failedCandidates = [
+      pendingRecord({ recordId: "f1", state: "分析失败", retryCount: 0 }),
+      pendingRecord({ recordId: "f2", state: "分析失败", retryCount: 0 }),
+    ];
+
+    const shard = buildPendingShard([], failedCandidates, 1);
+
+    expect(shard).toHaveLength(1);
+    expect(shard[0]).toMatchObject({ recordId: "f1", state: "待分析" });
+  });
+});
+
+describe("parseOwnerRules", () => {
+  // listOwnerRules' raw fetch was previously exercised only by the live Base
+  // round-trip. This is the mapping that fetch feeds, tested in isolation.
+  it("maps scope/openId/fallback from raw Bitable items", () => {
+    expect(
+      parseOwnerRules([
+        { fields: { 负责范围: "电商评价/冰箱", 负责人: [{ id: "ou_a" }], 兜底: false } },
+        { fields: { 负责范围: "", 负责人: [{ id: "ou_b" }], 兜底: true } },
+      ]),
+    ).toEqual([
+      { scope: "电商评价/冰箱", openId: "ou_a", fallback: false },
+      { scope: "", openId: "ou_b", fallback: true },
+    ]);
+  });
+
+  it("defaults openId to an empty string when nobody is assigned", () => {
+    expect(
+      parseOwnerRules([{ fields: { 负责范围: "APP", 负责人: [], 兜底: false } }]),
+    ).toEqual([{ scope: "APP", openId: "", fallback: false }]);
+  });
+
+  it("drops malformed items instead of throwing", () => {
+    expect(parseOwnerRules([null, "x", 42, {}, { fields: null }])).toEqual([]);
+  });
+});
+
+describe("resolveTagSource", () => {
+  it("returns the literal field-shortcut for the B track", () => {
+    expect(resolveTagSource({ provider: "field-shortcut" })).toBe(
+      "field-shortcut",
+    );
+  });
+
+  it("formats aily:<skill_id>@<batch> for the A track", () => {
+    expect(
+      resolveTagSource(
+        { provider: "aily", ailyAppId: "spring_x", taggingSkillId: "skill_x" },
+        () => 1700000000000,
+      ),
+    ).toBe("aily:skill_x@1700000000000");
   });
 });

@@ -39,7 +39,12 @@ import {
   type VocState,
 } from "../../../../src/features/voc/service-event";
 import { triage } from "../../../../src/features/voc/triage";
-import { readBitableEnv, readBotEnv, readTaggingEnv } from "../../../../src/lib/env";
+import {
+  readBitableEnv,
+  readBotEnv,
+  readTaggingEnv,
+  type TaggingEnv,
+} from "../../../../src/lib/env";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -70,6 +75,13 @@ type AnalyzeRouteDependencies = Readonly<{
   ) => Promise<readonly TagOutcome[]>;
   ownerRules: () => Promise<readonly OwnerRule[]>;
   updateRecord: (recordId: string, fields: BitableFields) => Promise<void>;
+  // Spec §3.2: 打标来源 records "aily:<skill_id>@<批次号>" or "field-shortcut"
+  // so a tagged/failed row is explainable and traceable. A plain string
+  // (not a thunk) so the whole shard call — potentially several records —
+  // reports the same batch identity; production wiring reads it once via
+  // `dependencies.tagSource` at the top of the handler rather than once per
+  // record, so an aily batch number stays stable across the shard.
+  tagSource: string;
 }>;
 
 type AnalyzeResponseBody = Readonly<{
@@ -97,19 +109,24 @@ function toTaggingRequest(record: PendingRecord): TaggingRequestRecord {
   };
 }
 
-// The four write fields spelled out in the brief for a failed outcome. 原始
-// 输出 is always written (as "" when the provider gave none) rather than
-// omitted, so a diagnosing operator never has to guess whether the column is
-// empty because nothing was captured or because this code path skipped it.
+// The four write fields spelled out in the brief for a failed outcome, plus
+// 打标来源 (spec §3.2 requires it on every AI write, success or failure, for
+// explainability — a failed attempt is exactly the case an operator most
+// needs to know which track produced it). 原始输出 is always written (as ""
+// when the provider gave none) rather than omitted, so a diagnosing operator
+// never has to guess whether the column is empty because nothing was
+// captured or because this code path skipped it.
 function buildFailedFields(
   outcome: Extract<TagOutcome, { kind: "failed" }>,
   retryCount: number,
+  tagSource: string,
 ): BitableFields {
   return {
     [VOC_FIELD_NAMES.state]: "分析失败",
     [VOC_FIELD_NAMES.failureReason]: outcome.reason,
     [VOC_FIELD_NAMES.rawOutput]: outcome.rawOutput ?? "",
     [VOC_FIELD_NAMES.retryCount]: retryCount + 1,
+    [VOC_FIELD_NAMES.tagSource]: tagSource,
   };
 }
 
@@ -121,12 +138,16 @@ async function buildTaggedFields(
   record: PendingRecord,
   result: TagResult,
   getOwnerRules: () => Promise<readonly OwnerRule[]>,
+  tagSource: string,
 ): Promise<BitableFields> {
   const { createTicket, severity } = triage({
     polarity: result.polarity,
     dimensions: result.dimensions,
   });
-  const tagFields = toTagFieldUpdate(result, severity);
+  const tagFields = {
+    ...toTagFieldUpdate(result, severity),
+    [VOC_FIELD_NAMES.tagSource]: tagSource,
+  };
   const context: TransitionContext = {
     retryCount: record.retryCount,
     hasOwner: false,
@@ -192,6 +213,11 @@ export function createAnalyzeRoute(dependencies: AnalyzeRouteDependencies) {
       return json(empty);
     }
 
+    // Read once per request, not once per record: dependencies.tagSource is a
+    // getter in production so a fresh aily batch number is minted per Cron
+    // tick, but every record in this shard must report the same batch.
+    const tagSource = dependencies.tagSource;
+
     const outcomes = await dependencies.tag(records.map(toTaggingRequest));
     const outcomeByRecordId = new Map(
       outcomes.map((outcome) => [outcomeRecordId(outcome), outcome] as const),
@@ -228,10 +254,11 @@ export function createAnalyzeRoute(dependencies: AnalyzeRouteDependencies) {
           record,
           outcome.result,
           getOwnerRules,
+          tagSource,
         );
       } else {
         failed += 1;
-        fields = buildFailedFields(outcome, record.retryCount);
+        fields = buildFailedFields(outcome, record.retryCount, tagSource);
       }
 
       try {
@@ -249,6 +276,46 @@ export function createAnalyzeRoute(dependencies: AnalyzeRouteDependencies) {
     };
     return json(body);
   };
+}
+
+// Merges freshly-fetched 待分析 records with retry-eligible 分析失败
+// candidates into one shard, up to shardSize. Pure and IO-free on purpose:
+// before this, the 分析失败 -> 重试 -> 待分析 transition and its
+// `重试次数 < RETRY_CEILING` guard were unreachable from any code path in the
+// repo — listPending only ever fetched 待分析, so a failed record had no way
+// back in and spec §14's "分析失败的记录可被下一片 Cron 重取" could never be
+// met. Each candidate is routed through the real transition() (not a
+// hand-rolled numeric comparison) so the guard is genuinely exercised: a
+// record at the retry ceiling is "rejected" and left untouched at 分析失败;
+// everything else this function does is decide who gets a slot.
+export function buildPendingShard(
+  pending: readonly PendingRecord[],
+  failedCandidates: readonly PendingRecord[],
+  shardSize: number,
+): readonly PendingRecord[] {
+  const remaining = shardSize - pending.length;
+  if (remaining <= 0) return pending;
+
+  const retried: PendingRecord[] = [];
+  for (const record of failedCandidates) {
+    if (retried.length >= remaining) break;
+
+    const result = transition(record.state, "重试", {
+      retryCount: record.retryCount,
+      hasOwner: false,
+    });
+    if (result.kind === "ok") {
+      // Reset in memory only — the eventual single updateRecord write below
+      // reflects wherever tagging actually lands the record (待跟进/无需跟进/
+      // 分析失败 again), so 流程状态 never visibly passes through 待分析 in
+      // the Base for a retried row.
+      retried.push({ ...record, state: result.next });
+    }
+    // "rejected" (retry ceiling reached): leave the record at 分析失败,
+    // untouched, for good — it must never be retaken.
+  }
+
+  return [...pending, ...retried];
 }
 
 // ---------------------------------------------------------------------------
@@ -292,12 +359,25 @@ function getBitableClient(): BitableClient {
 
 async function listPendingRecords(
   shardSize: number,
-): Promise<readonly VocRecord[]> {
-  return getBitableClient().listRecords({
+): Promise<readonly PendingRecord[]> {
+  const bitable = getBitableClient();
+  const pending = await bitable.listRecords({
     pageSize: shardSize,
     maxPages: 1,
     filter: `CurrentValue.[${VOC_FIELD_NAMES.state}]="待分析"`,
   });
+  if (pending.length >= shardSize) return pending;
+
+  // Best-effort: fetches up to shardSize 分析失败 candidates and
+  // buildPendingShard takes the first ones that pass the retry guard. A run
+  // of more than shardSize consecutive over-ceiling failures could still
+  // under-fill this one shard; the next Cron tick picks up whatever is left.
+  const failedCandidates = await bitable.listRecords({
+    pageSize: shardSize,
+    maxPages: 1,
+    filter: `CurrentValue.[${VOC_FIELD_NAMES.state}]="分析失败"`,
+  });
+  return buildPendingShard(pending, failedCandidates, shardSize);
 }
 
 // The owner table (负责范围/负责人/兜底) is a second table on the same Base,
@@ -309,6 +389,25 @@ const OWNER_FIELD_NAMES = {
   owner: "负责人",
   fallback: "兜底",
 } as const;
+
+// The Bitable-response -> OwnerRule[] mapping, pulled out of listOwnerRules
+// so it's testable without a fetcher or real env vars — previously this whole
+// function was only exercised by the live Base round-trip.
+export function parseOwnerRules(items: readonly unknown[]): readonly OwnerRule[] {
+  return items.flatMap((item) => {
+    if (!isRecord(item) || !isRecord(item.fields)) return [];
+    return [
+      {
+        scope: text(item.fields[OWNER_FIELD_NAMES.scope]),
+        // resolveOwner already drops rules with a blank openId (assignment.ts
+        // "usable" filter), so an empty fallback here is handled downstream
+        // rather than filtered twice.
+        openId: openIds(item.fields[OWNER_FIELD_NAMES.owner])[0] ?? "",
+        fallback: item.fields[OWNER_FIELD_NAMES.fallback] === true,
+      },
+    ];
+  });
+}
 
 async function listOwnerRules(): Promise<readonly OwnerRule[]> {
   const bitableEnv = readBitableEnv();
@@ -327,19 +426,7 @@ async function listOwnerRules(): Promise<readonly OwnerRule[]> {
 
   const data = isRecord(payload.data) ? payload.data : {};
   const items = Array.isArray(data.items) ? data.items : [];
-  return items.flatMap((item) => {
-    if (!isRecord(item) || !isRecord(item.fields)) return [];
-    return [
-      {
-        scope: text(item.fields[OWNER_FIELD_NAMES.scope]),
-        // resolveOwner already drops rules with a blank openId (assignment.ts
-        // "usable" filter), so an empty fallback here is handled downstream
-        // rather than filtered twice.
-        openId: openIds(item.fields[OWNER_FIELD_NAMES.owner])[0] ?? "",
-        fallback: item.fields[OWNER_FIELD_NAMES.fallback] === true,
-      },
-    ];
-  });
+  return parseOwnerRules(items);
 }
 
 // Reverses the "【语气】正文" \n\n-joined format toTagFieldUpdate/cards.ts's
@@ -418,6 +505,19 @@ function getTaggingProvider(): TaggingProvider {
   return taggingProvider;
 }
 
+// Spec §3.2: "打标来源" must read back as "aily:<skill_id>@<批次号>" (A track)
+// or the literal "field-shortcut" (B track) so a tagged/failed row is
+// explainable and traceable to what produced it. `now` is injectable so the
+// batch-number format is testable without faking Date.now() globally.
+export function resolveTagSource(
+  env: TaggingEnv,
+  now: () => number = Date.now,
+): string {
+  return env.provider === "aily"
+    ? `aily:${env.taggingSkillId}@${now()}`
+    : "field-shortcut";
+}
+
 const defaultDependencies: AnalyzeRouteDependencies = {
   get cronSecret() {
     return readCronSecret();
@@ -428,6 +528,12 @@ const defaultDependencies: AnalyzeRouteDependencies = {
   ownerRules: listOwnerRules,
   updateRecord: (recordId, fields) =>
     getBitableClient().updateRecord(recordId, fields),
+  // A getter (like cronSecret) so each Cron tick — not each import — gets a
+  // fresh aily batch number; createAnalyzeRoute reads this once per request
+  // and reuses it for every record in the shard.
+  get tagSource() {
+    return resolveTagSource(readTaggingEnv());
+  },
 };
 
 // Vercel Cron Jobs always invoke their target with an HTTP GET, not POST
