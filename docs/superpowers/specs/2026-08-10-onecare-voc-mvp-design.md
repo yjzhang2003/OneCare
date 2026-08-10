@@ -102,7 +102,7 @@ app/dashboard/voc/page.tsx        公开看板页
 | --- | --- | --- |
 | `event-handler.ts:104-112` | `authorizedEventHeader` 校验 `app_id` + `tenant_key` | 不变 |
 | `event-handler.ts:139-143` | `caseId !== ONECARE_CASE_ID` 对所有卡片动作等值校验 | **按动作类型分流**：九个演示动作保持 `case_id` 校验不变；四个 VOC 动作要求 `record_id` 形如 `rec*` 且 `operator.open_id` 非空。`FeishuEventOutcome` 的 `card_action` 分支（21-26 行）扩展 `recordId` 与 `operatorOpenId` |
-| `card-types.ts` | 39 行，含 `ONECARE_CASE_ID` 与 action 白名单 | **保留** `ONECARE_CASE_ID`——`cards.ts` 有 8 处在用，既是保留的八类演示卡文案，也是其按钮载荷（`cards.ts:66`）。一刀切移除会让演示卡按钮全部失效。新增 `VOC_CARD_ACTIONS` 白名单 |
+| `card-types.ts` | 39 行，含 `ONECARE_CASE_ID` 与 action 白名单 | **保留** `ONECARE_CASE_ID`——`cards.ts` 有 7 处在用，既是保留的八类演示卡文案，也是其按钮载荷（`cards.ts:66`）。一刀切移除会让演示卡按钮全部失效。新增 `VOC_CARD_ACTIONS` 白名单 |
 | `card-actions.ts` | 80 行，**不引用** `ONECARE_CASE_ID`；`resolveCardAction(action)` 同步单参 | 改为 async 多参，接收 `record_id` 与 `operatorOpenId`，做三重校验 |
 | `app/api/feishu/events/route.ts:50` | `resolveAction: (action) => CardActionResult` 同步单参 | 签名改 async 多参；`route.test.ts` 同步改 |
 | `cards.ts` | 403 行八类演示卡 | 复用 Card 2.0 外壳，新增 VOC 工单卡 |
@@ -131,6 +131,7 @@ app/dashboard/voc/page.tsx        公开看板页
 > - **日期字段读回 epoch 毫秒数字**（`1769133600000`），不是 ISO 字符串。按字符串判读会让全部时长指标归零。
 > - **人员字段读回的键名是 `id`**，不是 `open_id`。读错会让 `ownerOpenIds` 恒空，于是每次卡片操作都被判「非负责人」——MVP 唯一的硬证据 100% 失效。
 > - **人员字段写入只接受 `[{ id: openId }]`**；`[{open_id}]` 与 `["ou_..."]` 均返回 `1254066 UserFieldConvFail`。
+> - **日期字段写入只接受 epoch 毫秒数字**（`Date.now()`），ISO 字符串会被拒。这一条是 Task 12 在真实回合里踩到才发现的——读侧和写侧的形状不对称，而单测两边都能绿。凡写 `建单时间` / `闭环时间`，一律用数字。
 >
 > 已建 Base：`app_token=FxPtbftLBaErhUsvEBGcA746nDb`，`VOC 记录表=tblRdlrQJPofRrGe`，`负责人表=tblkFCjYfJOsqg3v`。
 >

@@ -1773,6 +1773,7 @@ FEISHU_BITABLE_TABLE_OWNER=tblkFCjYfJOsqg3v
 | **日期** | type 5 | **`1769133600000` 数字**（epoch 毫秒） | `typeof === "string"` 判定失败 → `""` → `null`。**所有时长指标静默归零** |
 | **人员（读）** | type 11 | **`[{email,en_name,id,name}]`，键名是 `id` 不是 `open_id`** | 读 `open_id` 得空数组 → `ownerOpenIds` 恒空 → **每次卡片操作都被判「你不是负责人」，MVP 唯一的硬证据 100% 失效** |
 | **人员（写）** | type 11 | **只接受 `[{ id: openId }]`** | `[{open_id}]` 与 `["ou_..."]` 均返回 `1254066 UserFieldConvFail` |
+| **日期（写）** | type 5 | **只接受 epoch 毫秒数字**，如 `Date.now()` | 写 `new Date().toISOString()` 字符串会被拒。Task 12 就是在真实回合里踩到这条才发现的——单测全绿，只有真实写入会失败。凡写 `建单时间` / `闭环时间` / `打标时间`，一律用 `Date.now()` 或 `Date.parse(...)` 得到的数字 |
 
 本任务的 `numberish()` / `isoDate()` / `openIds()` 三个辅助函数就是为这四条而存在，对应的四条回归测试也已写进 Step 2。**不要"简化"它们回 `typeof` 单判**。
 
@@ -2787,7 +2788,7 @@ so routing either resolves an owner or reports that it could not."
 
 操作者身份取 `event.operator.open_id`——它由现有签名校验保证可信。
 
-> **校验必须按动作类型分流，不得一刀切。** `ONECARE_CASE_ID` 在 `cards.ts` 有 8 处引用，既是八类演示卡的展示文案，也是它们按钮的载荷（`cards.ts:66` 的 `value: { action, case_id: ONECARE_CASE_ID }`）。这八类卡按规格 §1.4 是**保留**的。若把 `event-handler.ts:141` 改成对所有动作都要求 `record_id`，演示卡的按钮会全部失效。
+> **校验必须按动作类型分流，不得一刀切。** `ONECARE_CASE_ID` 在 `cards.ts` 有 7 处引用，既是八类演示卡的展示文案，也是它们按钮的载荷（`cards.ts:66` 的 `value: { action, case_id: ONECARE_CASE_ID }`）。这八类卡按规格 §1.4 是**保留**的。若把 `event-handler.ts:141` 改成对所有动作都要求 `record_id`，演示卡的按钮会全部失效。
 >
 > 因此：
 > - `ONECARE_CARD_ACTIONS`（九个演示动作，注意是 9 个动作对应 8 个视图，两者数量不同）→ **保持**现有的 `case_id === ONECARE_CASE_ID` 校验，行为不变，`ONECARE_CASE_ID` 常量保留
@@ -3184,7 +3185,9 @@ export async function resolveVocCardAction(input: {
     fields[VOC_FIELD_NAMES.closingNote] = input.closingNote;
   }
   if (outcome.next === "已闭环") {
-    fields[VOC_FIELD_NAMES.closedAt] = new Date().toISOString();
+    // Write side takes epoch milliseconds, NOT an ISO string — see the
+    // calibration table in Task 8 Step 1.
+    fields[VOC_FIELD_NAMES.closedAt] = Date.now();
   }
 
   try {
