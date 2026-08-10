@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createAilyTaggingProvider } from "./aily-provider";
 import { createFieldShortcutTaggingProvider } from "./field-shortcut-provider";
 import { selectTaggingProvider } from "./provider";
+import type { TaggingRequestRecord } from "./provider-types";
 
 describe("selectTaggingProvider", () => {
   const deps = {
@@ -53,15 +54,21 @@ describe("input robustness: both providers handle malformed input identically", 
   });
 
   const testInputs = [
-    { input: null as any, label: "null" },
-    { input: undefined as any, label: "undefined" },
-    { input: "str" as any, label: "string" },
-    { input: 42 as any, label: "number" },
-    { input: {} as any, label: "object" },
-    { input: [null as any], label: "[null]" },
-    { input: [{}], label: "[{}]" },
-    { input: [{ recordId: "" }], label: '[{recordId:""}]' },
-    { input: [{ recordId: 123 }], label: "[{recordId:123}]" },
+    { input: null as unknown as TaggingRequestRecord[], label: "null" },
+    { input: undefined as unknown as TaggingRequestRecord[], label: "undefined" },
+    { input: "str" as unknown as TaggingRequestRecord[], label: "string" },
+    { input: 42 as unknown as TaggingRequestRecord[], label: "number" },
+    { input: {} as unknown as TaggingRequestRecord[], label: "object" },
+    { input: [null as unknown as TaggingRequestRecord], label: "[null]" },
+    { input: [{}] as unknown as TaggingRequestRecord[], label: "[{}]" },
+    {
+      input: [{ recordId: "" }] as unknown as TaggingRequestRecord[],
+      label: '[{recordId:""}]',
+    },
+    {
+      input: [{ recordId: 123 }] as unknown as TaggingRequestRecord[],
+      label: "[{recordId:123}]",
+    },
   ];
 
   testInputs.forEach(({ input, label }) => {

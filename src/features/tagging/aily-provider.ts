@@ -1,5 +1,5 @@
 import { parseTagPayload, type TagOutcome } from "./contracts";
-import type { TaggingProvider, TaggingRequestRecord } from "./provider-types";
+import type { TaggingProvider } from "./provider-types";
 
 const SKILL_START_URL =
   "https://open.feishu.cn/open-apis/aily/v1/apps/:app_id/skills/:skill_id/start";
@@ -43,7 +43,12 @@ export function createAilyTaggingProvider(
         // 1. Every outcome has a recordId that is a non-empty string
         // 2. We can diagnose malformed inputs without throwing
         recordIds = records.map((record, index) => {
-          const recordId = (record as any)?.recordId;
+          // `records` is typed as `readonly TaggingRequestRecord[]`, but the
+          // tests deliberately pass runtime values that violate that type
+          // (null, arrays with non-object elements, etc.), so we treat each
+          // element as unknown rather than trusting the declared type.
+          const fields: Record<string, unknown> = isRecord(record) ? record : {};
+          const recordId = fields.recordId;
           if (typeof recordId === "string" && recordId.length > 0) {
             return recordId;
           }
@@ -77,13 +82,17 @@ export function createAilyTaggingProvider(
         // The official contract takes `input` as a JSON String, not a nested
         // object; sending an object silently produces an empty skill input.
         const input = JSON.stringify({
-          records: records.map((record) => ({
-            id: (record as any)?.recordId,
-            content: (record as any)?.content,
-            channel: (record as any)?.channel,
-            category: (record as any)?.category,
-            ...((record as any)?.rating === undefined ? {} : { rating: (record as any)?.rating }),
-          })),
+          records: records.map((record) => {
+            const fields: Record<string, unknown> = isRecord(record) ? record : {};
+            const rating = fields.rating;
+            return {
+              id: fields.recordId,
+              content: fields.content,
+              channel: fields.channel,
+              category: fields.category,
+              ...(rating === undefined ? {} : { rating }),
+            };
+          }),
         });
 
         const token = await config.tenantAccessToken();

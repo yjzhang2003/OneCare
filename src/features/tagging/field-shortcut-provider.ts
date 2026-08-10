@@ -1,5 +1,9 @@
-import { parseTagPayload, type TagOutcome } from "./contracts";
+import { parseTagPayload } from "./contracts";
 import type { TaggingProvider } from "./provider-types";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 export type FieldShortcutRow = Readonly<{
   recordId: string;
@@ -70,7 +74,12 @@ export function createFieldShortcutTaggingProvider(
         // 1. Every outcome has a recordId that is a non-empty string
         // 2. We can diagnose malformed inputs without throwing
         recordIds = records.map((record, index) => {
-          const recordId = (record as any)?.recordId;
+          // `records` is typed as `readonly TaggingRequestRecord[]`, but the
+          // tests deliberately pass runtime values that violate that type
+          // (null, arrays with non-object elements, etc.), so we treat each
+          // element as unknown rather than trusting the declared type.
+          const fields: Record<string, unknown> = isRecord(record) ? record : {};
+          const recordId = fields.recordId;
           if (typeof recordId === "string" && recordId.length > 0) {
             return recordId;
           }
@@ -92,9 +101,6 @@ export function createFieldShortcutTaggingProvider(
             return { kind: "failed" as const, recordId, reason };
           });
         }
-
-        const failAll = (reason: string): readonly TagOutcome[] =>
-          recordIds.map((recordId) => ({ kind: "failed", recordId, reason }));
 
         const rows = await source.read(recordIds);
         // Normalize the data before passing to parseTagPayload to ensure empty

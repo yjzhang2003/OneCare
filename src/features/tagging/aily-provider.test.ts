@@ -151,11 +151,15 @@ describe("createAilyTaggingProvider", () => {
 
     const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
 
-    expect(await provider.tag(null as any)).toEqual([]);
-    expect(await provider.tag(undefined as any)).toEqual([]);
-    expect(await provider.tag("notanarray" as any)).toEqual([]);
-    expect(await provider.tag(42 as any)).toEqual([]);
-    expect(await provider.tag({} as any)).toEqual([]);
+    expect(await provider.tag(null as unknown as readonly TaggingRequestRecord[])).toEqual([]);
+    expect(await provider.tag(undefined as unknown as readonly TaggingRequestRecord[])).toEqual(
+      [],
+    );
+    expect(
+      await provider.tag("notanarray" as unknown as readonly TaggingRequestRecord[]),
+    ).toEqual([]);
+    expect(await provider.tag(42 as unknown as readonly TaggingRequestRecord[])).toEqual([]);
+    expect(await provider.tag({} as unknown as readonly TaggingRequestRecord[])).toEqual([]);
     expect(fetcher).not.toHaveBeenCalled();
   });
 
@@ -165,7 +169,7 @@ describe("createAilyTaggingProvider", () => {
     );
 
     const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
-    const outcomes = await provider.tag([null as any]);
+    const outcomes = await provider.tag([null as unknown as TaggingRequestRecord]);
 
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]?.kind).toBe("failed");
@@ -181,7 +185,7 @@ describe("createAilyTaggingProvider", () => {
     );
 
     const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
-    const outcomes = await provider.tag([{} as any]);
+    const outcomes = await provider.tag([{} as unknown as TaggingRequestRecord]);
 
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]?.kind).toBe("failed");
@@ -197,7 +201,7 @@ describe("createAilyTaggingProvider", () => {
     );
 
     const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
-    const outcomes = await provider.tag([{ recordId: "" } as any]);
+    const outcomes = await provider.tag([{ recordId: "" } as unknown as TaggingRequestRecord]);
 
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]?.kind).toBe("failed");
@@ -213,7 +217,7 @@ describe("createAilyTaggingProvider", () => {
     );
 
     const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
-    const outcomes = await provider.tag([{ recordId: 123 } as any]);
+    const outcomes = await provider.tag([{ recordId: 123 } as unknown as TaggingRequestRecord]);
 
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]?.kind).toBe("failed");

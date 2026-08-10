@@ -308,42 +308,44 @@ describe("createFieldShortcutTaggingProvider", () => {
 
     it("returns empty array when tag() receives null instead of array", async () => {
       const provider = createFieldShortcutTaggingProvider({ read });
-      const outcomes = await provider.tag(null as any);
+      const outcomes = await provider.tag(null as unknown as readonly TaggingRequestRecord[]);
 
       expect(outcomes).toEqual([]);
     });
 
     it("returns empty array when tag() receives undefined instead of array", async () => {
       const provider = createFieldShortcutTaggingProvider({ read });
-      const outcomes = await provider.tag(undefined as any);
+      const outcomes = await provider.tag(
+        undefined as unknown as readonly TaggingRequestRecord[],
+      );
 
       expect(outcomes).toEqual([]);
     });
 
     it("returns empty array when tag() receives a string instead of array", async () => {
       const provider = createFieldShortcutTaggingProvider({ read });
-      const outcomes = await provider.tag("str" as any);
+      const outcomes = await provider.tag("str" as unknown as readonly TaggingRequestRecord[]);
 
       expect(outcomes).toEqual([]);
     });
 
     it("returns empty array when tag() receives a number instead of array", async () => {
       const provider = createFieldShortcutTaggingProvider({ read });
-      const outcomes = await provider.tag(42 as any);
+      const outcomes = await provider.tag(42 as unknown as readonly TaggingRequestRecord[]);
 
       expect(outcomes).toEqual([]);
     });
 
     it("returns empty array when tag() receives an object instead of array", async () => {
       const provider = createFieldShortcutTaggingProvider({ read });
-      const outcomes = await provider.tag({} as any);
+      const outcomes = await provider.tag({} as unknown as readonly TaggingRequestRecord[]);
 
       expect(outcomes).toEqual([]);
     });
 
     it("fails a record with null element and uses invalid_0 as recordId", async () => {
       const provider = createFieldShortcutTaggingProvider({ read });
-      const outcomes = await provider.tag([null as any]);
+      const outcomes = await provider.tag([null as unknown as TaggingRequestRecord]);
 
       expect(outcomes).toHaveLength(1);
       expect(outcomes[0]).toMatchObject({
@@ -355,7 +357,7 @@ describe("createFieldShortcutTaggingProvider", () => {
 
     it("fails a record with empty object and uses invalid_0 as recordId", async () => {
       const provider = createFieldShortcutTaggingProvider({ read });
-      const outcomes = await provider.tag([{} as any]);
+      const outcomes = await provider.tag([{} as unknown as TaggingRequestRecord]);
 
       expect(outcomes).toHaveLength(1);
       expect(outcomes[0]).toMatchObject({
@@ -367,7 +369,7 @@ describe("createFieldShortcutTaggingProvider", () => {
 
     it("fails a record with empty string recordId and uses invalid_0 as placeholder", async () => {
       const provider = createFieldShortcutTaggingProvider({ read });
-      const outcomes = await provider.tag([{ recordId: "" } as any]);
+      const outcomes = await provider.tag([{ recordId: "" } as unknown as TaggingRequestRecord]);
 
       expect(outcomes).toHaveLength(1);
       expect(outcomes[0]).toMatchObject({
@@ -379,7 +381,7 @@ describe("createFieldShortcutTaggingProvider", () => {
 
     it("fails a record with numeric recordId and uses invalid_0 as placeholder", async () => {
       const provider = createFieldShortcutTaggingProvider({ read });
-      const outcomes = await provider.tag([{ recordId: 123 } as any]);
+      const outcomes = await provider.tag([{ recordId: 123 } as unknown as TaggingRequestRecord]);
 
       expect(outcomes).toHaveLength(1);
       expect(outcomes[0]).toMatchObject({
@@ -393,7 +395,7 @@ describe("createFieldShortcutTaggingProvider", () => {
       const provider = createFieldShortcutTaggingProvider({ read });
       const outcomes = await provider.tag([
         { recordId: "rec1", content: "ok", channel: "APP", category: "空调" },
-        null as any,
+        null as unknown as TaggingRequestRecord,
       ]);
 
       expect(outcomes).toHaveLength(2);
