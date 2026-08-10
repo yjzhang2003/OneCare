@@ -61,6 +61,33 @@ function request(headers: Record<string, string> = {}): Request {
   });
 }
 
+// tagSource is a plain string on the dependency type but a *getter* in
+// production (a fresh aily batch number per Cron tick, via readTaggingEnv(),
+// which throws when TAGGING_PROVIDER is misconfigured). These tests therefore
+// have to control and observe the act of *reading* the property, not just its
+// value — which is exactly the read that slipped between the previous
+// per-read try blocks.
+function defineTagSource(dependencies: object, read: () => string): void {
+  Object.defineProperty(dependencies, "tagSource", {
+    get: read,
+    configurable: true,
+  });
+}
+
+function taggedOutcome(recordId: string) {
+  return {
+    kind: "tagged" as const,
+    result: {
+      recordId,
+      sentiment: ["失望"],
+      polarity: "差评" as const,
+      dimensions: ["维修时间"] as const,
+      summary: "等待三天",
+      replies: [],
+    },
+  };
+}
+
 describe("createAnalyzeRoute", () => {
   it("rejects a request with no cron secret", async () => {
     const dependencies = deps();
@@ -159,24 +186,81 @@ describe("createAnalyzeRoute", () => {
 
   it("returns early when the shard is empty", async () => {
     const dependencies = deps({ listPending: vi.fn(async () => []) });
+    const readTagSource = vi.fn(() => "field-shortcut");
+    defineTagSource(dependencies, readTagSource);
 
     const response = await createAnalyzeRoute(dependencies)(
       request({ authorization: "Bearer s3cret" }),
     );
 
-    expect(await response.json()).toMatchObject({ processed: 0 });
-    expect(dependencies.tag).not.toHaveBeenCalled();
-    // Nothing to route means no reason to read the owner table at all.
-    expect(dependencies.ownerRules).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    // Exactly the four contracted keys — the fail-closed work must not have
+    // leaked a diagnostic field into the success body.
+    expect(await response.json()).toEqual({
+      processed: 0,
+      tagged: 0,
+      failed: 0,
+      writeErrors: 0,
+    });
+    expect(dependencies.tag).toHaveBeenCalledTimes(0);
+    // Nothing to route means no reason to read the owner table, and no reason
+    // to mint a batch number for a shard that tags nothing.
+    expect(dependencies.ownerRules).toHaveBeenCalledTimes(0);
+    expect(readTagSource).toHaveBeenCalledTimes(0);
   });
 
-  it("calls ownerRules exactly once on the normal path", async () => {
+  it("reads ownerRules and tagSource exactly once each on the normal path", async () => {
     const dependencies = deps();
-    await createAnalyzeRoute(dependencies)(
+    const readTagSource = vi.fn(() => "field-shortcut");
+    defineTagSource(dependencies, readTagSource);
+
+    const response = await createAnalyzeRoute(dependencies)(
       request({ authorization: "Bearer s3cret" }),
     );
 
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      processed: 1,
+      tagged: 1,
+      failed: 0,
+      writeErrors: 0,
+    });
     expect(dependencies.ownerRules).toHaveBeenCalledTimes(1);
+    expect(readTagSource).toHaveBeenCalledTimes(1);
+    expect(dependencies.tag).toHaveBeenCalledTimes(1);
+    expect(dependencies.updateRecord).toHaveBeenCalledTimes(1);
+  });
+
+  // A batch number identifies one shard run, so it must be minted once per
+  // request and shared by every record in that request — a per-record read
+  // would stamp two rows of the same run with two different batches.
+  it("stamps every record in a shard with the same batch number", async () => {
+    let reads = 0;
+    const dependencies = deps({
+      listPending: vi.fn(async () => [
+        pendingRecord({ recordId: "rec1", state: "待分析" }),
+        pendingRecord({ recordId: "rec2", state: "待分析" }),
+      ]),
+      tag: vi.fn(async () => [taggedOutcome("rec1"), taggedOutcome("rec2")]),
+    });
+    defineTagSource(dependencies, () => `aily:skill_x@${(reads += 1)}`);
+
+    const response = await createAnalyzeRoute(dependencies)(
+      request({ authorization: "Bearer s3cret" }),
+    );
+
+    expect(await response.json()).toEqual({
+      processed: 2,
+      tagged: 2,
+      failed: 0,
+      writeErrors: 0,
+    });
+    expect(reads).toBe(1);
+    expect(dependencies.updateRecord).toHaveBeenCalledTimes(2);
+    const [, first] = dependencies.updateRecord.mock.calls[0];
+    const [, second] = dependencies.updateRecord.mock.calls[1];
+    expect(first["打标来源"]).toBe("aily:skill_x@1");
+    expect(second["打标来源"]).toBe("aily:skill_x@1");
   });
 
   it("keeps going when one record fails to write", async () => {
@@ -275,6 +359,148 @@ describe("createAnalyzeRoute", () => {
       expect(response.status).toBe(401);
       expect(dependencies.listPending).not.toHaveBeenCalled();
       expect(dependencies.ownerRules).not.toHaveBeenCalled();
+    });
+  });
+
+  // The two named sources above cover the reads whose failure was *predicted*.
+  // Three rounds of this task each found one more read that had not been
+  // predicted (ownerRules inside the loop, then listPending, then the
+  // tagSource getter, which landed in the gap between the two try blocks added
+  // for the first two). These tests lock the property that replaces the
+  // enumeration: no matter where the throw comes from, the handler answers 503
+  // — never an uncaught exception Next.js renders as a 500 — and the 401 path
+  // is unaffected by the guard that makes that true.
+  describe("fails closed on any unexpected error", () => {
+    it("returns 503 when the tagSource getter throws", async () => {
+      const dependencies = deps();
+      defineTagSource(dependencies, () => {
+        throw new Error("TAGGING_PROVIDER must be aily or field-shortcut");
+      });
+
+      const response = await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        error: "service_unavailable",
+        source: "unexpected",
+        reason: "TAGGING_PROVIDER must be aily or field-shortcut",
+      });
+      expect(dependencies.tag).toHaveBeenCalledTimes(0);
+      expect(dependencies.updateRecord).toHaveBeenCalledTimes(0);
+    });
+
+    it("still returns 401 when unauthorized, even though the tagSource getter would throw", async () => {
+      const dependencies = deps();
+      defineTagSource(dependencies, () => {
+        throw new Error("TAGGING_PROVIDER must be aily or field-shortcut");
+      });
+
+      // No Authorization header at all. The catch-all now wraps the auth check
+      // too (dependencies.cronSecret is itself a throwing getter in
+      // production), so this asserts the wrapping did not turn a 401 into a
+      // 503 or let anything downstream run first.
+      const response = await createAnalyzeRoute(dependencies)(request());
+
+      expect(response.status).toBe(401);
+      expect(await response.json()).toEqual({ error: "unauthorized" });
+      expect(dependencies.listPending).toHaveBeenCalledTimes(0);
+      expect(dependencies.tag).toHaveBeenCalledTimes(0);
+      expect(dependencies.updateRecord).toHaveBeenCalledTimes(0);
+    });
+
+    // tag() gets no try of its own on purpose: the providers hold a
+    // never-throw contract (Tasks 6/7) and a dedicated catch would absorb a
+    // break in it silently. The catch-all covers it as a backstop only.
+    it("returns 503 when tag() breaks its never-throw contract", async () => {
+      const dependencies = deps({
+        tag: vi.fn(async () => {
+          throw new Error("provider contract broken");
+        }),
+      });
+
+      const response = await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        error: "service_unavailable",
+        source: "unexpected",
+        reason: "provider contract broken",
+      });
+      expect(dependencies.updateRecord).toHaveBeenCalledTimes(0);
+    });
+
+    it("returns 503 when listPending resolves to something that is not a shard", async () => {
+      const dependencies = deps({
+        // A resolved-but-wrong value throws on records.map, well past every
+        // read a per-read try block would have been placed around.
+        listPending: vi.fn(async () => "not-a-shard" as never),
+      });
+
+      const response = await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({
+        error: "service_unavailable",
+        source: "unexpected",
+      });
+      expect(dependencies.tag).toHaveBeenCalledTimes(0);
+      expect(dependencies.updateRecord).toHaveBeenCalledTimes(0);
+    });
+
+    it("returns 503 when a field of a listed record cannot be read", async () => {
+      const poisoned = pendingRecord({ recordId: "rec1", state: "待分析" });
+      Object.defineProperty(poisoned, "content", {
+        get() {
+          throw new Error("content decode failed");
+        },
+        configurable: true,
+      });
+      const dependencies = deps({
+        listPending: vi.fn(async () => [poisoned]),
+      });
+
+      const response = await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        error: "service_unavailable",
+        source: "unexpected",
+        reason: "content decode failed",
+      });
+      expect(dependencies.tag).toHaveBeenCalledTimes(0);
+      expect(dependencies.updateRecord).toHaveBeenCalledTimes(0);
+    });
+
+    it("returns 503 rather than 500 when the thrown value cannot be stringified", async () => {
+      const dependencies = deps({
+        tag: vi.fn(async () => {
+          // A prototype-less value: String(value) raises TypeError of its
+          // own, so a catch-all that formatted the error naively would throw
+          // from inside its own catch block and 500 anyway.
+          const opaque: unknown = Object.create(null);
+          throw opaque;
+        }),
+      });
+
+      const response = await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        error: "service_unavailable",
+        source: "unexpected",
+        reason: "unreadable error",
+      });
+      expect(dependencies.updateRecord).toHaveBeenCalledTimes(0);
     });
   });
 });

@@ -197,106 +197,171 @@ function buildTaggedFields(
   return { ...tagFields, [VOC_FIELD_NAMES.state]: afterTagging };
 }
 
+// "listPending"/"ownerRules" name the two reads whose failure is expected and
+// diagnosable — seeing which one failed in a Vercel log is worth keeping.
+// "unexpected" is the catch-all: everything else, named as such precisely
+// because it carries no more specific claim than "this shard did not run".
+type UnavailableSource = "listPending" | "ownerRules" | "unexpected";
+
+// The catch-all's own error formatting must not be able to throw, or the last
+// line of defense has the very hole it exists to close: String() raises
+// TypeError for a prototype-less object (`Object.create(null)`), and both
+// `.message` and `toString` can be throwing getters. A throw from inside a
+// catch block is uncaught all over again.
+function errorReason(error: unknown): string {
+  try {
+    return error instanceof Error ? error.message : String(error);
+  } catch {
+    return "unreadable error";
+  }
+}
+
 function serviceUnavailable(
-  source: "listPending" | "ownerRules",
+  source: UnavailableSource,
   error: unknown,
 ): Response {
-  const reason = error instanceof Error ? error.message : String(error);
   // No secret ever appears in these messages (listPending/ownerRules only
   // ever throw Bitable business-code strings), so it's safe to surface the
   // reason for whoever is reading Vercel's runtime logs for this Cron.
-  return json({ error: "service_unavailable", source, reason }, 503);
+  return json(
+    { error: "service_unavailable", source, reason: errorReason(error) },
+    503,
+  );
+}
+
+// The whole shard body, lifted out of the handler so it has exactly one call
+// site — and that call site is inside the handler's catch-all. Reads added to
+// this function in the future are covered by construction rather than by
+// remembering to wrap them.
+async function runShard(
+  dependencies: AnalyzeRouteDependencies,
+): Promise<Response> {
+  let records: readonly PendingRecord[];
+  try {
+    records = await dependencies.listPending(dependencies.shardSize);
+  } catch (error) {
+    return serviceUnavailable("listPending", error);
+  }
+
+  if (records.length === 0) {
+    const empty: AnalyzeResponseBody = {
+      processed: 0,
+      tagged: 0,
+      failed: 0,
+      writeErrors: 0,
+    };
+    return json(empty);
+  }
+
+  // Read-before-acting: every critical read this shard needs is resolved up
+  // front, before tag() spends any AI budget and before any write is
+  // attempted. A transient Bitable failure here (rate limit, 5xx) must fail
+  // the whole shard rather than tag records it then can't route — 已分析 is a
+  // dead end (listPendingRecords only ever re-fetches 待分析 and 分析失败;
+  // nothing ever revisits 已分析), so a record stranded there after already
+  // burning its one tagging attempt is worse than refusing the shard outright
+  // and letting the next Cron tick retry cleanly with nothing written yet.
+  let ownerRules: readonly OwnerRule[];
+  try {
+    ownerRules = await dependencies.ownerRules();
+  } catch (error) {
+    return serviceUnavailable("ownerRules", error);
+  }
+
+  // Read once per request, not once per record: dependencies.tagSource is a
+  // getter in production so a fresh aily batch number is minted per Cron
+  // tick, but every record in this shard must report the same batch. It gets
+  // no try of its own — reading it is one of the many things in this function
+  // that "shouldn't" throw, and the handler's catch-all is what covers all of
+  // them uniformly.
+  const tagSource = dependencies.tagSource;
+
+  // Deliberately unguarded here too: the tagging providers hold a "never
+  // throws, always returns an outcome per input" contract (Tasks 6/7, verified
+  // against concurrency and malformed input). A dedicated catch around tag()
+  // would silently absorb a break in that contract and make it unfindable
+  // later. The handler's catch-all still turns such a break into a 503 rather
+  // than a 500 — that is a backstop, not a sanctioned failure mode.
+  const outcomes = await dependencies.tag(records.map(toTaggingRequest));
+  const outcomeByRecordId = new Map(
+    outcomes.map((outcome) => [outcomeRecordId(outcome), outcome] as const),
+  );
+
+  let tagged = 0;
+  let failed = 0;
+  let writeErrors = 0;
+
+  for (const record of records) {
+    const outcome =
+      outcomeByRecordId.get(record.recordId) ??
+      ({
+        kind: "failed",
+        recordId: record.recordId,
+        reason: "未获得打标结果",
+      } as const);
+
+    let fields: BitableFields;
+    if (outcome.kind === "tagged") {
+      tagged += 1;
+      fields = buildTaggedFields(record, outcome.result, ownerRules, tagSource);
+    } else {
+      failed += 1;
+      fields = buildFailedFields(outcome, record.retryCount, tagSource);
+    }
+
+    // Per-record, and per-record only: one row that won't write must not cost
+    // the rest of the shard the work already paid for in AI budget. This
+    // stays a counted, non-fatal outcome, not something the catch-all sees.
+    try {
+      await dependencies.updateRecord(record.recordId, fields);
+    } catch {
+      writeErrors += 1;
+    }
+  }
+
+  const body: AnalyzeResponseBody = {
+    processed: records.length,
+    tagged,
+    failed,
+    writeErrors,
+  };
+  return json(body);
 }
 
 export function createAnalyzeRoute(dependencies: AnalyzeRouteDependencies) {
   return async function POST(request: Request): Promise<Response> {
-    // Authorization must stay the very first thing this handler does. Every
-    // read below can fail, but a request without the secret must never reach
-    // any of them regardless of how the rest of this function is reordered.
-    const authorization = request.headers.get("authorization") ?? "";
-    if (authorization !== `Bearer ${dependencies.cronSecret}`) {
-      return json({ error: "unauthorized" }, 401);
-    }
-
-    let records: readonly PendingRecord[];
+    // One guard around the entire handler, with exactly one call site for the
+    // shard body inside it. The shape this replaces — a try around each read
+    // that had been *observed* to throw — closed one hole per round and left
+    // the next one open three rounds running: ownerRules, then listPending,
+    // then the tagSource getter, which landed in the gap between the two new
+    // try blocks. Enumerating throwers is the wrong move because the
+    // enumeration is never finished; what closes the class is that there is
+    // no longer any path out of this function that isn't inside this try.
     try {
-      records = await dependencies.listPending(dependencies.shardSize);
-    } catch (error) {
-      return serviceUnavailable("listPending", error);
-    }
-
-    if (records.length === 0) {
-      const empty: AnalyzeResponseBody = {
-        processed: 0,
-        tagged: 0,
-        failed: 0,
-        writeErrors: 0,
-      };
-      return json(empty);
-    }
-
-    // Read-before-acting: every critical read this shard needs is resolved
-    // up front, before tag() spends any AI budget and before any write is
-    // attempted. A transient Bitable failure here (rate limit, 5xx) must
-    // fail the whole shard rather than tag records it then can't route —
-    // 已分析 is a dead end (listPendingRecords only ever re-fetches 待分析
-    // and 分析失败; nothing ever revisits 已分析), so a record stranded
-    // there after already burning its one tagging attempt is worse than
-    // refusing the shard outright and letting the next Cron tick retry
-    // cleanly with nothing written yet.
-    let ownerRules: readonly OwnerRule[];
-    try {
-      ownerRules = await dependencies.ownerRules();
-    } catch (error) {
-      return serviceUnavailable("ownerRules", error);
-    }
-
-    // Read once per request, not once per record: dependencies.tagSource is a
-    // getter in production so a fresh aily batch number is minted per Cron
-    // tick, but every record in this shard must report the same batch.
-    const tagSource = dependencies.tagSource;
-
-    const outcomes = await dependencies.tag(records.map(toTaggingRequest));
-    const outcomeByRecordId = new Map(
-      outcomes.map((outcome) => [outcomeRecordId(outcome), outcome] as const),
-    );
-
-    let tagged = 0;
-    let failed = 0;
-    let writeErrors = 0;
-
-    for (const record of records) {
-      const outcome =
-        outcomeByRecordId.get(record.recordId) ??
-        ({
-          kind: "failed",
-          recordId: record.recordId,
-          reason: "未获得打标结果",
-        } as const);
-
-      let fields: BitableFields;
-      if (outcome.kind === "tagged") {
-        tagged += 1;
-        fields = buildTaggedFields(record, outcome.result, ownerRules, tagSource);
-      } else {
-        failed += 1;
-        fields = buildFailedFields(outcome, record.retryCount, tagSource);
+      // Authorization stays the first statement executed. Nothing below is
+      // reachable without the cron secret, and the 401 verdict is settled
+      // before any dependency other than cronSecret is touched.
+      //
+      // It sits *inside* the guard rather than in front of it because
+      // `dependencies.cronSecret` is itself a getter in production
+      // (readCronSecret() throws when CRON_SECRET is unset) — the one read a
+      // per-read shape could never have covered without yet another try.
+      // Wrapping reorders nothing: a request with a bad or missing header
+      // still returns 401 from here and never reaches runShard.
+      const authorization = request.headers.get("authorization") ?? "";
+      if (authorization !== `Bearer ${dependencies.cronSecret}`) {
+        return json({ error: "unauthorized" }, 401);
       }
 
-      try {
-        await dependencies.updateRecord(record.recordId, fields);
-      } catch {
-        writeErrors += 1;
-      }
+      return await runShard(dependencies);
+    } catch (error) {
+      // Cron runs once a day on this project's Hobby plan, so an uncaught
+      // throw here does not cost one request — it costs a day of tagging,
+      // reported as an opaque Next.js 500. 503 with a source is the same
+      // refusal, legible in the runtime log.
+      return serviceUnavailable("unexpected", error);
     }
-
-    const body: AnalyzeResponseBody = {
-      processed: records.length,
-      tagged,
-      failed,
-      writeErrors,
-    };
-    return json(body);
   };
 }
 
