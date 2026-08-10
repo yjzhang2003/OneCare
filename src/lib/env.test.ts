@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readAuthEnv, readBotEnv } from "./env";
+import { readAuthEnv, readBitableEnv, readBotEnv, readTaggingEnv } from "./env";
 
 const validEnvironment = {
   FEISHU_APP_ID: "cli_test",
@@ -62,6 +62,61 @@ describe("readBotEnv", () => {
       }),
     ).toThrow(
       "Missing server environment variable: FEISHU_EVENT_VERIFICATION_TOKEN",
+    );
+  });
+});
+
+const bitable = {
+  FEISHU_BITABLE_APP_TOKEN: "bascn_demo",
+  FEISHU_BITABLE_TABLE_VOC: "tblvoc",
+  FEISHU_BITABLE_TABLE_OWNER: "tblowner",
+};
+
+describe("readBitableEnv", () => {
+  it("reads all three identifiers", () => {
+    expect(readBitableEnv(bitable)).toEqual({
+      appToken: "bascn_demo",
+      vocTableId: "tblvoc",
+      ownerTableId: "tblowner",
+    });
+  });
+
+  it.each(Object.keys(bitable))("throws when %s is missing", (key) => {
+    const source = { ...bitable, [key]: "" };
+    expect(() => readBitableEnv(source)).toThrow(new RegExp(key));
+  });
+});
+
+describe("readTaggingEnv", () => {
+  it("reads the field shortcut track without aily identifiers", () => {
+    expect(readTaggingEnv({ TAGGING_PROVIDER: "field-shortcut" })).toEqual({
+      provider: "field-shortcut",
+    });
+  });
+
+  it("requires aily identifiers on the aily track", () => {
+    expect(() => readTaggingEnv({ TAGGING_PROVIDER: "aily" })).toThrow(
+      /FEISHU_AILY_APP_ID/,
+    );
+  });
+
+  it("reads the aily track when fully configured", () => {
+    expect(
+      readTaggingEnv({
+        TAGGING_PROVIDER: "aily",
+        FEISHU_AILY_APP_ID: "spring_demo__c",
+        FEISHU_AILY_SKILL_TAGGING: "skill_demo",
+      }),
+    ).toEqual({
+      provider: "aily",
+      ailyAppId: "spring_demo__c",
+      taggingSkillId: "skill_demo",
+    });
+  });
+
+  it("rejects an unknown provider name", () => {
+    expect(() => readTaggingEnv({ TAGGING_PROVIDER: "magic" })).toThrow(
+      /TAGGING_PROVIDER/,
     );
   });
 });
