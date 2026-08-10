@@ -40,4 +40,40 @@ describe("redactVocContent", () => {
   it("returns empty string unchanged", () => {
     expect(redactVocContent("")).toBe("");
   });
+
+  it("masks mobile numbers with hyphens", () => {
+    expect(redactVocContent("请回电 138-0013-8000 谢谢")).toBe(
+      "请回电 [手机号] 谢谢",
+    );
+  });
+
+  it("masks mobile numbers with spaces", () => {
+    expect(redactVocContent("请回电 138 0013 8000 谢谢")).toBe(
+      "请回电 [手机号] 谢谢",
+    );
+  });
+
+  it("masks mobile numbers with dots", () => {
+    expect(redactVocContent("请回电 138.0013.8000 谢谢")).toBe(
+      "请回电 [手机号] 谢谢",
+    );
+  });
+
+  it("masks mobile numbers with country code +86", () => {
+    expect(redactVocContent("请拨 +8613800138000 联系")).toBe(
+      "请拨 [手机号] 联系",
+    );
+  });
+
+  it("masks mobile numbers with country code and separators", () => {
+    expect(redactVocContent("请拨 +86 138 0013 8000 联系")).toBe(
+      "请拨 [手机号] 联系",
+    );
+  });
+
+  it("18-digit id card is not consumed by new mobile rules", () => {
+    expect(redactVocContent("证件 11010519491231002X 已核")).toBe(
+      "证件 [身份证] 已核",
+    );
+  });
 });
