@@ -13,9 +13,15 @@
 - 飞书企业自建应用 OAuth 授权码登录，登录成功后留在体验入口，不再进入重复的网站工作台；
 - 服务端签名的 8 小时网站会话；
 - 面向企业成员的轻量飞书机器人 Webhook，提供全 Card 2.0 的员工工作台、八类岗位卡片与可点击的演示操作；
+- 真实 VOC 数据落地飞书多维表格「VOC 记录表」，字段与枚举已对真实 Base 校准；入库前对手机号、邮箱、身份证号、订单号（含带分隔符与国家码形态）做正文级脱敏，不只脱敏用户标识列；
+- AI 打标双轨：飞书 aily 技能（A 轨）与多维表格 AI 字段捷径（B 轨）二选一，由 `TAGGING_PROVIDER` 切换，两轨产出同一份打标结果契约；是否建单与严重度由仓库侧 triage 规则判定，不写在提示词里；
+- 服务事件状态机 `待分析 → 已分析 → 待跟进 → 跟进中 → 待闭环 → 已闭环`（另有无需跟进与分析失败两条支线），转移含幂等与重试上限，负责人路由含兜底；
+- 飞书卡片内完成 VOC 工单流转：负责人点击卡片按钮，服务端在同一次同步响应内做 `record_id` 存在性、操作者身份、状态转移合法性三重校验，任一不通过即拒绝并回复明确提示，不写入任何数据；
+- Vercel Cron 驱动、可从「分析失败」状态自动重取的可恢复分片打标作业（`/api/voc/analyze`），以 `CRON_SECRET` 校验调用方；
+- 公开只读的 VOC 闭环看板（`/dashboard/voc`），只出聚合数字、不出反馈原文，读取失败时显示明确的「指标暂不可用」，这与「Base 为空如实显示 0」是两种不同的展示；
 - Vercel 生产部署。
 
-当前版本用于呈现万护 OneCare 的产品方向与服务闭环故事。四个角色共享同一份浏览器内案例状态：用户先接受 AI 预诊和知识库自助建议，自助失败后才转客服建单；客服建单会解锁工程师任务，工程师完成服务会解锁后台改善，任意角色重置都会恢复整条流程。案例固定为 `OC-240718-037`，所有回复、设备信号、知识建议、工单、配件、指标和状态变化均为确定性模拟，尚未接入真实 IoT、知识库、VOC、客服、工单、配件、回访或 AI 服务。
+当前版本用于呈现万护 OneCare 的产品方向与服务闭环故事。四个角色共享同一份浏览器内案例状态：用户先接受 AI 预诊和知识库自助建议，自助失败后才转客服建单；客服建单会解锁工程师任务，工程师完成服务会解锁后台改善，任意角色重置都会恢复整条流程。案例固定为 `OC-240718-037`，用户、客服、工程师三个视角的全部回复、设备信号、知识建议、工单、配件和状态变化仍为确定性模拟，尚未接入真实 IoT、知识库、客服、工单、配件或回访。后台视角是例外：其「VOC 闭环驾驶舱」小节的待闭环、已建单、已闭环、闭环率与问题维度聚类改为读取飞书多维表格中的真实 VOC 记录，不再是模拟数字；读取失败会明确显示「VOC 指标暂不可用」，不会静默退回模拟值；该视角的改善任务解锁与重置流程仍是模拟叙事的一部分。
 
 当前网站采用参考海信官网的黑白品牌展厅视觉：顶部和页尾为黑色，主体为白色，使用 MiSans、海信官方大场景图、海信智能冰箱产品图、药丸形文字按钮、圆形图标按钮与白色圆角内容卡。用户提供的万护反色 Logo 已封装为统一品牌组件：黑色顶栏、双层黑色页尾和 AI 头像使用白色图形，手机白色标题栏使用黑色图形；浏览器 Tab 也直接复用同一份深色万护图形。一级页面标题统一使用中文，Top Bar 切换会保留 URL Hash、浏览器前进后退和深链恢复。图片与字体来源及处理记录见 `public/images/hisense/SOURCES.md`。所有业务结果仍是方案目标，不是生产指标。
 
@@ -26,6 +32,8 @@
 机器人处理 `im.message.receive_v1` 的单聊文本、`im.chat.access_event.bot_p2p_chat_entered_v1` 的进入会话事件和 `card.action.trigger` 卡片按钮回调。员工进入会话时会收到万护 Card 2.0 工作台；底部菜单发送的八条中文、英文或中英双语指令分别打开使用帮助、运营后台、待确认服务、创建服务工单、查询服务进度、今日任务、AI 预诊与配件、提交服务结果卡片。未知输入也只返回工作台卡片，机器人不再生成纯文字业务回复。“打开网页演示”仍直接跳转网站。
 
 查询和岗位切换按钮在三秒内确认后向当前单聊发送新的详情卡片；创建演示工单、确认演示配件和提交演示结果会原地更新被点击的卡片并禁用重复操作。脚本无状态且不保存消息、身份或事件 ID；所有工单、任务、配件和结果均明确标注为演示，不会调用真实 AI、知识库、IoT、工单或服务系统。当前没有持久化欢迎或事件去重；已订阅但未使用的群事件经过验证后安全忽略。
+
+同一个 `card.action.trigger` 回调处理器另外承载四个真实的 VOC 工单动作（开始跟进、提交跟进结果、确认闭环、标记无需跟进）。这四个动作的按钮 `value` 携带真实的多维表格 `record_id`，操作者身份取自签名事件里的 `event.operator.open_id`，从不信任按钮自带的值；服务端在同一次同步响应内完成记录存在、操作者是否为该记录负责人、状态转移是否合法三重校验，任一不通过直接回复明确 toast，不修改 Base 中任何字段。这条地址空间与其余九个演示动作固定使用的案例号 `OC-240718-037` 完全独立，互不影响。
 
 飞书事件请求已通过自定义域名完成 URL Verification；本分支的新员工机器人逻辑仍需部署到 Production、发布对应应用版本并由真实企业成员验收后，才能宣称飞书内体验可用。
 
@@ -54,7 +62,14 @@ npm run dev
 - `FEISHU_REDIRECT_URI`：本地或线上完整 OAuth 回调 URL；
 - `SESSION_SECRET`：至少 32 字节的随机会话密钥，可用 `openssl rand -base64 48` 生成；
 - `FEISHU_EVENT_VERIFICATION_TOKEN`：飞书事件订阅的 Verification Token；
-- `FEISHU_EVENT_ENCRYPT_KEY`：飞书事件订阅的 Encrypt Key。
+- `FEISHU_EVENT_ENCRYPT_KEY`：飞书事件订阅的 Encrypt Key；
+- `FEISHU_BITABLE_APP_TOKEN`：VOC 多维表格（Base）的 app token；
+- `FEISHU_BITABLE_TABLE_VOC`：「VOC 记录表」的 table id；
+- `FEISHU_BITABLE_TABLE_OWNER`：「负责人表」的 table id；
+- `TAGGING_PROVIDER`：AI 打标提供方，取值 `aily` 或 `field-shortcut`；
+- `FEISHU_AILY_APP_ID`：仅 `TAGGING_PROVIDER=aily` 时必填，aily 侧应用 ID（`spring_xxx__c` 形态，与飞书 `cli_xxx` App ID 是两个独立配置项）；
+- `FEISHU_AILY_SKILL_TAGGING`：仅 `TAGGING_PROVIDER=aily` 时必填，打标技能的 skill id；
+- `CRON_SECRET`：`/api/voc/analyze` 的调用方鉴权密钥，请求头须为 `Authorization: Bearer $CRON_SECRET`，否则返回 401。
 
 真实密钥不得提交到 Git。仓库会忽略 `.env*`，只保留无敏感值的 `.env.example`。
 
@@ -87,6 +102,23 @@ https://onecare-loop.vercel.app/api/auth/feishu/callback
 
 事件接口会验证请求签名、Verification Token、Encrypt Key、App ID 和非空 tenant context；卡片按钮还会校验 Card 2.0 规范化结果、固定演示案例号和 action 白名单。普通事件与导航按钮在三秒响应要求内先确认，再通过 Next.js `after()` 回复或主动发送 interactive 卡片；三个本地确定性状态动作在响应中返回完整替换卡片。已配置但未注册业务处理器的群事件返回 `200` 并忽略。为减少飞书中国侧到 Vercel 默认美国区域的跨境延迟，`vercel.json` 只将该事件函数部署到香港 `hkg1`；网站与 OAuth 函数不受此配置影响。Vercel Preview 受 Deployment Protection 保护，不能用作飞书事件或卡片回调地址；分享链接只用于页面确认。
 
+## VOC 闭环配置
+
+要让 VOC 数据入表、AI 打标和飞书卡片工单流转生效，还需在飞书多维表格与开发者后台完成：
+
+1. 建两张表：`VOC 记录表`（原始反馈、AI 打标结果与流转字段）与 `负责人表`（负责范围、负责人、兜底），字段名与选项需与仓库 `src/features/bitable/field-map.ts` 里的 `VOC_FIELD_NAMES` 逐一一致。表格字段可被运营随手改名，改名的直接后果是新数据被静默写空而不是报错，仓库侧的 `schema-guard.ts` 只在服务启动时做一次性校验，不能替代人工核对；
+2. 把当前企业自建应用加为该多维表格的协作者，并授予多维表格的读写权限；
+3. 若 `TAGGING_PROVIDER=aily`，额外为应用申请 `aily:skill:write` 权限点，并建一个 Workflow 类型的打标技能，在结束节点按 `TagResult`（`src/features/tagging/contracts.ts`）的形状逐字段配置输出；若 `TAGGING_PROVIDER=field-shortcut`，改为在多维表格里给相应列配好分类、摘要等 AI 字段捷径，仓库侧只读这些列，不发起模型调用；
+4. VOC 原始数据由运营在多维表格里用自带的「导入 Excel」手动完成，仓库没有程序化的导入路由。导入前应确认 `VOC 记录表` 为空或已清空，避免重复导入把统计数字做假；
+5. `/api/voc/analyze` 由 Vercel Cron 调用（见 `vercel.json`），请求头须带 `Authorization: Bearer $CRON_SECRET`，鉴权失败返回 `401`；`/api/voc/dashboard` 与 `/dashboard/voc` 无需登录即可访问，只返回聚合数字，不返回反馈原文。
+
+以下边界如实说明，而非回避：
+
+- **并发不保证强一致**：飞书多维表格没有乐观锁（CAS），记录更新接口也没有版本号；卡片写回状态时用的是「读到的状态序号比当前更靠后才写」的 best-effort 判断（序号本身不落 Base 列，由 `VOC_STATE_SEQUENCE` 从 `流程状态` 的字符串值推导），两个负责人同时点击仍可能后写覆盖先写。生产版需要引入数据库行锁才能消除这个窗口。
+- **权限的信任边界就是多维表格的编辑权限**：负责人表的「负责人」「兜底」是运营可写的普通字段，任何拥有该 Base 编辑权限的人都能把自己填成负责人，或勾上兜底，从而获得对全部记录的操作权。这不是一套独立的角色/权限系统，只是一张可写的 ACL 表。
+- **人效数字是折算值，不是实测值**：看板与 `/api/voc/dashboard` 的「折算节省工时」按「已完成打标记录数 × 假设的单条人工处理分钟数」计算，假设基线未经海信真实工时的实测，页面上会同时标注这一点，也不会把它换算成年化金额。
+- **Base 为空与读取失败是两种不同展示**：Base 里暂时没有记录时，看板如实显示 `0`；只有网络请求或飞书接口调用失败时才会显示「指标暂不可用」，两者不能混为一谈，也不会用同一套文案掩盖。
+
 ## 验证
 
 ```bash
@@ -97,6 +129,8 @@ npm run typecheck
 npm run build
 npm audit --omit=dev
 ```
+
+前五条命令预期全绿。`npm audit --omit=dev` 目前以非零状态退出——**这是已知例外，不是被隐藏的失败**：它报告 4 项漏洞（1 moderate：`postcss`；3 high：`nanoid`、`next`、`sharp`），均是 `next@16.2.10` 自身或其依赖树带来的传递漏洞（`postcss` 是 `next` 的依赖，其版本已通过 `package.json` 的 `overrides` 钉定以修复更早的 GHSA-qx2v-qp2m-jg93，但仍受一条更新的公告影响并携带了同样受影响的 `nanoid`；`sharp` 是 `next` 内置图片优化能力的可选依赖），分支起点 `b1daba4` 的 `package.json`/`package-lock.json` 与当前完全一致，因此不是本分支引入。`sharp` 携带的四个 libvips CVE（CVE-2026-33327 / 33328 / 35590 / 35591）只能经 Next.js Image Optimization API 触达，本仓库没有面向用户的图片上传入口，唯一使用的是仓库自带的少量静态图；`next` 包本身另外还打包了一组与图片无关的公告（Server Actions、Middleware、rewrites 相关的 SSRF 与缓存混淆等），本仓库未使用 Server Actions、`middleware.ts` 或自定义 rewrites，这组攻击面同样没有被触达的入口。距提交截止仅剩数天，`cacheComponents` / `use cache` / `cacheLife` 这套缓存架构刚在 `next@16.2.10` 上完成开发与验证（见 `next.config.ts`、`app/api/voc/dashboard/route.ts`），`npm audit fix --force` 会把 Next 升级到声明范围外的 `16.3.0`，没有时间重新验证缓存与预渲染行为，因此本次比赛周期内不处置，留待赛后随 Next 一起升级解决。
 
 ## Vercel 部署
 

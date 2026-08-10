@@ -2,7 +2,7 @@
 
 ## Status
 
-The 万护 OneCare TypeScript web baseline and Feishu custom-app login were implemented on 2026-07-17. A guided Feishu experience page and stateless employee bot webhook were added on 2026-07-18. On 2026-07-19 the bot was upgraded locally to an all-Card-2.0 workbench with verified button callbacks; production deployment, callback subscription, app-version publication and real-member acceptance are still required. The current application remains a single-enterprise demonstration; IoT and VOC data, service-system integrations, AI analysis, persistence, and production Feishu bot activation remain unimplemented.
+The 万护 OneCare TypeScript web baseline and Feishu custom-app login were implemented on 2026-07-17. A guided Feishu experience page and stateless employee bot webhook were added on 2026-07-18. On 2026-07-19 the bot was upgraded locally to an all-Card-2.0 workbench with verified button callbacks; production deployment, callback subscription, app-version publication and real-member acceptance are still required. A VOC closed loop was added on 2026-08-11: real VOC feedback lands in a Feishu Bitable; dual-track AI tagging (a Feishu aily skill, or a Bitable AI field shortcut, selected by `TAGGING_PROVIDER`) fills one shared tagging contract; a Cron-driven, resumable shard job at `/api/voc/analyze` retags failed records under a retry ceiling; a Feishu card workflow carries a ticket through `待跟进 → 跟进中 → 待闭环 → 已闭环` behind a synchronous triple check; and a public, read-only dashboard at `/dashboard/voc` reports aggregate numbers only. The current application remains a single-enterprise demonstration; PostgreSQL persistence, real IoT device data, other service-system integrations (customer service, work orders, parts, follow-up), and production activation of the employee bot workbench remain unimplemented.
 
 The production deployment is available at `https://onecare-loop.vercel.app`. The canonical OAuth callback is `https://onecare-loop.vercel.app/api/auth/feishu/callback`, and the verified bot event callback is `https://onecare.ohmyfeishu.top/api/feishu/events`. URL Verification, permissions, event subscriptions and custom menus have been configured externally; the employee-bot branch is not considered active until its code is deployed to Production, the application version is published, and a real enterprise member completes acceptance testing.
 
@@ -65,7 +65,7 @@ Authentication routes explicitly use the Node.js runtime. The repository pins No
 
 ## Persistence and Tenant Isolation
 
-The current build has no database and stores no device, VOC, service, refresh-token, or persistent user-profile records.
+The current build has no SQL database of its own. VOC feedback and its service-event state now live in a Feishu Bitable (see the VOC closed loop note above), not in a database this repository owns; Bitable has no transaction support or row locking, so writes there are best-effort rather than strongly consistent. Aside from that Bitable, the site still stores no device, refresh-token, or persistent user-profile records.
 
 PostgreSQL and Drizzle remain the intended system-of-record stack when persistence begins. At that point every tenant-owned row must carry an internal tenant identifier derived from validated Feishu installation or identity data. Missing tenant context defaults to no access. PostgreSQL row-level security may be added as defense in depth after the first schema is specified.
 
@@ -82,6 +82,7 @@ The stable public callback, matching server secrets and URL Verification are com
 ## Testing Baseline
 
 - Vitest covers environment validation, OAuth state, signed sessions, Feishu OAuth adapters, deterministic bot scripts, event verification, SDK reply adapters, and Route Handlers.
+- Vitest also covers the VOC closed loop as pure functions injected with fake fetchers: content redaction, the service-event state machine (exhaustive legal/illegal transitions, idempotency, the retry ceiling), triage, metrics aggregation, the shared tagging-result contract, both tagging providers, the Bitable client and its schema guard, owner-rule resolution, and the analyze/dashboard Route Handlers.
 - A separate built-runtime Vitest suite starts the output of `next build` with `next start` and exercises authentication routes, login redirects, and the Feishu URL Verification challenge across the real Next.js production boundary.
 - React Testing Library covers the landing page, guided login page, reusable Feishu role banner, and role-workspace presentation contracts.
 - External Feishu calls are injected in tests and never reach the network.
@@ -94,8 +95,8 @@ Playwright browser checks cover the public experience page and role-entry layout
 
 - queue and background-job implementation;
 - PostgreSQL hosting and migration workflow;
-- AI model and orchestration provider;
-- IoT, VOC, customer-service, work-order, parts, and follow-up data sources;
+- AI model and orchestration provider for free-text customer service and predictive diagnosis (VOC tagging itself now runs on a Feishu aily skill or a Bitable AI field shortcut; see the VOC closed loop note above);
+- IoT, customer-service, work-order, parts, and follow-up data sources;
 - analytics and visualization libraries;
 - store-app ISV and marketplace path;
 - final multi-service deployment topology.
