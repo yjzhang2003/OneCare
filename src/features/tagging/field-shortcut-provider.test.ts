@@ -302,4 +302,111 @@ describe("createFieldShortcutTaggingProvider", () => {
       expect(outcomes[0].result.replies).toEqual([]);
     }
   });
+
+  describe("input robustness: malformed records", () => {
+    const read = vi.fn(async (_ids: readonly string[]) => []);
+
+    it("returns empty array when tag() receives null instead of array", async () => {
+      const provider = createFieldShortcutTaggingProvider({ read });
+      const outcomes = await provider.tag(null as any);
+
+      expect(outcomes).toEqual([]);
+    });
+
+    it("returns empty array when tag() receives undefined instead of array", async () => {
+      const provider = createFieldShortcutTaggingProvider({ read });
+      const outcomes = await provider.tag(undefined as any);
+
+      expect(outcomes).toEqual([]);
+    });
+
+    it("returns empty array when tag() receives a string instead of array", async () => {
+      const provider = createFieldShortcutTaggingProvider({ read });
+      const outcomes = await provider.tag("str" as any);
+
+      expect(outcomes).toEqual([]);
+    });
+
+    it("returns empty array when tag() receives a number instead of array", async () => {
+      const provider = createFieldShortcutTaggingProvider({ read });
+      const outcomes = await provider.tag(42 as any);
+
+      expect(outcomes).toEqual([]);
+    });
+
+    it("returns empty array when tag() receives an object instead of array", async () => {
+      const provider = createFieldShortcutTaggingProvider({ read });
+      const outcomes = await provider.tag({} as any);
+
+      expect(outcomes).toEqual([]);
+    });
+
+    it("fails a record with null element and uses invalid_0 as recordId", async () => {
+      const provider = createFieldShortcutTaggingProvider({ read });
+      const outcomes = await provider.tag([null as any]);
+
+      expect(outcomes).toHaveLength(1);
+      expect(outcomes[0]).toMatchObject({
+        kind: "failed",
+        recordId: "invalid_0",
+        reason: "Input record lacks valid recordId (must be non-empty string)",
+      });
+    });
+
+    it("fails a record with empty object and uses invalid_0 as recordId", async () => {
+      const provider = createFieldShortcutTaggingProvider({ read });
+      const outcomes = await provider.tag([{} as any]);
+
+      expect(outcomes).toHaveLength(1);
+      expect(outcomes[0]).toMatchObject({
+        kind: "failed",
+        recordId: "invalid_0",
+        reason: "Input record lacks valid recordId (must be non-empty string)",
+      });
+    });
+
+    it("fails a record with empty string recordId and uses invalid_0 as placeholder", async () => {
+      const provider = createFieldShortcutTaggingProvider({ read });
+      const outcomes = await provider.tag([{ recordId: "" } as any]);
+
+      expect(outcomes).toHaveLength(1);
+      expect(outcomes[0]).toMatchObject({
+        kind: "failed",
+        recordId: "invalid_0",
+        reason: "Input record lacks valid recordId (must be non-empty string)",
+      });
+    });
+
+    it("fails a record with numeric recordId and uses invalid_0 as placeholder", async () => {
+      const provider = createFieldShortcutTaggingProvider({ read });
+      const outcomes = await provider.tag([{ recordId: 123 } as any]);
+
+      expect(outcomes).toHaveLength(1);
+      expect(outcomes[0]).toMatchObject({
+        kind: "failed",
+        recordId: "invalid_0",
+        reason: "Input record lacks valid recordId (must be non-empty string)",
+      });
+    });
+
+    it("fails all records when one has invalid recordId", async () => {
+      const provider = createFieldShortcutTaggingProvider({ read });
+      const outcomes = await provider.tag([
+        { recordId: "rec1", content: "ok", channel: "APP", category: "空调" },
+        null as any,
+      ]);
+
+      expect(outcomes).toHaveLength(2);
+      expect(outcomes[0]).toMatchObject({
+        kind: "failed",
+        recordId: "rec1",
+        reason: "Batch fails because other records have invalid recordIds",
+      });
+      expect(outcomes[1]).toMatchObject({
+        kind: "failed",
+        recordId: "invalid_1",
+        reason: "Input record lacks valid recordId (must be non-empty string)",
+      });
+    });
+  });
 });
