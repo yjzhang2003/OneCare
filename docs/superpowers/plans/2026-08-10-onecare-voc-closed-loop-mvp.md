@@ -2695,7 +2695,15 @@ so routing either resolves an owner or reports that it could not."
 - Consumes: 无
 - Produces: `VOC_CARD_ACTIONS`、`VocCardAction`、`FeishuEventOutcome` 的 `card_action` 分支新增 `recordId`、`operatorOpenId`
 
-移除 `ONECARE_CASE_ID` 等值校验（现位于 `event-handler.ts:141`），改为要求 `record_id` 存在且形如 `rec*`。操作者身份取 `event.operator.open_id`——它由现有签名校验保证可信。
+操作者身份取 `event.operator.open_id`——它由现有签名校验保证可信。
+
+> **校验必须按动作类型分流，不得一刀切。** `ONECARE_CASE_ID` 在 `cards.ts` 有 8 处引用，既是八类演示卡的展示文案，也是它们按钮的载荷（`cards.ts:66` 的 `value: { action, case_id: ONECARE_CASE_ID }`）。这八类卡按规格 §1.4 是**保留**的。若把 `event-handler.ts:141` 改成对所有动作都要求 `record_id`，演示卡的按钮会全部失效。
+>
+> 因此：
+> - `ONECARE_CARD_ACTIONS`（八个演示动作）→ **保持**现有的 `case_id === ONECARE_CASE_ID` 校验，行为不变，`ONECARE_CASE_ID` 常量保留
+> - `VOC_CARD_ACTIONS`（四个新增真实动作）→ 要求 `record_id` 匹配 `/^rec[A-Za-z0-9]+$/` **且** `event.operator.open_id` 非空
+>
+> 两类动作的 outcome 都走 `card_action` 分支，但 `recordId` 与 `operatorOpenId` 只在 VOC 动作上有意义；演示动作的这两个字段填空串，由 Task 12 按动作类型分派到不同的处理函数。
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2767,7 +2775,7 @@ Expected: FAIL — 返回的 outcome 缺少 `recordId` 与 `operatorOpenId`
 
 - [ ] **Step 3: Write minimal implementation**
 
-`card-types.ts`：删除 `ONECARE_CASE_ID`，新增 VOC 动作白名单。
+`card-types.ts`：**保留** `ONECARE_CASE_ID`（`cards.ts` 8 处在用），新增 VOC 动作白名单。
 
 ```ts
 export const VOC_CARD_ACTIONS = [

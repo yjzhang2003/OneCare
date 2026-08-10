@@ -101,8 +101,8 @@ app/dashboard/voc/page.tsx        公开看板页
 | 位置 | 现状（已核实） | 改为 |
 | --- | --- | --- |
 | `event-handler.ts:104-112` | `authorizedEventHeader` 校验 `app_id` + `tenant_key` | 不变 |
-| `event-handler.ts:139-143` | `caseId !== ONECARE_CASE_ID` 等值校验 | 改为携带 `record_id` 与 `owner_open_id`；`FeishuEventOutcome` 的 `card_action` 分支（21-26 行）扩展 `operatorOpenId` |
-| `card-types.ts` | 39 行，含 `ONECARE_CASE_ID` 与 action 白名单 | 移除固定案例号；白名单扩充 VOC 流转动作 |
+| `event-handler.ts:139-143` | `caseId !== ONECARE_CASE_ID` 对所有卡片动作等值校验 | **按动作类型分流**：八个演示动作保持 `case_id` 校验不变；四个 VOC 动作要求 `record_id` 形如 `rec*` 且 `operator.open_id` 非空。`FeishuEventOutcome` 的 `card_action` 分支（21-26 行）扩展 `recordId` 与 `operatorOpenId` |
+| `card-types.ts` | 39 行，含 `ONECARE_CASE_ID` 与 action 白名单 | **保留** `ONECARE_CASE_ID`——`cards.ts` 有 8 处在用，既是保留的八类演示卡文案，也是其按钮载荷（`cards.ts:66`）。一刀切移除会让演示卡按钮全部失效。新增 `VOC_CARD_ACTIONS` 白名单 |
 | `card-actions.ts` | 80 行，**不引用** `ONECARE_CASE_ID`；`resolveCardAction(action)` 同步单参 | 改为 async 多参，接收 `record_id` 与 `operatorOpenId`，做三重校验 |
 | `app/api/feishu/events/route.ts:50` | `resolveAction: (action) => CardActionResult` 同步单参 | 签名改 async 多参；`route.test.ts` 同步改 |
 | `cards.ts` | 403 行八类演示卡 | 复用 Card 2.0 外壳，新增 VOC 工单卡 |
