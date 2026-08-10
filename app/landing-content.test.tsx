@@ -1,7 +1,31 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import type { VocMetrics } from "../src/features/voc/metrics";
 import { LandingContent } from "./landing-content";
+
+// A real VocMetrics shape (task 14): LandingContent now threads this to the
+// operations workspace instead of that workspace reading a fabricated
+// vocTopics fixture. The tests below only assert on markup unrelated to
+// specific numbers, so any well-formed VocMetrics value works here.
+const metrics: VocMetrics = {
+  total: 3,
+  byPolarity: { 好评: 1, 中评: 1, 差评: 1 },
+  dimensionTop: [
+    { dimension: "维修时间", count: 2 },
+    { dimension: "服务态度", count: 1 },
+  ],
+  byChannel: [{ channel: "电商评价", count: 3 }],
+  negativeShare: 0.67,
+  ticketsOpened: 2,
+  ticketsClosed: 1,
+  closureRate: 0.5,
+  averageClosureHours: 12,
+  taggingAttempted: 3,
+  taggingSucceeded: 2,
+  taggingFailed: 1,
+  taggingPending: 0,
+};
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
@@ -11,7 +35,9 @@ afterEach(cleanup);
 
 describe("LandingContent", () => {
   it("presents the Hisense showroom story with interactive perspectives", () => {
-    const { container } = render(<LandingContent user={null} />);
+    const { container } = render(
+      <LandingContent metrics={metrics} user={null} />,
+    );
 
     expect(
       screen.getByRole("heading", {
@@ -190,7 +216,7 @@ describe("LandingContent", () => {
   });
 
   it("moves between perspective tabs with the keyboard", () => {
-    render(<LandingContent user={null} />);
+    render(<LandingContent metrics={metrics} user={null} />);
     fireEvent.click(screen.getByRole("link", { name: "四个视角" }));
 
     const customer = screen.getByRole("tab", { name: "客服" });
@@ -210,7 +236,9 @@ describe("LandingContent", () => {
   });
 
   it("keeps text controls centered and free of decorative arrows", () => {
-    const { container } = render(<LandingContent user={null} />);
+    const { container } = render(
+      <LandingContent metrics={metrics} user={null} />,
+    );
     fireEvent.click(screen.getByRole("link", { name: "团队" }));
 
     const textControls = container.querySelectorAll(
@@ -230,6 +258,7 @@ describe("LandingContent", () => {
   it("returns signed-in visitors to the Feishu experience gateway", () => {
     render(
       <LandingContent
+        metrics={metrics}
         user={{ openId: "ou_onecare", name: "服务运营员" }}
       />,
     );
@@ -246,7 +275,9 @@ describe("LandingContent", () => {
   });
 
   it("renders only safe copy for a known authentication error", () => {
-    render(<LandingContent user={null} authError="invalid_state" />);
+    render(
+      <LandingContent authError="invalid_state" metrics={metrics} user={null} />,
+    );
 
     expect(screen.getByRole("alert")).toHaveTextContent(
       "登录请求已失效，请重新发起。",

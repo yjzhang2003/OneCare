@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import "./globals.css";
 
@@ -21,7 +22,19 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           href="https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Demibold.min.css"
         />
       </head>
-      <body className="font-misans">{children}</body>
+      <body className="font-misans">
+        {/*
+          Task 14 turns on `cacheComponents` (next.config.ts) so the VOC
+          dashboard route can use `use cache`/`cacheLife`. Under that flag,
+          any page reading `cookies()`/`searchParams` (home, /login) must sit
+          behind a Suspense boundary or the build fails outright — before
+          this flag, the same pages were already fully dynamic per request,
+          this just makes that pre-existing behavior explicit. A `null`
+          fallback keeps the static shell empty rather than approximating
+          markup that would just be discarded a moment later.
+        */}
+        <Suspense fallback={null}>{children}</Suspense>
+      </body>
     </html>
   );
 }

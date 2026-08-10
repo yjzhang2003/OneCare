@@ -1,4 +1,5 @@
 import type { AuthUser } from "../src/features/auth/types";
+import type { VocMetrics } from "../src/features/voc/metrics";
 import {
   architectureLayers,
   closedLoopSteps,
@@ -29,9 +30,19 @@ const errorMessages: Record<string, string> = {
 type LandingContentProps = {
   user: AuthUser | null;
   authError?: string;
+  // Fetched by app/page.tsx (a sibling server component already awaiting
+  // getCurrentSession() there) and threaded through this component and
+  // PerspectiveTabs down to OperationsWorkspace, so the VOC showcase panel
+  // reflects the same real, cached aggregation the public dashboard shows
+  // rather than a second, independently-fabricated demo number set. Fetched
+  // one layer up instead of inside this component so LandingContent stays a
+  // plain synchronous component — landing-content.test.tsx renders it
+  // directly with @testing-library/react, which cannot render an async
+  // component.
+  metrics: VocMetrics;
 };
 
-export function LandingContent({ user, authError }: LandingContentProps) {
+export function LandingContent({ user, authError, metrics }: LandingContentProps) {
   const errorMessage = authError ? errorMessages[authError] : undefined;
 
   return (
@@ -76,7 +87,7 @@ export function LandingContent({ user, authError }: LandingContentProps) {
                 title="一次问题，四种角色，一条完整服务链"
                 titleId="perspectives-title"
               />
-          <PerspectiveTabs perspectives={perspectives} />
+          <PerspectiveTabs metrics={metrics} perspectives={perspectives} />
             </div>
           ),
           architecture: (

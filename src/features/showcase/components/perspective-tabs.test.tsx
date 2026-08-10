@@ -2,14 +2,37 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { perspectives } from "../content";
+import type { VocMetrics } from "../../voc/metrics";
 import { PerspectiveTabs } from "./perspective-tabs";
+
+// A real VocMetrics shape (task 14): OperationsWorkspace reads this instead
+// of the removed vocTopics fixture. These tests never assert on the VOC
+// panel's own numbers, so any well-formed value works here.
+const metrics: VocMetrics = {
+  total: 3,
+  byPolarity: { 好评: 1, 中评: 1, 差评: 1 },
+  dimensionTop: [
+    { dimension: "维修时间", count: 2 },
+    { dimension: "服务态度", count: 1 },
+  ],
+  byChannel: [{ channel: "电商评价", count: 3 }],
+  negativeShare: 0.67,
+  ticketsOpened: 2,
+  ticketsClosed: 1,
+  closureRate: 0.5,
+  averageClosureHours: 12,
+  taggingAttempted: 3,
+  taggingSucceeded: 2,
+  taggingFailed: 1,
+  taggingPending: 0,
+};
 
 afterEach(cleanup);
 
 describe("PerspectiveTabs", () => {
   it("keeps four workspaces mounted and positions the selected role", () => {
     const { container } = render(
-      <PerspectiveTabs perspectives={perspectives} />,
+      <PerspectiveTabs metrics={metrics} perspectives={perspectives} />,
     );
 
     expect(screen.getByTestId("workspace-customer")).toHaveAttribute(
@@ -40,7 +63,7 @@ describe("PerspectiveTabs", () => {
   });
 
   it("supports directional, Home, and End keyboard navigation", () => {
-    render(<PerspectiveTabs perspectives={perspectives} />);
+    render(<PerspectiveTabs metrics={metrics} perspectives={perspectives} />);
 
     const customer = screen.getByRole("tab", { name: "客服" });
     customer.focus();
@@ -66,7 +89,7 @@ describe("PerspectiveTabs", () => {
   });
 
   it("preserves a workspace demo while switching roles", () => {
-    render(<PerspectiveTabs perspectives={perspectives} />);
+    render(<PerspectiveTabs metrics={metrics} perspectives={perspectives} />);
 
     fireEvent.click(screen.getByRole("button", { name: "饮料不够凉" }));
     fireEvent.click(screen.getByRole("tab", { name: "客服" }));

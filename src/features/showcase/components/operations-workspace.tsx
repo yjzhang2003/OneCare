@@ -2,11 +2,8 @@
 
 import { useState } from "react";
 
-import {
-  serviceCase,
-  vocTopics,
-  type VocTopicId,
-} from "../perspective-demo-data";
+import type { VocMetrics } from "../../voc/metrics";
+import { serviceCase } from "../perspective-demo-data";
 import {
   journeyHasCompletedService,
   journeyHasImprovementTask,
@@ -22,23 +19,30 @@ import { FeishuExperienceBanner } from "./feishu-experience-banner";
 
 type OperationsWorkspaceProps = Readonly<{
   journey: ServiceJourneyState;
+  metrics: VocMetrics;
   onCreateImprovementTask: () => void;
   onReset: () => void;
 }>;
 
 export function OperationsWorkspace({
   journey,
+  metrics,
   onCreateImprovementTask,
   onReset,
 }: OperationsWorkspaceProps) {
-  const [selectedTopic, setSelectedTopic] =
-    useState<VocTopicId>("temperature");
-  const topic = vocTopics.find((item) => item.id === selectedTopic) ?? vocTopics[0];
+  const dimensions = metrics.dimensionTop;
+  const [selectedDimension, setSelectedDimension] = useState<string | null>(
+    dimensions[0]?.dimension ?? null,
+  );
+  const activeDimension =
+    dimensions.find((item) => item.dimension === selectedDimension) ??
+    dimensions[0] ??
+    null;
   const serviceCompleted = journeyHasCompletedService(journey);
   const taskCreated = journeyHasImprovementTask(journey);
 
   function reset() {
-    setSelectedTopic("temperature");
+    setSelectedDimension(dimensions[0]?.dimension ?? null);
     onReset();
   }
 
@@ -65,48 +69,56 @@ export function OperationsWorkspace({
       <div className="operations-workspace__grid">
         <DemoPanel className="voc-clusters">
           <div className="workspace-column-heading">
-            <span>高频问题聚类</span>
-            <small>AI 语义聚类 · 模拟</small>
+            <span>高频问题维度</span>
+            <small>来自当前 Base 快照 · AI 打标聚合</small>
           </div>
           <div className="voc-topic-list">
-            {vocTopics.map((item, index) => (
-              <button
-                aria-label={item.label}
-                aria-pressed={item.id === selectedTopic}
-                key={item.id}
-                onClick={() => setSelectedTopic(item.id)}
-                type="button"
-              >
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <strong>{item.label}</strong>
-                <small>{item.voices} 条</small>
-              </button>
-            ))}
+            {dimensions.length === 0 ? (
+              <p>暂无已打标的问题维度。</p>
+            ) : (
+              dimensions.map((item, index) => (
+                <button
+                  aria-label={item.dimension}
+                  aria-pressed={item.dimension === activeDimension?.dimension}
+                  key={item.dimension}
+                  onClick={() => setSelectedDimension(item.dimension)}
+                  type="button"
+                >
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <strong>{item.dimension}</strong>
+                  <small>{item.count} 条</small>
+                </button>
+              ))
+            )}
           </div>
         </DemoPanel>
 
         <DemoPanel className="voc-detail">
           <div className="workspace-column-heading">
-            <span>主题洞察</span>
-            <small>{topic.change} 环比变化</small>
+            <span>维度洞察</span>
+            <small>单一快照，暂无环比</small>
           </div>
-          <div className="voc-detail__headline">
-            <div>
-              <span>当前主题</span>
-              <h3>{topic.label}</h3>
-            </div>
-            <strong>{topic.voices} 条相关声音</strong>
-          </div>
-          <div className="voc-detail__signals">
-            <DemoMetric label="关联型号" value={`${topic.models} 个`} />
-            <DemoMetric label="趋势变化" value={topic.change} />
-            <DemoMetric label="关联服务案例" value={serviceCase.id} />
-          </div>
-          <div className="voc-trend" aria-label={`${topic.label}七日趋势`}>
-            {[32, 44, 40, 58, 66, 74, 88].map((height, index) => (
-              <i key={`${topic.id}-${index}`} style={{ height: `${height}%` }} />
-            ))}
-          </div>
+          {activeDimension ? (
+            <>
+              <div className="voc-detail__headline">
+                <div>
+                  <span>当前维度</span>
+                  <h3>{activeDimension.dimension}</h3>
+                </div>
+                <strong>{activeDimension.count} 条相关反馈</strong>
+              </div>
+              <div className="voc-detail__signals">
+                <DemoMetric label="反馈总量" value={`${metrics.total} 条`} />
+                <DemoMetric
+                  label="负向占比"
+                  value={`${Math.round(metrics.negativeShare * 100)}%`}
+                />
+                <DemoMetric label="关联服务案例" value={serviceCase.id} />
+              </div>
+            </>
+          ) : (
+            <p>暂无维度数据，等待更多 VOC 记录完成打标。</p>
+          )}
         </DemoPanel>
 
         <DemoPanel className="closure-panel">
@@ -164,7 +176,7 @@ export function OperationsWorkspace({
           </div>
           <div aria-live="polite" role="status">
             {taskCreated
-              ? `${topic.label}已进入闭环`
+              ? `${activeDimension ? activeDimension.dimension : "该问题"}已进入闭环`
               : serviceCompleted
                 ? "等待创建改善任务"
                 : "等待服务结果"}

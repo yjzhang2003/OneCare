@@ -35,7 +35,9 @@ import {
   type BotEnv,
 } from "../../../../src/lib/env";
 
-export const runtime = "nodejs";
+// `runtime = "nodejs"` was dropped: it is the App Router default anyway, and
+// task 14 enables `cacheComponents` in next.config.ts (for the VOC
+// dashboard's `use cache`), which rejects this route segment config outright.
 export const maxDuration = 10;
 
 type Scheduler = (task: () => Promise<void>) => void;

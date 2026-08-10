@@ -8,10 +8,34 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { initialServiceJourneyState } from "../service-journey";
+import type { VocMetrics } from "../../voc/metrics";
 import { AgentWorkspace } from "./agent-workspace";
 import { CustomerWorkspace } from "./customer-workspace";
 import { EngineerWorkspace } from "./engineer-workspace";
 import { OperationsWorkspace } from "./operations-workspace";
+
+// A real VocMetrics shape (task 14): OperationsWorkspace now renders this
+// instead of the removed vocTopics fixture. Two dimensionTop entries so the
+// "inspect a VOC topic" test below can click between them like it did with
+// the old two-topic fixture.
+const metrics: VocMetrics = {
+  total: 204,
+  byPolarity: { 好评: 40, 中评: 36, 差评: 128 },
+  dimensionTop: [
+    { dimension: "维修时间", count: 128 },
+    { dimension: "服务态度", count: 76 },
+  ],
+  byChannel: [{ channel: "电商评价", count: 204 }],
+  negativeShare: 0.8,
+  ticketsOpened: 150,
+  ticketsClosed: 129,
+  closureRate: 0.86,
+  averageClosureHours: 18,
+  taggingAttempted: 204,
+  taggingSucceeded: 190,
+  taggingFailed: 8,
+  taggingPending: 6,
+};
 
 const scrollToDescriptor = Object.getOwnPropertyDescriptor(
   HTMLElement.prototype,
@@ -217,12 +241,13 @@ describe("perspective workspaces", () => {
     expect(onReset).toHaveBeenCalledOnce();
   });
 
-  it("lets operations inspect a VOC topic and create an improvement task", () => {
+  it("lets operations inspect a VOC dimension and create an improvement task", () => {
     const onCreateImprovementTask = vi.fn();
     const onReset = vi.fn();
     const { rerender } = render(
       <OperationsWorkspace
         journey={{ customerReply: "饮料不够凉", stage: "serviceCompleted" }}
+        metrics={metrics}
         onCreateImprovementTask={onCreateImprovementTask}
         onReset={onReset}
       />,
@@ -236,10 +261,10 @@ describe("perspective workspaces", () => {
       "href",
       "/login?from=operations",
     );
-    expect(screen.getByText("128 条相关声音")).toBeInTheDocument();
+    expect(screen.getByText("128 条相关反馈")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "安装等待时间" }));
-    expect(screen.getByText("76 条相关声音")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "服务态度" }));
+    expect(screen.getByText("76 条相关反馈")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "创建改善任务" }));
     expect(onCreateImprovementTask).toHaveBeenCalledOnce();
@@ -247,6 +272,7 @@ describe("perspective workspaces", () => {
     rerender(
       <OperationsWorkspace
         journey={{ customerReply: "饮料不够凉", stage: "improvementCreated" }}
+        metrics={metrics}
         onCreateImprovementTask={onCreateImprovementTask}
         onReset={onReset}
       />,

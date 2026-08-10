@@ -19,8 +19,6 @@ import {
 import type { AuthEnv } from "../../../../../src/lib/env";
 import { readAuthEnv } from "../../../../../src/lib/env";
 
-export const runtime = "nodejs";
-
 type CallbackDependencies = {
   readEnv: () => AuthEnv;
   exchangeCode: (input: { code: string; env: AuthEnv }) => Promise<string>;
