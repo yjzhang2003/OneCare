@@ -463,9 +463,17 @@ const STATUS_COLOR_BY_STATE: Readonly<Record<VocState, string>> = {
 // full text still lives in the Base row itself).
 export const VOC_TICKET_CONTENT_LIMIT = 200;
 
+// content.slice() cuts UTF-16 code units, not characters. VOC text is
+// user-typed and emoji are common; an emoji outside the Basic Multilingual
+// Plane is two UTF-16 code units (a surrogate pair), so a slice that lands
+// exactly between them keeps a lone surrogate. That lone surrogate survives
+// JSON.stringify and becomes mojibake once re-encoded as UTF-8 for the
+// Feishu API. Array.from() splits on code points instead, so a boundary
+// landing mid-emoji drops the whole character rather than half of it.
 function truncateContent(content: string): string {
-  return content.length > VOC_TICKET_CONTENT_LIMIT
-    ? `${content.slice(0, VOC_TICKET_CONTENT_LIMIT)}…`
+  const codePoints = Array.from(content);
+  return codePoints.length > VOC_TICKET_CONTENT_LIMIT
+    ? `${codePoints.slice(0, VOC_TICKET_CONTENT_LIMIT).join("")}…`
     : content;
 }
 
@@ -494,8 +502,10 @@ export function createVocTicketCard(
     icon: "todo_colorful",
     elements: [
       detailBlock(tag.summary || content, [
+        ["记录编号", record.recordNumber || "—"],
         ["渠道", record.channel],
         ["产品品类", record.category],
+        ["反馈时间", record.feedbackAt ?? "—"],
       ]),
       field("原始反馈", content),
       field("情绪极性", tag.polarity),
@@ -503,6 +513,7 @@ export function createVocTicketCard(
         "问题维度",
         tag.dimensions.length > 0 ? tag.dimensions.join("、") : "—",
       ),
+      field("严重度", record.severity ?? "—"),
       ...(tag.replies.length > 0
         ? [field("AI 回复话术建议", repliesText(tag.replies))]
         : []),

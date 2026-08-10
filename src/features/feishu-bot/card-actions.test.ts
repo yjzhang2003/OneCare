@@ -70,13 +70,16 @@ describe("resolveCardAction", () => {
 // literal type and reject any other valid VocState.
 const record: VocRecord = {
   recordId: "rec1",
+  recordNumber: "VOC-0001",
   channel: "电商评价",
   category: "冰箱",
   content: "等了三天",
   rating: 2,
+  feedbackAt: "2026-01-20T00:00:00.000Z",
   state: "待跟进",
   polarity: "差评",
   dimensions: ["维修时间"],
+  severity: "中",
   ownerOpenIds: ["ou_owner"],
   retryCount: 0,
   ticketOpenedAt: "2026-01-23T02:00:00.000Z",

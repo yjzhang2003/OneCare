@@ -6,12 +6,15 @@ describe("toVocRecord", () => {
   it("unpacks single select, multi select and person fields", () => {
     const record = toVocRecord(
       {
+        [VOC_FIELD_NAMES.recordNumber]: "VOC-0001",
+        [VOC_FIELD_NAMES.feedbackAt]: 1769126400000,
         [VOC_FIELD_NAMES.channel]: "电商评价",
         [VOC_FIELD_NAMES.category]: "冰箱",
         [VOC_FIELD_NAMES.content]: "等了三天",
         [VOC_FIELD_NAMES.state]: "待跟进",
         [VOC_FIELD_NAMES.polarity]: "差评",
         [VOC_FIELD_NAMES.dimensions]: ["维修时间", "服务态度"],
+        [VOC_FIELD_NAMES.severity]: "高",
         [VOC_FIELD_NAMES.owner]: [
           { email: "", en_name: "OneCare", id: "ou_owner", name: "OneCare" },
         ],
@@ -24,17 +27,38 @@ describe("toVocRecord", () => {
 
     expect(record).toMatchObject({
       recordId: "rec1",
+      recordNumber: "VOC-0001",
+      feedbackAt: "2026-01-23T00:00:00.000Z",
       channel: "电商评价",
       category: "冰箱",
       content: "等了三天",
       state: "待跟进",
       polarity: "差评",
       dimensions: ["维修时间", "服务态度"],
+      severity: "高",
       ownerOpenIds: ["ou_owner"],
       retryCount: 1,
       rating: 2,
       ticketOpenedAt: "2026-01-23T02:00:00.000Z",
     });
+  });
+
+  it("defaults recordNumber to an empty string when absent", () => {
+    expect(toVocRecord({}, "rec1").recordNumber).toBe("");
+  });
+
+  it("defaults feedbackAt to null when absent", () => {
+    expect(toVocRecord({}, "rec1").feedbackAt).toBeNull();
+  });
+
+  it("nulls a severity that is not in the 高/中/低 enum", () => {
+    expect(
+      toVocRecord({ [VOC_FIELD_NAMES.severity]: "紧急" }, "rec1").severity,
+    ).toBeNull();
+  });
+
+  it("defaults severity to null when absent", () => {
+    expect(toVocRecord({}, "rec1").severity).toBeNull();
   });
 
   // The next four tests encode calibration against the live Base on 2026-08-10.

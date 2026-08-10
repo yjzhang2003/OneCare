@@ -11,6 +11,7 @@ import type { TagResult } from "../tagging/contracts";
 // Operations staff can rename Base columns at will, so every field name lives
 // here and nowhere else. Renaming one column then means editing one file.
 export const VOC_FIELD_NAMES = {
+  recordNumber: "记录编号",
   feedbackAt: "反馈时间",
   channel: "渠道",
   category: "产品品类",
@@ -40,20 +41,26 @@ export type BitableFields = Record<string, unknown>;
 
 export type VocRecord = Readonly<{
   recordId: string;
+  recordNumber: string;
   channel: string;
   category: string;
   content: string;
   rating: number | null;
+  feedbackAt: string | null;
   state: VocState;
   polarity: VocPolarity | null;
   dimensions: readonly VocDimension[];
+  severity: VocSeverity | null;
   ownerOpenIds: readonly string[];
   retryCount: number;
   ticketOpenedAt: string | null;
   closedAt: string | null;
 }>;
 
-function text(value: unknown): string {
+// Card rendering (createVocTicketCard) and any other consumer that needs a
+// plain string out of a Bitable field reach for this rather than re-deriving
+// their own typeof check.
+export function text(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
@@ -93,17 +100,27 @@ function isoDate(value: unknown): string | null {
   return null;
 }
 
-function stringArray(value: unknown): readonly string[] {
+// Exported for the same reason as text(): the analyze route reads raw AI
+// field-shortcut columns (multi-select 情绪标签/问题维度) directly off Bitable
+// responses and must not re-derive this Array.isArray + typeof filter itself.
+export function stringArray(value: unknown): readonly string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
 }
 
+// 严重度 is a single-select written by triage.ts (never by the AI), but a
+// hand-edited Base row could still hold a stray value — treat anything
+// outside the enum as "not decided" rather than passing it through.
+const VOC_SEVERITIES: readonly VocSeverity[] = ["高", "中", "低"];
+
 // Calibrated: a User field reads back as [{ email, en_name, id, name }] — the
 // key is `id`, NOT `open_id`. Reading open_id yields an empty owner list, which
 // makes every card action fail the ownership check while unit tests built on
-// hand-written {open_id} fixtures stay green.
-function openIds(value: unknown): readonly string[] {
+// hand-written {open_id} fixtures stay green. Exported so the analyze route's
+// owner-table reader (a different table, same field shape) can reuse it
+// instead of re-deriving the same calibration.
+export function openIds(value: unknown): readonly string[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) =>
     typeof item === "object" &&
@@ -129,6 +146,11 @@ export function toVocRecord(
     ? (rawPolarity as VocPolarity)
     : null;
 
+  const rawSeverity = text(safeFields[VOC_FIELD_NAMES.severity]);
+  const severity = (VOC_SEVERITIES as readonly string[]).includes(rawSeverity)
+    ? (rawSeverity as VocSeverity)
+    : null;
+
   const dimensions = stringArray(
     safeFields[VOC_FIELD_NAMES.dimensions],
   ).filter((item): item is VocDimension =>
@@ -137,13 +159,16 @@ export function toVocRecord(
 
   return {
     recordId,
+    recordNumber: text(safeFields[VOC_FIELD_NAMES.recordNumber]),
     channel: text(safeFields[VOC_FIELD_NAMES.channel]),
     category: text(safeFields[VOC_FIELD_NAMES.category]),
     content: text(safeFields[VOC_FIELD_NAMES.content]),
     rating: numberish(safeFields[VOC_FIELD_NAMES.rating]),
+    feedbackAt: isoDate(safeFields[VOC_FIELD_NAMES.feedbackAt]),
     state,
     polarity,
     dimensions,
+    severity,
     ownerOpenIds: openIds(safeFields[VOC_FIELD_NAMES.owner]),
     retryCount: numberish(safeFields[VOC_FIELD_NAMES.retryCount]) ?? 0,
     ticketOpenedAt: isoDate(safeFields[VOC_FIELD_NAMES.ticketOpenedAt]),

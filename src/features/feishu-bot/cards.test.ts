@@ -162,13 +162,16 @@ describe("OneCare Feishu Card 2.0 builders", () => {
 function vocRecord(overrides: Partial<VocRecord> = {}): VocRecord {
   return {
     recordId: "rec1",
+    recordNumber: "VOC-0001",
     channel: "电商评价",
     category: "冰箱",
     content: "冷藏室温度持续偏高，用户已联系三次",
     rating: 2,
+    feedbackAt: "2026-01-20T00:00:00.000Z",
     state: "待跟进",
     polarity: "差评",
     dimensions: ["维修时间"],
+    severity: "中",
     ownerOpenIds: ["ou_owner"],
     retryCount: 0,
     ticketOpenedAt: "2026-01-23T02:00:00.000Z",
@@ -198,6 +201,33 @@ describe("createVocTicketCard", () => {
     expect(JSON.stringify(card)).toContain("冰箱");
     expect(JSON.stringify(card)).toContain("冷藏室温度持续偏高，用户已联系三次");
     expect(JSON.stringify(card)).toContain("用户反馈冷藏室温度持续偏高，等待维修三天未解决");
+  });
+
+  // Spec §6.1 lists 记录编号、反馈时间、严重度 alongside 渠道/品类 as required
+  // card content; field-map.ts didn't expose them until this task.
+  it("renders 记录编号, 反馈时间 and 严重度 from the record", () => {
+    const card = createVocTicketCard(
+      vocRecord({
+        recordNumber: "VOC-0042",
+        feedbackAt: "2026-01-20T00:00:00.000Z",
+        severity: "高",
+      }),
+      tagResult(),
+    );
+    const json = JSON.stringify(card);
+
+    expect(json).toContain("VOC-0042");
+    expect(json).toContain("2026-01-20T00:00:00.000Z");
+    expect(json).toContain("高");
+  });
+
+  it("falls back to a placeholder when 记录编号/反馈时间/严重度 are unset", () => {
+    expect(() =>
+      createVocTicketCard(
+        vocRecord({ recordNumber: "", feedbackAt: null, severity: null }),
+        tagResult(),
+      ),
+    ).not.toThrow();
   });
 
   it.each([
@@ -281,6 +311,21 @@ describe("createVocTicketCard", () => {
     expect(() =>
       createVocTicketCard(vocRecord({ content: "" }), tagResult()),
     ).not.toThrow();
+  });
+
+  it("truncates on a code point boundary instead of splitting a surrogate pair", () => {
+    // "😀" sits outside the Basic Multilingual Plane and is two UTF-16 code
+    // units. Landing the cut exactly between them (as content.slice(0, 200)
+    // would for this input) leaves a lone surrogate, which becomes mojibake
+    // once re-encoded as UTF-8 for the Feishu API.
+    const content = `${"a".repeat(199)}😀TAIL`;
+    const json = JSON.stringify(
+      createVocTicketCard(vocRecord({ content }), tagResult()),
+    );
+    const loneSurrogate = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
+    expect(json).not.toContain("TAIL");
+    expect(loneSurrogate.test(json)).toBe(false);
   });
 
   it("renders 情绪极性 from the tag result", () => {
