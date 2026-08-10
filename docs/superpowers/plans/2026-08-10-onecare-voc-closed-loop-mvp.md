@@ -1226,7 +1226,7 @@ const successOutput = JSON.stringify({
 
 describe("createAilyTaggingProvider", () => {
   it("posts to the skill start endpoint with a bearer token", async () => {
-    const fetcher = vi.fn(async () =>
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
       jsonResponse({ code: 0, msg: "ok", data: { output: successOutput, status: "success" } }),
     );
 
@@ -1234,26 +1234,26 @@ describe("createAilyTaggingProvider", () => {
     await provider.tag(records);
 
     expect(fetcher).toHaveBeenCalledTimes(1);
-    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetcher.mock.calls[0];
     expect(url).toBe(
       "https://open.feishu.cn/open-apis/aily/v1/apps/spring_demo__c/skills/skill_demo/start",
     );
-    expect(init.method).toBe("POST");
+    expect(init?.method).toBe("POST");
     expect(
-      (init.headers as Record<string, string>).Authorization,
+      (init?.headers as Record<string, string>).Authorization,
     ).toBe("Bearer t-token");
   });
 
   it("serialises input as a JSON string rather than a nested object", async () => {
-    const fetcher = vi.fn(async () =>
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
       jsonResponse({ code: 0, data: { output: successOutput, status: "success" } }),
     );
 
     const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
     await provider.tag(records);
 
-    const [, init] = fetcher.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(init.body as string) as { input: unknown };
+    const [, init] = fetcher.mock.calls[0];
+    const body = JSON.parse(init?.body as string) as { input: unknown };
 
     expect(typeof body.input).toBe("string");
     expect(JSON.parse(body.input as string)).toEqual({
