@@ -20,6 +20,7 @@
 - 外部调用显式超时：多维表格 10s，打标 25s。
 - 枚举值逐字使用规格 §3.2 的中文字面量，不得改写或翻译。
 - 完成判定命令：`npm test`、`npm run test:runtime`、`npm run lint`、`npm run typecheck`、`npm run build`、`npm audit --omit=dev`。
+- **假 mock 必须声明参数类型，不得对 `.mock.calls[n]` 做元组强转。** `vi.fn(async () => ...)` 推断出的调用签名是零参，`.mock.calls[0]` 类型是 `[]`，再 `as [string, RequestInit]` 会触发 `TS2352` 并让 `npm run typecheck` 变红——`vitest run` 不做类型检查，所以测试全绿也发现不了。正确写法是把参数类型写进 `vi.fn`：`vi.fn(async (_url: string, _init?: RequestInit) => ...)`，之后直接解构、无需强转。仓库既有先例见 `src/features/auth/feishu.test.ts:17` 的 `fetchReturning`。
 
 ## 阶段与外部依赖
 
@@ -2192,7 +2193,7 @@ describe("createBitableClient", () => {
   const token = async () => "t1";
 
   it("requests a single record with open_id typed people fields", async () => {
-    const fetcher = vi.fn(async () =>
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
       jsonResponse({
         code: 0,
         data: {
@@ -2207,7 +2208,7 @@ describe("createBitableClient", () => {
     const client = createBitableClient(env, token, fetcher as unknown as typeof fetch);
     const record = await client.getRecord("rec1");
 
-    const [url] = fetcher.mock.calls[0] as [string];
+    const [url] = fetcher.mock.calls[0];
     expect(url).toBe(
       "https://open.feishu.cn/open-apis/bitable/v1/apps/bascn_demo/tables/tblvoc/records/rec1?user_id_type=open_id",
     );
@@ -2224,7 +2225,7 @@ describe("createBitableClient", () => {
 
   it("pages through list results until the page token runs out", async () => {
     const fetcher = vi
-      .fn()
+      .fn<(url: string, init?: RequestInit) => Promise<Response>>()
       .mockResolvedValueOnce(
         jsonResponse({
           code: 0,
@@ -2247,7 +2248,7 @@ describe("createBitableClient", () => {
 
     expect(records.map((r) => r.recordId)).toEqual(["rec1", "rec2"]);
     expect(fetcher).toHaveBeenCalledTimes(2);
-    expect((fetcher.mock.calls[1] as [string])[0]).toContain("page_token=p2");
+    expect(fetcher.mock.calls[1][0]).toContain("page_token=p2");
   });
 
   it("stops paging at the configured limit", async () => {
@@ -2269,15 +2270,17 @@ describe("createBitableClient", () => {
   });
 
   it("sends a PUT with open_id typing when updating", async () => {
-    const fetcher = vi.fn(async () => jsonResponse({ code: 0, data: {} }));
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: 0, data: {} }),
+    );
 
     const client = createBitableClient(env, token, fetcher as unknown as typeof fetch);
     await client.updateRecord("rec1", { [VOC_FIELD_NAMES.state]: "跟进中" });
 
-    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetcher.mock.calls[0];
     expect(url).toContain("/records/rec1?user_id_type=open_id");
-    expect(init.method).toBe("PUT");
-    expect(JSON.parse(init.body as string)).toEqual({
+    expect(init?.method).toBe("PUT");
+    expect(JSON.parse(init?.body as string)).toEqual({
       fields: { [VOC_FIELD_NAMES.state]: "跟进中" },
     });
   });
@@ -3195,7 +3198,9 @@ function deps(overrides: Record<string, unknown> = {}) {
     ownerRules: vi.fn(async () => [
       { scope: "", openId: "ou_backstop", fallback: true },
     ]),
-    updateRecord: vi.fn(async () => undefined),
+    updateRecord: vi.fn(
+      async (_recordId: string, _fields: Record<string, unknown>) => undefined,
+    ),
     ...overrides,
   };
 }
@@ -3238,10 +3243,7 @@ describe("createAnalyzeRoute", () => {
       failed: 0,
     });
 
-    const [, fields] = dependencies.updateRecord.mock.calls[0] as [
-      string,
-      Record<string, unknown>,
-    ];
+    const [, fields] = dependencies.updateRecord.mock.calls[0];
     expect(fields["情绪极性"]).toBe("差评");
     expect(fields["严重度"]).toBe("中");
     expect(fields["流程状态"]).toBe("待跟进");
@@ -3266,10 +3268,7 @@ describe("createAnalyzeRoute", () => {
 
     expect(await response.json()).toMatchObject({ failed: 1, tagged: 0 });
 
-    const [, fields] = dependencies.updateRecord.mock.calls[0] as [
-      string,
-      Record<string, unknown>,
-    ];
+    const [, fields] = dependencies.updateRecord.mock.calls[0];
     expect(fields["流程状态"]).toBe("分析失败");
     expect(fields["失败原因"]).toBe("模型未返回该 id");
     expect(fields["重试次数"]).toBe(1);
