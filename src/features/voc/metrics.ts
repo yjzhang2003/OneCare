@@ -77,11 +77,16 @@ export function aggregateVocMetrics(
   const opened = records.filter((r) => r.ticketOpenedAt);
   const closed = opened.filter((r) => r.closedAt);
 
-  const closureHours = closed.map((record) => {
-    const from = new Date(record.ticketOpenedAt as string).getTime();
-    const to = new Date(record.closedAt as string).getTime();
-    return (to - from) / 3_600_000;
-  });
+  const closureHours = closed
+    .map((record) => {
+      const from = new Date(record.ticketOpenedAt as string).getTime();
+      const to = new Date(record.closedAt as string).getTime();
+      if (!Number.isFinite(from) || !Number.isFinite(to)) {
+        return null;
+      }
+      return (to - from) / 3_600_000;
+    })
+    .filter((h): h is number => h !== null);
 
   const dimensionTop = countBy(
     records.flatMap((record) => [...record.dimensions]),

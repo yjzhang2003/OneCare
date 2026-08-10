@@ -105,4 +105,94 @@ describe("aggregateVocMetrics", () => {
     expect(metrics.closureRate).toBe(0);
     expect(metrics.averageClosureHours).toBe(0);
   });
+
+  it("skips records with unparseable dates when computing average closure hours", () => {
+    const testRecords: readonly VocMetricsInput[] = [
+      {
+        state: "已闭环",
+        polarity: "差评",
+        dimensions: [],
+        channel: "电商评价",
+        ticketOpenedAt: "not-a-real-date",
+        closedAt: "also-not-a-date",
+      },
+      {
+        state: "已闭环",
+        polarity: "好评",
+        dimensions: [],
+        channel: "电商评价",
+        ticketOpenedAt: "2026-01-23T02:00:00.000Z",
+        closedAt: "2026-01-24T02:00:00.000Z",
+      },
+    ];
+
+    const metrics = aggregateVocMetrics(testRecords);
+
+    // Should compute average from the one valid record (24 hours)
+    expect(metrics.averageClosureHours).toBeCloseTo(24, 5);
+    expect(Number.isNaN(metrics.averageClosureHours)).toBe(false);
+    // Still counts both as opened/closed by field presence
+    expect(metrics.ticketsOpened).toBe(2);
+    expect(metrics.ticketsClosed).toBe(2);
+  });
+
+  it("handles only closedAt unparseable, skips that record from average", () => {
+    const testRecords: readonly VocMetricsInput[] = [
+      {
+        state: "已闭环",
+        polarity: "差评",
+        dimensions: [],
+        channel: "电商评价",
+        ticketOpenedAt: "2026-01-23T02:00:00.000Z",
+        closedAt: "not-a-date",
+      },
+      {
+        state: "已闭环",
+        polarity: "好评",
+        dimensions: [],
+        channel: "电商评价",
+        ticketOpenedAt: "2026-01-24T02:00:00.000Z",
+        closedAt: "2026-01-25T02:00:00.000Z",
+      },
+    ];
+
+    const metrics = aggregateVocMetrics(testRecords);
+
+    // Average should be from the second record only (24 hours)
+    expect(metrics.averageClosureHours).toBeCloseTo(24, 5);
+    expect(Number.isNaN(metrics.averageClosureHours)).toBe(false);
+    // Both counted as opened/closed
+    expect(metrics.ticketsOpened).toBe(2);
+    expect(metrics.ticketsClosed).toBe(2);
+  });
+
+  it("returns 0 for averageClosureHours when all dates are unparseable", () => {
+    const testRecords: readonly VocMetricsInput[] = [
+      {
+        state: "已闭环",
+        polarity: "差评",
+        dimensions: [],
+        channel: "电商评价",
+        ticketOpenedAt: "bad-date",
+        closedAt: "worse-date",
+      },
+      {
+        state: "已闭环",
+        polarity: "好评",
+        dimensions: [],
+        channel: "电商评价",
+        ticketOpenedAt: "invalid",
+        closedAt: "also-invalid",
+      },
+    ];
+
+    const metrics = aggregateVocMetrics(testRecords);
+
+    // No valid durations means average is 0
+    expect(metrics.averageClosureHours).toBe(0);
+    expect(Number.isNaN(metrics.averageClosureHours)).toBe(false);
+    // Still counts as opened/closed by field presence
+    expect(metrics.ticketsOpened).toBe(2);
+    expect(metrics.ticketsClosed).toBe(2);
+  });
 });
