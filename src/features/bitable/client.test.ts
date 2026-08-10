@@ -44,6 +44,151 @@ describe("createTenantTokenProvider", () => {
 
     await expect(provider()).rejects.toThrow(/tenant_access_token/);
   });
+
+  it("still fetches only once across ten serial calls", async () => {
+    const fetcher = vi.fn(async () =>
+      jsonResponse({ code: 0, tenant_access_token: "t1", expire: 7200 }),
+    );
+
+    const provider = createTenantTokenProvider(
+      "cli_x",
+      "secret",
+      fetcher as unknown as typeof fetch,
+    );
+
+    const results: string[] = [];
+    for (let i = 0; i < 10; i += 1) {
+      // Sequential by design: this reproduces the "serial calls" half of the
+      // coordinator's probe, where a single cached token must be reused.
+      results.push(await provider());
+    }
+
+    expect(results).toEqual(Array(10).fill("t1"));
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares a single in-flight exchange across five concurrent callers", async () => {
+    const fetcher = vi.fn(async () =>
+      jsonResponse({ code: 0, tenant_access_token: "t1", expire: 7200 }),
+    );
+
+    const provider = createTenantTokenProvider(
+      "cli_x",
+      "secret",
+      fetcher as unknown as typeof fetch,
+    );
+
+    const results = await Promise.all([
+      provider(),
+      provider(),
+      provider(),
+      provider(),
+      provider(),
+    ]);
+
+    expect(results).toEqual(["t1", "t1", "t1", "t1", "t1"]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries after a failed exchange instead of caching the rejection", async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ code: 99991663 }));
+
+    const provider = createTenantTokenProvider(
+      "cli_x",
+      "secret",
+      fetcher as unknown as typeof fetch,
+    );
+
+    await expect(provider()).rejects.toThrow(/tenant_access_token/);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    fetcher.mockResolvedValueOnce(
+      jsonResponse({ code: 0, tenant_access_token: "t1", expire: 7200 }),
+    );
+
+    await expect(provider()).resolves.toBe("t1");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries after the fetcher itself rejects, instead of caching the rejection", async () => {
+    const fetcher = vi
+      .fn<(url: string, init?: RequestInit) => Promise<Response>>()
+      .mockRejectedValueOnce(new Error("network down"));
+
+    const provider = createTenantTokenProvider(
+      "cli_x",
+      "secret",
+      fetcher as unknown as typeof fetch,
+    );
+
+    await expect(provider()).rejects.toThrow(/network down/);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    fetcher.mockResolvedValueOnce(
+      jsonResponse({ code: 0, tenant_access_token: "t1", expire: 7200 }),
+    );
+
+    await expect(provider()).resolves.toBe("t1");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects every concurrent caller on a first-call failure, then recovers", async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ code: 99991663 }));
+
+    const provider = createTenantTokenProvider(
+      "cli_x",
+      "secret",
+      fetcher as unknown as typeof fetch,
+    );
+
+    const settled = await Promise.allSettled([
+      provider(),
+      provider(),
+      provider(),
+      provider(),
+      provider(),
+    ]);
+
+    expect(settled.every((result) => result.status === "rejected")).toBe(
+      true,
+    );
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    fetcher.mockResolvedValueOnce(
+      jsonResponse({ code: 0, tenant_access_token: "t1", expire: 7200 }),
+    );
+
+    await expect(provider()).resolves.toBe("t1");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-fetches once after expiry, even when requested concurrently", async () => {
+    const fetcher = vi.fn(async () =>
+      jsonResponse({ code: 0, tenant_access_token: "stale", expire: 0 }),
+    );
+
+    const provider = createTenantTokenProvider(
+      "cli_x",
+      "secret",
+      fetcher as unknown as typeof fetch,
+    );
+
+    // expire: 0 combined with the token's built-in safety window means the
+    // cached entry is already stale the instant it lands.
+    await expect(provider()).resolves.toBe("stale");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    // mockImplementation (not mockResolvedValue) so a fresh Response — with
+    // an unread body — is produced if this were ever invoked more than once.
+    fetcher.mockImplementation(async () =>
+      jsonResponse({ code: 0, tenant_access_token: "fresh", expire: 7200 }),
+    );
+
+    const results = await Promise.all([provider(), provider(), provider()]);
+
+    expect(results).toEqual(["fresh", "fresh", "fresh"]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("createBitableClient", () => {

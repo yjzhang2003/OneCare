@@ -22,11 +22,17 @@ export function createTenantTokenProvider(
   // budget and cannot afford a token exchange on every click.
   let cached: { token: string; expiresAt: number } | null = null;
 
-  return async () => {
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.token;
-    }
+  // Card callbacks are inherently concurrent — several owners can click at
+  // once, or Feishu can redeliver the same callback. Checking `cached` and
+  // then `await`-ing the exchange are two separate steps, so without this,
+  // every concurrent caller sees an empty cache and starts its own exchange.
+  // The in-flight exchange itself (not just its eventual result) is cached
+  // here so concurrent callers share one network round trip. It is cleared
+  // in `finally` so a failed exchange never wedges later calls onto the same
+  // rejected promise.
+  let pending: Promise<string> | null = null;
 
+  async function exchange(): Promise<string> {
     const response = await fetcher(TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json; charset=utf-8" },
@@ -50,6 +56,20 @@ export function createTenantTokenProvider(
       expiresAt: Date.now() + expire * 1000 - TOKEN_SAFETY_WINDOW_MS,
     };
     return cached.token;
+  }
+
+  return () => {
+    if (cached && cached.expiresAt > Date.now()) {
+      return Promise.resolve(cached.token);
+    }
+
+    if (!pending) {
+      pending = exchange().finally(() => {
+        pending = null;
+      });
+    }
+
+    return pending;
   };
 }
 
