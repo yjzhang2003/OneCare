@@ -2,6 +2,7 @@ import type { BitableClient } from "../bitable/client";
 import { VOC_FIELD_NAMES } from "../bitable/field-map";
 import { transition, type VocAction } from "../voc/service-event";
 import { buildAnswerFacts } from "../warroom/facts";
+import { warRoomDecision } from "../warroom/naming";
 import type {
   FeishuCardCallbackResponse,
   FeishuOutboundMessage,
@@ -136,16 +137,25 @@ export type ResolveVocCardActionInput = Readonly<{
   // the action rather than chosen by the caller.
   note: string;
   bitable: VocActionBitable;
-  // Closure archival (Task 9) — all three optional so every existing caller
-  // (and every test above this one) that has no notion of a group keeps
-  // compiling unchanged. `chatId` is the gate: `null` or omitted means there
-  // is nothing to archive — most importantly the single-chat case the four
-  // state actions have always supported, which has no group at all — and
-  // `readTranscript`/`summarise` are then never even invoked. `readTranscript`
-  // takes no argument because *which* chat to read is the caller's business,
-  // already closed over by whatever function it hands in here.
-  chatId?: string | null;
-  readTranscript?: () => Promise<readonly string[]>;
+  // Closure archival (Task 9) — both optional so every existing caller (and
+  // every test above this one) that has no notion of a group keeps compiling
+  // unchanged. There is deliberately no `chatId` parameter here: the gate is
+  // "does this ticket have a war room", and that is a fact already sitting on
+  // the record this call read for the triple check above, not something the
+  // caller needs to determine or pass in. Threading it through the route
+  // layer would either need a second `getRecord` (the exact duplicate read
+  // this module's design already refuses — see VocActionBitable's own
+  // comment) or force the caller to guess whether a given click's chat
+  // happens to be the war room, which is the wrong question anyway: a ticket
+  // closed from a plain single chat still has a war room worth archiving if
+  // one exists, and a ticket with no war room has nothing to archive no
+  // matter which chat the click came from. `readTranscript` takes the war
+  // room's chat id as its argument, unlike a plain `() => Promise<...>`: the
+  // caller cannot close over "which chat" in advance the way it could when
+  // `chatId` was an explicit input, because it does not know a war room
+  // exists — let alone which one — until this call resolves it from the
+  // record.
+  readTranscript?: (chatId: string) => Promise<readonly string[]>;
   // `facts` (built from the very record this call already read, via Task 8's
   // buildAnswerFacts) and whatever `readTranscript` returned are the only
   // grounding a closing summary gets. `null` means "cannot summarise right
@@ -254,10 +264,27 @@ export async function resolveVocCardAction(
   // the narrowing from this guard survives across them.
   const readTranscript = input.readTranscript;
   const summarise = input.summarise;
+  // `record.warRoomChatId` is untouched by the write above (that write only
+  // ever sets state/note/closedAt fields), so reading it off the pre-write
+  // `record` is not the stale-data trap it would be for a field the write
+  // just changed — it is exactly the same value a fresh read would return.
+  //
+  // Three values live in this column, not two: "" (no war room chat has ever
+  // been created — warRoomDecision's "create"), a real `oc_*` chat id
+  // ("exists"), and the literal string "declined" (warRoomDecision's own
+  // DECLINED_MARKER — the operator chose "暂不需要协同群" in
+  // resolveWarRoomAction). "declined" is non-empty text but is not a chat
+  // id: handing it to a transcript reader would be a guaranteed-to-fail API
+  // call instead of a correct no-op. Only "exists" has anything to archive.
   let closureSuffix = "";
-  if (outcome.next === "已闭环" && input.chatId && readTranscript && summarise) {
+  if (
+    outcome.next === "已闭环" &&
+    warRoomDecision(record.warRoomChatId) === "exists" &&
+    readTranscript &&
+    summarise
+  ) {
     try {
-      const transcript = await readTranscript();
+      const transcript = await readTranscript(record.warRoomChatId);
       const facts = buildAnswerFacts({
         // `record` is what getRecord returned before this call's own write —
         // still showing the pre-closure state. The write above has already

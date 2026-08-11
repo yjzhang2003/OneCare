@@ -28,7 +28,10 @@ import {
   createVocTicketCard,
   createWelcomeMessage,
 } from "../../../../src/features/feishu-bot/cards";
-import { createBotOpenIdProvider } from "../../../../src/features/feishu-bot/chat-client";
+import {
+  createBotOpenIdProvider,
+  listChatMessages,
+} from "../../../../src/features/feishu-bot/chat-client";
 import {
   replyToFeishuMessage,
   sendFeishuMessage,
@@ -176,6 +179,60 @@ function getAnswerProvider(): AnswerProvider | null {
   }
 }
 
+// Task 9's closure archival, wired for real: resolveVocCardAction calls these
+// only after 确认闭环's own write has already landed and only when it has
+// resolved, from the record it already read, that a real war room chat
+// exists — this route never decides that itself and never does a second
+// getRecord to find out.
+const CLOSURE_SUMMARY_QUESTION =
+  "请把这次协同过程收敛成一段闭环结论，说明问题、处理动作与结果";
+
+// AnswerProvider.answer takes exactly two string scalars (question, facts) —
+// aily's custom skill parameters are String/Boolean/Float/Integer only, no
+// object (buildAnswerFacts's own comment documents the same constraint) — so
+// the transcript has nowhere to travel as a third parameter. It rides folded
+// into the same `facts` string instead. `facts` here is always
+// buildAnswerFacts's own output (resolveVocCardAction is the only caller),
+// so the parse is not expected to ever fail; the catch just keeps a
+// hypothetical malformed value from crashing the closing-summary attempt
+// instead of degrading it to "cannot answer right now" like every other
+// failure on this path.
+function closureFacts(facts: string, transcript: readonly string[]): string {
+  let ticket: unknown = facts;
+  try {
+    ticket = JSON.parse(facts);
+  } catch {
+    // See comment above: defensive only.
+  }
+  return JSON.stringify({ ticket, transcript });
+}
+
+async function summariseClosure(
+  facts: string,
+  transcript: readonly string[],
+): Promise<string | null> {
+  const provider = getAnswerProvider();
+  if (!provider) return null;
+  return provider.answer(
+    CLOSURE_SUMMARY_QUESTION,
+    closureFacts(facts, transcript),
+  );
+}
+
+// `chatId` arrives from resolveVocCardAction, which is the only party that
+// knows a war room exists (and which chat it is) by the time this runs — see
+// its own ResolveVocCardActionInput.readTranscript comment for why this
+// cannot be pre-bound the way a simpler `() => Promise<...>` would be.
+// listChatMessages (Task 4) already turns every failure mode — network
+// error, non-zero Feishu code, an empty group, an unparseable message — into
+// an empty transcript rather than a throw, so nothing extra is caught here;
+// a summary built from zero messages is exactly as "cannot summarise
+// meaningfully" as an outright failure, and resolveVocCardAction's own
+// null-check on the model's response handles that uniformly.
+function readWarRoomTranscript(chatId: string): Promise<readonly string[]> {
+  return listChatMessages({ env: readBotEnv(), chatId });
+}
+
 const NO_TICKET_MESSAGE = "这个群没有关联的 VOC 工单";
 const CANNOT_ANSWER_MESSAGE =
   "暂时答不上来，可以稍后再问，或直接在多维表格里查这条记录";
@@ -286,6 +343,13 @@ export function createResolveAction(
         operatorOpenId: input.operatorOpenId,
         note: input.note,
         bitable: bitable(),
+        // Both unconditionally injected: resolveVocCardAction only ever
+        // calls them for voc_confirm_closure, and only once it has resolved
+        // a real war room chat off the record it already read. Every other
+        // action (and the no-war-room / declined cases of this one) leaves
+        // them untouched.
+        readTranscript: readWarRoomTranscript,
+        summarise: summariseClosure,
       });
     }
     return resolveCardAction(input.action);

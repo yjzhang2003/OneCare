@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { VOC_FIELD_NAMES, type VocRecord } from "../bitable/field-map";
+import { DECLINED_MARKER } from "../warroom/naming";
 import type { OneCareCardAction, OneCareCardView } from "./card-types";
 import { resolveCardAction, resolveVocCardAction } from "./card-actions";
 
@@ -430,22 +431,30 @@ describe("resolveVocCardAction card refresh", () => {
 // block here uses) with the record already parked at 待闭环 — the transition
 // 确认闭环 requires — rather than reused across tests, so one test's call
 // count can never leak into another's assertions.
+//
+// There is no `chatId` input anymore: the gate is `record.warRoomChatId`,
+// read from the same getRecord this call already made for the triple check,
+// so each fixture below sets that field directly instead of passing a
+// parallel chatId argument.
 describe("resolveVocCardAction closure archival", () => {
-  function readyForClosure() {
+  function readyForClosure(warRoomChatId: string) {
     const bitable = client();
-    bitable.getRecord = vi.fn(async () => ({ ...record, state: "待闭环" as const }));
+    bitable.getRecord = vi.fn(async () => ({
+      ...record,
+      state: "待闭环" as const,
+      warRoomChatId,
+    }));
     return bitable;
   }
 
-  it("writes the closure first and the summary second", async () => {
+  it("archives when the ticket has a real war room chat", async () => {
     const writes: Array<Record<string, unknown>> = [];
-    const bitable = readyForClosure();
+    const bitable = readyForClosure("oc_1");
 
     await resolveVocCardAction({
       action: "voc_confirm_closure", recordId: "rec1", operatorOpenId: "ou_owner",
       note: "已处理",
       bitable: { ...bitable, updateRecord: async (_id: string, fields: Record<string, unknown>) => { writes.push(fields); } },
-      chatId: "oc_1",
       readTranscript: async () => ["先跟进了", "已上门解决"],
       summarise: async () => "已上门更换配件，用户确认解决。",
     });
@@ -458,13 +467,12 @@ describe("resolveVocCardAction closure archival", () => {
     // This is the load-bearing rule of the whole design. Closure is a fact that
     // already happened; a failed summary must not be able to undo it.
     const writes: Array<Record<string, unknown>> = [];
-    const bitable = readyForClosure();
+    const bitable = readyForClosure("oc_1");
 
     const result = await resolveVocCardAction({
       action: "voc_confirm_closure", recordId: "rec1", operatorOpenId: "ou_owner",
       note: "已处理",
       bitable: { ...bitable, updateRecord: async (_id: string, fields: Record<string, unknown>) => { writes.push(fields); } },
-      chatId: "oc_1",
       readTranscript: async () => ["内容"],
       summarise: async () => null,
     });
@@ -474,16 +482,38 @@ describe("resolveVocCardAction closure archival", () => {
     expect(JSON.stringify(result)).toMatch(/结论生成失败/);
   });
 
-  it("skips the summary entirely for a single-chat closure", async () => {
+  it("skips the summary entirely for a ticket with no war room", async () => {
     const summarise = vi.fn(async () => "x");
-    const bitable = readyForClosure();
+    const readTranscript = vi.fn(async () => []);
+    const bitable = readyForClosure("");
 
     await resolveVocCardAction({
       action: "voc_confirm_closure", recordId: "rec1", operatorOpenId: "ou_owner",
       note: "已处理",
-      bitable, chatId: null, readTranscript: async () => [], summarise,
+      bitable, readTranscript, summarise,
     });
 
+    expect(readTranscript).not.toHaveBeenCalled();
+    expect(summarise).not.toHaveBeenCalled();
+  });
+
+  // The easiest branch to get wrong: DECLINED_MARKER ("declined") is a
+  // non-empty string sitting in the same column a real chat id lives in. Any
+  // "truthy means archive" shortcut would pass this value straight to
+  // readTranscript and fire a request guaranteed to fail against a chat that
+  // was deliberately never created.
+  it("skips the summary entirely when the war room was declined", async () => {
+    const summarise = vi.fn(async () => "x");
+    const readTranscript = vi.fn(async () => []);
+    const bitable = readyForClosure(DECLINED_MARKER);
+
+    await resolveVocCardAction({
+      action: "voc_confirm_closure", recordId: "rec1", operatorOpenId: "ou_owner",
+      note: "已处理",
+      bitable, readTranscript, summarise,
+    });
+
+    expect(readTranscript).not.toHaveBeenCalled();
     expect(summarise).not.toHaveBeenCalled();
   });
 });
