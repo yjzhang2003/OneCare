@@ -595,13 +595,61 @@ export type VocTicketCardTag = Readonly<{
   replies: readonly VocReply[];
 }>;
 
+// Sent to exactly one approver (the fallback owner for the record's 负责范围),
+// whose only job is deciding whether this ticket warrants a group. It
+// deliberately omits record.content: the customer's own words belong in the
+// group, after people have been deliberately added to work the ticket — this
+// notification is one less surface carrying them. The AI summary in tag
+// stands in for the raw complaint here.
+export function createWarRoomEscalationCard(
+  record: VocTicketCardRecord,
+  tag: VocTicketCardTag,
+  ownerNames: readonly string[],
+): FeishuCard {
+  return cardRoot({
+    title: "VOC 升级提请",
+    subtitle: `${record.channel} · ${record.category}`,
+    status: "待确认",
+    statusColor: "red",
+    template: "red",
+    icon: "todo_colorful",
+    elements: [
+      field("记录编号", record.recordNumber || "—"),
+      field("严重度", record.severity ?? "—"),
+      field("情绪极性", tag.polarity),
+      field(
+        "问题维度",
+        tag.dimensions.length > 0 ? tag.dimensions.join("、") : "—",
+      ),
+      field("AI 摘要", tag.summary || "—"),
+      field(
+        "负责人",
+        ownerNames.length > 0 ? ownerNames.join("、") : "未解析到负责人",
+      ),
+      // Same value shape as the existing four VOC actions (action + record_id)
+      // so the callback path (event-handler.ts's isVocCardAction branch) reads
+      // it back exactly the same way.
+      columns(
+        vocActionButton("确认拉群协同", "voc_open_war_room", record.recordId),
+        vocActionButton("暂不需要", "voc_decline_war_room", record.recordId),
+      ),
+    ],
+  });
+}
+
 export function createVocTicketCard(
   record: VocTicketCardRecord,
   tag: VocTicketCardTag,
+  options: Readonly<{ fullContent?: boolean }> = {},
 ): FeishuCard {
   const completed = record.state === "已闭环";
   const next = NEXT_VOC_ACTION[record.state];
-  const content = truncateContent(record.content);
+  // Default (and every existing call site) keeps truncating: the single-chat
+  // card this function has always produced must stay byte-for-byte unchanged.
+  // Only the in-group war room card (Task 6) opts into the untruncated text —
+  // everyone in that group was deliberately added to work the ticket, and a
+  // truncated complaint is one they cannot act on.
+  const content = options.fullContent ? record.content : truncateContent(record.content);
 
   return cardRoot({
     title: "VOC 工单",

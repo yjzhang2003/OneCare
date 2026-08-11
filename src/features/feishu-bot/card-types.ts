@@ -19,6 +19,8 @@ export const VOC_CARD_ACTIONS = [
   "voc_submit_follow_up",
   "voc_confirm_closure",
   "voc_mark_no_action",
+  "voc_open_war_room",
+  "voc_decline_war_room",
 ] as const;
 
 export type VocCardAction = (typeof VOC_CARD_ACTIONS)[number];

@@ -16,6 +16,7 @@ import {
   createCardMessage,
   createVocTicketCard,
   createVocTicketMessage,
+  createWarRoomEscalationCard,
   createWelcomeMessage,
   VOC_TICKET_CONTENT_LIMIT,
 } from "./cards";
@@ -448,5 +449,49 @@ describe("createVocTicketMessage", () => {
     expect(JSON.parse(message.content)).toEqual(
       createVocTicketCard(vocRecord(), tagResult()),
     );
+  });
+});
+
+// Two cards, two deliberately different disclosure levels for the same
+// underlying record and tag: the escalation card goes to one approver
+// deciding whether to open a group at all, and the in-group ticket card goes
+// to whoever was deliberately added to that group to work the ticket.
+const ticketRecord = vocRecord();
+const ticketTag = tagResult();
+
+describe("createWarRoomEscalationCard", () => {
+  it("keeps the raw complaint out of the escalation card", () => {
+    const card = createWarRoomEscalationCard(
+      { ...ticketRecord, content: "报修后等了三天没人上门" },
+      ticketTag,
+      ["张三"],
+    );
+    const json = JSON.stringify(card);
+
+    // The escalation card is a notification sent to one approver. The complaint
+    // itself belongs in the group, after people have been deliberately added —
+    // one less surface carrying a customer's words.
+    expect(json).not.toContain("报修后等了三天没人上门");
+    expect(json).toContain("张三");
+    expect(json).toContain("voc_open_war_room");
+    expect(json).toContain("voc_decline_war_room");
+  });
+});
+
+describe("createVocTicketCard fullContent option", () => {
+  it("renders the full complaint on the in-group ticket card", () => {
+    const long = "投".repeat(400);
+    const json = JSON.stringify(createVocTicketCard({ ...ticketRecord, content: long }, ticketTag, { fullContent: true }));
+
+    // Everyone in the group was deliberately added to work this ticket; a
+    // truncated complaint is one they cannot act on.
+    expect(json).toContain(long);
+  });
+
+  it("still truncates by default so the single-chat card is unchanged", () => {
+    const long = "投".repeat(400);
+    const json = JSON.stringify(createVocTicketCard({ ...ticketRecord, content: long }, ticketTag));
+
+    expect(json).not.toContain(long);
   });
 });

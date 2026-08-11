@@ -87,7 +87,16 @@ export function resolveCardAction(action: OneCareCardAction): CardActionResult {
   }
 }
 
-const ACTION_TO_TRANSITION: Readonly<Record<VocCardAction, VocAction>> = {
+// Partial, not total: voc_open_war_room / voc_decline_war_room (Task 5) are
+// not state-machine transitions at all — resolveWarRoomAction (Task 6) owns
+// them, on its own relaxed authorization (owner OR fallback, not owner only).
+// Forcing them onto some VocAction here to satisfy a total Record would let
+// either button silently drive transition() with a fabricated action once
+// something starts routing real clicks to this resolver. The guard just below
+// this map is the placeholder: it keeps both actions inert here — no read of
+// the state machine, no write — until whatever wires the war room card past
+// this function routes them to resolveWarRoomAction instead.
+const ACTION_TO_TRANSITION: Readonly<Partial<Record<VocCardAction, VocAction>>> = {
   voc_start_follow_up: "开始跟进",
   voc_submit_follow_up: "提交跟进结果",
   voc_confirm_closure: "确认闭环",
@@ -158,8 +167,16 @@ export async function resolveVocCardAction(
     return errorToast("只有该记录的负责人可以操作");
   }
 
+  const transitionAction = ACTION_TO_TRANSITION[input.action];
+  if (!transitionAction) {
+    // voc_open_war_room / voc_decline_war_room: this resolver does not decide
+    // them (see ACTION_TO_TRANSITION above). Nothing is read from or written
+    // to the state machine for either action here.
+    return errorToast("该操作暂不支持");
+  }
+
   const noteColumn = NOTE_COLUMN[input.action];
-  const outcome = transition(record.state, ACTION_TO_TRANSITION[input.action], {
+  const outcome = transition(record.state, transitionAction, {
     retryCount: record.retryCount,
     hasOwner: record.ownerOpenIds.length > 0,
     ...(noteColumn === "followUpNote" ? { followUpNote: input.note } : {}),
