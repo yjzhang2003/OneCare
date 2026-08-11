@@ -44,7 +44,7 @@ import {
   type TransitionContext,
   type VocState,
 } from "../../../../src/features/voc/service-event";
-import { triage } from "../../../../src/features/voc/triage";
+import { triage, type VocSeverity } from "../../../../src/features/voc/triage";
 import { warRoomDecision } from "../../../../src/features/warroom/naming";
 import {
   readBitableEnv,
@@ -74,11 +74,19 @@ const SHARD_SIZE = 5;
 // delivers puts both on screen (spec §6.1) — reading them off the row already
 // listed costs nothing, and omitting them would render the owner's card with
 // two placeholder dashes.
-// severity and warRoomChatId are here for Task 7's escalation gate: whether a
-// war room gets proposed reads record.severity (this row's own 严重度 column,
-// as already stored in the Base), and whether it gets proposed *again* reads
-// record.warRoomChatId through warRoomDecision — the one column that records
-// both "a group already exists" and "the approver already declined."
+// warRoomChatId is here for Task 7's escalation gate: whether a war room gets
+// proposed *again* for the same ticket reads it through warRoomDecision — the
+// one persisted column that records both "a group already exists" and "the
+// approver already declined." Whether one gets proposed at all is a
+// different question with a different data source: spec §3.1 reads "当分片
+// 作业把一条记录推进到 待跟进 (即 triage 判定要建单) 时，若该记录 严重度 = 高"
+// — the severity in that sentence is triage()'s own verdict for *this* pass
+// (buildTaggedWrite's local `severity`, plumbed out via TaggedWrite below),
+// not a column read off the row before tagging ran. A first-run 待分析 row's
+// own 严重度 column is null by construction (nothing has tagged it yet), so
+// gating on that column instead would make the whole feature unreachable —
+// this was caught and corrected after the first implementation of this task
+// gated on the column literally, per the brief's own (incorrect) wording.
 type PendingRecord = Pick<
   VocRecord,
   | "recordId"
@@ -90,7 +98,6 @@ type PendingRecord = Pick<
   | "rating"
   | "state"
   | "retryCount"
-  | "severity"
   | "warRoomChatId"
 >;
 
@@ -202,9 +209,17 @@ function buildFailedFields(
 // actually became a routable ticket — the card to hand its owner. Both come
 // out of the same decision so the card can never claim a state the write did
 // not set, or address someone the write did not record as the owner.
+// severity is triage()'s verdict for *this* tagging pass — plumbed out so the
+// escalation gate in runShard's loop can read the value that was actually
+// just decided, rather than reaching back into the pre-tagging row for a
+// column triage() itself is about to overwrite. Present on every branch for
+// type uniformity, even though only the ticket-with-owner branch below can
+// ever reach the gate (the other two leave delivery null, and the loop's own
+// `if (!delivery) continue` skips the gate before it is read).
 type TaggedWrite = Readonly<{
   fields: BitableFields;
   delivery: TicketDelivery | null;
+  severity: VocSeverity;
 }>;
 
 // Computes the whole 待分析 -> 已分析 -> {待跟进|无需跟进} chain in memory and
@@ -260,6 +275,7 @@ function buildTaggedWrite(
       // 无需跟进 is a terminal state nobody has to act on, so there is no
       // ticket to announce and no owner to announce it to.
       delivery: null,
+      severity,
     };
   }
 
@@ -299,6 +315,7 @@ function buildTaggedWrite(
           result,
         ),
       },
+      severity,
     };
   }
 
@@ -309,6 +326,7 @@ function buildTaggedWrite(
   return {
     fields: { ...tagFields, [VOC_FIELD_NAMES.state]: afterTagging },
     delivery: null,
+    severity,
   };
 }
 
@@ -445,6 +463,12 @@ async function runShard(
 
     let fields: BitableFields;
     let delivery: TicketDelivery | null = null;
+    // This pass's own triage verdict, not the row's pre-tagging column — see
+    // the escalation gate below and PendingRecord's comment above for why
+    // that distinction is load-bearing. Stays null for a failed outcome,
+    // which is harmless: a failed outcome never produces a delivery either,
+    // so the gate's `if (!delivery) continue` above it is never reached.
+    let severity: VocSeverity | null = null;
     if (outcome.kind === "tagged") {
       tagged += 1;
       const write = buildTaggedWrite(
@@ -455,6 +479,7 @@ async function runShard(
       );
       fields = write.fields;
       delivery = write.delivery;
+      severity = write.severity;
     } else {
       failed += 1;
       fields = buildFailedFields(outcome, record.retryCount, tagSource);
@@ -489,20 +514,31 @@ async function runShard(
     // Escalation is an enhancement on top of the closed loop above, never a
     // condition of it: the ticket already reached 待跟进 and its owner was
     // already (attempted to be) notified by this point, regardless of
-    // anything below. Gated on three independent things: only 严重度 高
-    // (spec's trigger), only warRoomDecision's "create" (so a ticket that
-    // already has a group, or whose approver already declined, is never
-    // re-proposed — the shard re-runs daily and retries failures, and an
-    // unconditional proposal would nag the approver about a ticket they
-    // already answered), and only when a real escalate dependency was
-    // injected (most tests, and any caller that hasn't wired one up, get
-    // silent no-ops here). A throw falls into this record's own try/catch,
-    // exactly like the write and push above, but is not counted — the brief
-    // is explicit that a failed proposal costs no counter of its own, only
-    // the chance to have gone up.
+    // anything below. Gated on three independent things, from two different
+    // data sources on purpose:
+    //   - `severity === "高"` is *this pass's* triage verdict (spec §3.1:
+    //     "分片作业把一条记录推进到 待跟进 时，若该记录 严重度 = 高"), not
+    //     record's own pre-tagging 严重度 column — that column is null for
+    //     any record reaching this branch for the first time, which would
+    //     make the whole feature unreachable. (An earlier version of this
+    //     gate read record.severity directly; caught and corrected before
+    //     merge — see the commit history on this line.)
+    //   - `warRoomDecision(record.warRoomChatId)` reads the opposite kind of
+    //     data on purpose: a persisted fact about *history*, not this pass's
+    //     computation. That column is the one place "already has a group" or
+    //     "approver already declined" survives across Cron ticks, which is
+    //     what makes a ticket proposed at most once even though the shard
+    //     re-runs daily and retries failures — an unconditional proposal
+    //     would nag the approver about a ticket they already answered.
+    //   - `dependencies.escalate` presence: most tests, and any caller that
+    //     hasn't wired one up, get silent no-ops here.
+    // A throw falls into this record's own try/catch, exactly like the write
+    // and push above, but is not counted — the brief is explicit that a
+    // failed proposal costs no counter of its own, only the chance to have
+    // gone up.
     if (
       dependencies.escalate &&
-      record.severity === "高" &&
+      severity === "高" &&
       warRoomDecision(record.warRoomChatId) === "create"
     ) {
       try {

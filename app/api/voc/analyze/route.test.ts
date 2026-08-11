@@ -50,11 +50,10 @@ function deps(overrides: Record<string, unknown> = {}) {
         retryCount: 0,
         ticketOpenedAt: null,
         closedAt: null,
-        // Blank/null by default — a freshly-listed 待分析 row has not been
-        // through triage yet and carries no escalation memory. Task 7's own
-        // fixtures (highSeverityRecord/midSeverityRecord below) override
-        // these explicitly.
-        severity: null,
+        // Blank by default — no group proposed yet. Task 7's escalation gate
+        // reads this pass's own triage() severity, not a column on this
+        // fixture (see the "war room escalation" describe block below), so
+        // there is no equivalent "severity" default to set here.
         warRoomChatId: "",
       },
     ]),
@@ -126,13 +125,37 @@ function taggedOutcome(recordId: string) {
   };
 }
 
-// Fixtures for the escalation gate (Task 7). Both reach 待跟进 through the
-// same deps() tag()/ownerRules() fixtures above (tag() now answers any
-// recordId it is handed), so escalate() is reached for both — only their own
-// 严重度/协同群 ID columns differ, which is exactly what the gate reads.
-// Plain object literals, not built through pendingRecord() below, so their
-// own field types stay concrete rather than merged through that helper's
-// generic Record<string, unknown> overrides parameter.
+// Drives triage()'s real severity computation rather than asserting a label:
+// 差评 + 2 or more dimensions is "高", 差评 + fewer than 2 is "中" (see
+// src/features/voc/triage.ts). The escalation gate (Task 7) reads *this
+// pass's* triage verdict, not any column on the input record, so every
+// escalation test below controls severity by shaping what tag() returns,
+// not by setting a field on the record itself.
+function taggedOutcomeWithSeverity(recordId: string, severity: "高" | "中") {
+  return {
+    kind: "tagged" as const,
+    result: {
+      recordId,
+      sentiment: ["愤怒"],
+      polarity: "差评" as const,
+      dimensions:
+        severity === "高"
+          ? (["维修时间", "服务态度"] as const)
+          : (["维修时间"] as const),
+      summary: "多重问题",
+      replies: [],
+    },
+  };
+}
+
+// Fixtures for the escalation gate (Task 7). Distinguished only by recordId —
+// neither carries a 严重度 field, because the gate no longer reads one off
+// the input record at all (see the "war room escalation" describe block
+// below for why: the gate reads this pass's own triage() verdict, computed
+// from whatever tag() returns for a given recordId, not a pre-tagging
+// column). Plain object literals, not built through pendingRecord() below,
+// so their own field types stay concrete rather than merged through that
+// helper's generic Record<string, unknown> overrides parameter.
 const highSeverityRecord = {
   recordId: "rec-high",
   recordNumber: "VOC-0002",
@@ -143,14 +166,12 @@ const highSeverityRecord = {
   rating: 1,
   state: "待分析" as const,
   retryCount: 0,
-  severity: "高" as const,
   warRoomChatId: "",
 };
 
 const midSeverityRecord = {
   ...highSeverityRecord,
   recordId: "rec-mid",
-  severity: "中" as const,
 };
 
 describe("createAnalyzeRoute", () => {
@@ -549,12 +570,29 @@ describe("createAnalyzeRoute", () => {
   // factory (the brief's "...deps" spread assumes deps is already a plain
   // object; here it is a factory, so the equivalent call is deps({...})) and
   // its request(headers) helper (cronRequest() is a thin wrapper over it).
+  //
+  // A correction after the first version of this gate shipped: it read
+  // record.severity (the input row's own pre-tagging 严重度 column) instead
+  // of this pass's own triage() verdict. That column is null for any 待分析
+  // row on its first tagging pass, which made the whole feature unreachable
+  // in production even though every test here — which set that column
+  // directly on the fixture — stayed green. Every test below now drives
+  // severity through what tag() returns (via taggedOutcomeWithSeverity,
+  // which shapes the polarity/dimensions triage() itself reads), not through
+  // a field on the input record, so a regression back to reading the stale
+  // column would fail here rather than only in production.
   describe("war room escalation", () => {
     it("proposes a war room for a high-severity ticket and not for the others", async () => {
       const escalated: string[] = [];
       const route = createAnalyzeRoute(
         deps({
           listPending: async () => [highSeverityRecord, midSeverityRecord],
+          tag: async (records: readonly { recordId: string }[]) =>
+            records.map((record) =>
+              record.recordId === highSeverityRecord.recordId
+                ? taggedOutcomeWithSeverity(record.recordId, "高")
+                : taggedOutcomeWithSeverity(record.recordId, "中"),
+            ),
           escalate: async ({ record }: { record: VocRecord }) => {
             escalated.push(record.recordId);
           },
@@ -569,13 +607,20 @@ describe("createAnalyzeRoute", () => {
 
     it("does not propose a war room twice for the same ticket", async () => {
       // The shard job re-runs daily and retries failures; a proposal per run
-      // would nag the approver about a ticket they already answered.
+      // would nag the approver about a ticket they already answered. This
+      // pass's own triage still says 高 (tag() below guarantees it) — the
+      // only thing standing between this ticket and a proposal is the
+      // persisted chat-id column, which is exactly what this test isolates.
       const escalate = vi.fn(async () => {});
       const route = createAnalyzeRoute(
         deps({
           listPending: async () => [
             { ...highSeverityRecord, warRoomChatId: "oc_existing" },
           ],
+          tag: async (records: readonly { recordId: string }[]) =>
+            records.map((record) =>
+              taggedOutcomeWithSeverity(record.recordId, "高"),
+            ),
           escalate,
         }),
       );
@@ -592,6 +637,10 @@ describe("createAnalyzeRoute", () => {
       const route = createAnalyzeRoute(
         deps({
           listPending: async () => [highSeverityRecord],
+          tag: async (records: readonly { recordId: string }[]) =>
+            records.map((record) =>
+              taggedOutcomeWithSeverity(record.recordId, "高"),
+            ),
           escalate: async () => {
             throw new Error("im down");
           },
@@ -608,13 +657,19 @@ describe("createAnalyzeRoute", () => {
       // warRoomDecision treats DECLINED_MARKER the same as an existing group:
       // both mean "do not ask again". Not one of the brief's three, but the
       // brief's own gate condition (warRoomDecision(...) === "create") is
-      // meaningless without covering its third outcome too.
+      // meaningless without covering its third outcome too. Same isolation
+      // as the "twice" test above: this pass's own triage says 高, so only
+      // the declined marker can be blocking it.
       const escalate = vi.fn(async () => {});
       const route = createAnalyzeRoute(
         deps({
           listPending: async () => [
             { ...highSeverityRecord, warRoomChatId: "declined" },
           ],
+          tag: async (records: readonly { recordId: string }[]) =>
+            records.map((record) =>
+              taggedOutcomeWithSeverity(record.recordId, "高"),
+            ),
           escalate,
         }),
       );
@@ -631,6 +686,10 @@ describe("createAnalyzeRoute", () => {
       // otherwise qualify.
       const dependencies = deps({
         listPending: async () => [highSeverityRecord],
+        tag: async (records: readonly { recordId: string }[]) =>
+          records.map((record) =>
+            taggedOutcomeWithSeverity(record.recordId, "高"),
+          ),
       });
 
       const body = await (
@@ -649,7 +708,63 @@ describe("createAnalyzeRoute", () => {
       const route = createAnalyzeRoute(
         deps({
           listPending: async () => [highSeverityRecord],
+          tag: async (records: readonly { recordId: string }[]) =>
+            records.map((record) =>
+              taggedOutcomeWithSeverity(record.recordId, "高"),
+            ),
           ownerRules: async () => [],
+          escalate,
+        }),
+      );
+
+      await route(cronRequest());
+
+      expect(escalate).not.toHaveBeenCalled();
+    });
+
+    // The regression pin the coordinator asked for: these two are the direct
+    // positive/negative proof that the gate reads this pass's own triage()
+    // verdict and not the input record's pre-tagging 严重度 column. Neither
+    // fixture record carries a severity field at all (per the comment above
+    // them) — "severity" below is an inert extra property standing in for a
+    // stale/hand-edited column value, added only via spread, and read by
+    // nothing in the route.
+    it("escalates when this pass's own triage says 高, even though the record carries no 严重度 column at all", async () => {
+      const escalate = vi.fn(async () => {});
+      const route = createAnalyzeRoute(
+        deps({
+          // midSeverityRecord has no severity field — standing in for a
+          // first-time 待分析 row, whose real 严重度 column is genuinely
+          // blank because nothing has tagged it yet.
+          listPending: async () => [midSeverityRecord],
+          tag: async (records: readonly { recordId: string }[]) =>
+            records.map((record) =>
+              taggedOutcomeWithSeverity(record.recordId, "高"),
+            ),
+          escalate,
+        }),
+      );
+
+      await route(cronRequest());
+
+      expect(escalate).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not escalate when a stale 严重度 column says 高 but this pass's own triage says otherwise", async () => {
+      const escalate = vi.fn(async () => {});
+      const route = createAnalyzeRoute(
+        deps({
+          // The extra `severity: "高"` property here is never read by the
+          // route (PendingRecord has no such field) — it stands in for a
+          // leftover or hand-edited column value that must not, by itself,
+          // trigger an escalation this pass's own tagging does not support.
+          listPending: async () => [
+            { ...highSeverityRecord, severity: "高" },
+          ],
+          tag: async (records: readonly { recordId: string }[]) =>
+            records.map((record) =>
+              taggedOutcomeWithSeverity(record.recordId, "中"),
+            ),
           escalate,
         }),
       );
@@ -1007,11 +1122,9 @@ function pendingRecord(overrides: Record<string, unknown> = {}) {
     rating: 2,
     state: "分析失败" as const,
     retryCount: 0,
-    // Defaults added for Task 7's escalation gate — none of buildPendingShard's
-    // own tests care about either column, so they get the values that mean
-    // "not high severity" / "no group yet" and every existing call site below
-    // keeps working unchanged.
-    severity: null,
+    // Default added for Task 7's escalation gate — none of buildPendingShard's
+    // own tests care about this column, so it gets the value that means "no
+    // group yet" and every existing call site below keeps working unchanged.
     warRoomChatId: "",
     ...overrides,
   };
