@@ -232,6 +232,52 @@ describe("toVocRecord", () => {
     expect(record.state).toBe("待分析");
     expect(record.recordId).toBe("rec1");
   });
+
+  describe("ownerNames", () => {
+    it("reads the display name alongside the open id", () => {
+      const record = toVocRecord(
+        {
+          [VOC_FIELD_NAMES.owner]: [
+            { email: "", en_name: "A", id: "ou_a", name: "张三" },
+            { email: "", en_name: "B", id: "ou_b", name: "李四" },
+          ],
+        },
+        "rec1",
+      );
+
+      expect(record.ownerOpenIds).toEqual(["ou_a", "ou_b"]);
+      expect(record.ownerNames).toEqual(["张三", "李四"]);
+    });
+
+    it("skips entries without a usable name but keeps their open id", () => {
+      const record = toVocRecord(
+        { [VOC_FIELD_NAMES.owner]: [{ id: "ou_a" }, { id: "ou_b", name: "李四" }] },
+        "rec1",
+      );
+
+      expect(record.ownerOpenIds).toEqual(["ou_a", "ou_b"]);
+      expect(record.ownerNames).toEqual(["李四"]);
+    });
+
+    it("returns an empty list when the field is unset", () => {
+      expect(toVocRecord({}, "rec1").ownerNames).toEqual([]);
+    });
+
+    it("ignores a non-array people field", () => {
+      expect(
+        toVocRecord({ [VOC_FIELD_NAMES.owner]: "nope" }, "rec1").ownerNames,
+      ).toEqual([]);
+    });
+
+    it("ignores a whitespace-only name", () => {
+      expect(
+        toVocRecord(
+          { [VOC_FIELD_NAMES.owner]: [{ id: "ou_a", name: "   " }] },
+          "rec1",
+        ).ownerNames,
+      ).toEqual([]);
+    });
+  });
 });
 
 describe("toTagFieldUpdate", () => {

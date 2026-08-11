@@ -60,6 +60,7 @@ export type VocRecord = Readonly<{
   replies: readonly VocReply[];
   severity: VocSeverity | null;
   ownerOpenIds: readonly string[];
+  ownerNames: readonly string[];
   retryCount: number;
   ticketOpenedAt: string | null;
   closedAt: string | null;
@@ -139,6 +140,22 @@ export function openIds(value: unknown): readonly string[] {
   );
 }
 
+// The same calibrated people-field shape openIds() reads, taking `name` instead
+// of `id`. Kept as a separate function rather than widening openIds() because
+// card authorization compares open ids and must not start depending on display
+// names — a renamed person must never change who can act on a ticket.
+export function personNames(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) =>
+    typeof item === "object" &&
+    item !== null &&
+    typeof (item as { name?: unknown }).name === "string" &&
+    (item as { name: string }).name.trim().length > 0
+      ? [(item as { name: string }).name]
+      : [],
+  );
+}
+
 // Reverses the "【语气】正文" \n\n-joined format toTagFieldUpdate writes into
 // AI 回复话术, so whatever is in that cell — written by the aily track, by
 // Bitable's own field shortcut, or by hand — reads back as replies. A segment
@@ -197,6 +214,7 @@ export function toVocRecord(
     replies: parseReplyText(text(safeFields[VOC_FIELD_NAMES.replies])),
     severity,
     ownerOpenIds: openIds(safeFields[VOC_FIELD_NAMES.owner]),
+    ownerNames: personNames(safeFields[VOC_FIELD_NAMES.owner]),
     retryCount: numberish(safeFields[VOC_FIELD_NAMES.retryCount]) ?? 0,
     ticketOpenedAt: isoDate(safeFields[VOC_FIELD_NAMES.ticketOpenedAt]),
     closedAt: isoDate(safeFields[VOC_FIELD_NAMES.closedAt]),

@@ -83,6 +83,7 @@ const record: VocRecord = {
   replies: [{ tone: "致歉安抚", text: "非常抱歉给您带来不便" }],
   severity: "中",
   ownerOpenIds: ["ou_owner"],
+  ownerNames: [],
   retryCount: 0,
   ticketOpenedAt: "2026-01-23T02:00:00.000Z",
   closedAt: null,
