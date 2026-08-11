@@ -593,7 +593,7 @@ describe("createAnalyzeRoute", () => {
                 ? taggedOutcomeWithSeverity(record.recordId, "高")
                 : taggedOutcomeWithSeverity(record.recordId, "中"),
             ),
-          escalate: async ({ record }: { record: VocRecord }) => {
+          escalate: async ({ record }: { record: { recordId: string } }) => {
             escalated.push(record.recordId);
           },
         }),
@@ -772,6 +772,55 @@ describe("createAnalyzeRoute", () => {
       await route(cronRequest());
 
       expect(escalate).not.toHaveBeenCalled();
+    });
+
+    // The mirror of the two regression pins above, at the card-content layer
+    // rather than the gate: a second bug in the same family was found after
+    // the severity-gate fix landed — escalateToWarRoom built the card from
+    // record.summary/.polarity/.dimensions/.replies/.severity, which for any
+    // ticket escalating on its first tagging pass are genuinely blank (they
+    // are Bitable columns nothing has written yet), so the approver received
+    // a card that triggered correctly but showed no AI summary and no
+    // severity — "looks like it worked, tells the approver nothing." This
+    // test proves the fix at the value level: midSeverityRecord carries no
+    // summary/severity fields at all (there is nowhere else the values below
+    // could come from), tag() returns a real, distinctive summary and
+    // dimensions that make triage() say 高, and the assertions read exactly
+    // what runShard handed to escalate().
+    it("passes this pass's fresh tag result and severity to escalate, not blank/stale AI columns", async () => {
+      const seen: Array<{
+        tag: { summary: string };
+        severity: string;
+      }> = [];
+      const route = createAnalyzeRoute(
+        deps({
+          listPending: async () => [midSeverityRecord],
+          tag: async (records: readonly { recordId: string }[]) =>
+            records.map((record) => ({
+              kind: "tagged" as const,
+              result: {
+                recordId: record.recordId,
+                sentiment: ["愤怒"],
+                polarity: "差评" as const,
+                dimensions: ["维修时间", "服务态度"] as const,
+                summary: "本轮生成的真实摘要",
+                replies: [],
+              },
+            })),
+          escalate: async (input: {
+            tag: { summary: string };
+            severity: string;
+          }) => {
+            seen.push({ tag: input.tag, severity: input.severity });
+          },
+        }),
+      );
+
+      await route(cronRequest());
+
+      expect(seen).toHaveLength(1);
+      expect(seen[0]?.tag.summary).toBe("本轮生成的真实摘要");
+      expect(seen[0]?.severity).toBe("高");
     });
   });
 
@@ -1201,6 +1250,18 @@ const fullVocRecord: VocRecord = {
   warRoomChatId: "",
 };
 
+// A complete TagResult, used the same way fullVocRecord is above — only to
+// satisfy escalateToWarRoom's parameter type for the one test that never
+// reads it.
+const fullTagResult = {
+  recordId: "rec1",
+  sentiment: ["失望"],
+  polarity: "差评" as const,
+  dimensions: ["维修时间"] as const,
+  summary: "摘要",
+  replies: [],
+};
+
 describe("escalateToWarRoom", () => {
   // The one branch that is safe to exercise without a fake fetcher: spec
   // §3.1's "no fallback resolves" case must return before ever calling
@@ -1208,7 +1269,12 @@ describe("escalateToWarRoom", () => {
   // credentials in this test environment — it never reaches that code at all.
   it("resolves without sending or throwing when no fallback approver resolves", async () => {
     await expect(
-      escalateToWarRoom({ record: fullVocRecord, fallbackOpenIds: [] }),
+      escalateToWarRoom({
+        record: fullVocRecord,
+        tag: fullTagResult,
+        severity: "高",
+        fallbackOpenIds: [],
+      }),
     ).resolves.toBeUndefined();
   });
 });

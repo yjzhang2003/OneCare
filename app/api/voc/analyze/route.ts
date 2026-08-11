@@ -109,6 +109,39 @@ type TicketDelivery = Readonly<{
   message: FeishuOutboundMessage;
 }>;
 
+// This route holds two kinds of data about a ticket, and confusing them is
+// exactly the bug this type exists to make impossible: **history** (what is
+// already true and persisted — identity fields, the owner's resolved name,
+// the war-room chat id) versus **this pass's own computation** (what tagging
+// and triage() just decided — polarity/dimensions/summary/replies/severity).
+// The rule for which a field belongs to: if a future retry of this same
+// record could see a *different* value next time tagging runs, it is
+// this-pass data and does not belong on EscalationRecord; if it does not
+// change just because tagging ran again, it is history and does. Omitting
+// summary/polarity/dimensions/replies/severity here (unlike PendingRecord,
+// which never carried them to begin with) makes it a compile error to reach
+// into `record` for any of the five instead of the `tag`/`severity` fields
+// on EscalateInput below — the mistake this type replaces cannot type-check
+// again. ownerNames is history on purpose: it is a person's display name off
+// Base's own resolved people-field, which this pass's tagging does not
+// produce and does not change.
+type EscalationRecord = Omit<
+  VocRecord,
+  "summary" | "polarity" | "dimensions" | "replies" | "severity"
+>;
+
+// The whole input to an escalate() call. `tag` and `severity` are this
+// pass's own fresh results — outcome.result and buildTaggedWrite's severity,
+// both already computed by the time runShard's loop reaches the gate — kept
+// as their own top-level fields (not merged into `record`) specifically so
+// nothing about "read record.summary instead" can compile.
+type EscalateInput = Readonly<{
+  record: EscalationRecord;
+  tag: TagResult;
+  severity: VocSeverity;
+  fallbackOpenIds: readonly string[];
+}>;
+
 type AnalyzeRouteDependencies = Readonly<{
   cronSecret: string;
   shardSize: number;
@@ -126,18 +159,15 @@ type AnalyzeRouteDependencies = Readonly<{
   notifyOwner: (delivery: TicketDelivery) => Promise<void>;
   // Optional: a shard's tests overwhelmingly never exercise the high-severity
   // path, and an escalation-less run must behave exactly as it did before
-  // this task existed. `record` is a full VocRecord (not the narrower
-  // PendingRecord this route reads off listPending) because the default
-  // implementation needs the AI columns (summary/polarity/dimensions/
-  // replies) and ownerNames to build the escalation card, and — same
-  // reasoning as PendingRecord's own comment above — the real listPending
-  // already returns full VocRecord values under the hood, so this is a
-  // widening, not a lie. fallbackOpenIds is computed once per shard (the
-  // fallback set does not vary per record) and handed down rather than
-  // re-derived inside every call.
-  escalate?: (
-    input: Readonly<{ record: VocRecord; fallbackOpenIds: readonly string[] }>,
-  ) => Promise<void>;
+  // this task existed. See EscalateInput above for why `record`, `tag`, and
+  // `severity` are three separate fields rather than one VocRecord: an
+  // earlier version of this dependency took just `{ record: VocRecord }` and
+  // its default implementation read summary/polarity/dimensions/severity off
+  // that stale, pre-tagging record — reachable, but showing the approver a
+  // blank AI summary and blank severity on every escalation. fallbackOpenIds
+  // is computed once per shard (the fallback set does not vary per record)
+  // and handed down rather than re-derived inside every call.
+  escalate?: (input: EscalateInput) => Promise<void>;
   // Spec §3.2: 打标来源 records "aily:<skill_id>@<批次号>" or "field-shortcut"
   // so a tagged/failed row is explainable and traceable. A plain string
   // (not a thunk) so the whole shard call — potentially several records —
@@ -463,12 +493,14 @@ async function runShard(
 
     let fields: BitableFields;
     let delivery: TicketDelivery | null = null;
-    // This pass's own triage verdict, not the row's pre-tagging column — see
-    // the escalation gate below and PendingRecord's comment above for why
-    // that distinction is load-bearing. Stays null for a failed outcome,
-    // which is harmless: a failed outcome never produces a delivery either,
-    // so the gate's `if (!delivery) continue` above it is never reached.
-    let severity: VocSeverity | null = null;
+    // This pass's own triage verdict and tag result, not the row's
+    // pre-tagging column/AI fields — see the escalation gate below and
+    // EscalationRecord's comment above for why that distinction is
+    // load-bearing. Stays null for a failed outcome, which is harmless: a
+    // failed outcome never produces a delivery either, so the gate's
+    // `if (!delivery) continue` above it is never reached.
+    let freshTagging: Readonly<{ severity: VocSeverity; tag: TagResult }> | null =
+      null;
     if (outcome.kind === "tagged") {
       tagged += 1;
       const write = buildTaggedWrite(
@@ -479,7 +511,7 @@ async function runShard(
       );
       fields = write.fields;
       delivery = write.delivery;
-      severity = write.severity;
+      freshTagging = { severity: write.severity, tag: outcome.result };
     } else {
       failed += 1;
       fields = buildFailedFields(outcome, record.retryCount, tagSource);
@@ -516,13 +548,13 @@ async function runShard(
     // already (attempted to be) notified by this point, regardless of
     // anything below. Gated on three independent things, from two different
     // data sources on purpose:
-    //   - `severity === "高"` is *this pass's* triage verdict (spec §3.1:
-    //     "分片作业把一条记录推进到 待跟进 时，若该记录 严重度 = 高"), not
-    //     record's own pre-tagging 严重度 column — that column is null for
-    //     any record reaching this branch for the first time, which would
-    //     make the whole feature unreachable. (An earlier version of this
-    //     gate read record.severity directly; caught and corrected before
-    //     merge — see the commit history on this line.)
+    //   - `freshTagging.severity === "高"` is *this pass's* triage verdict
+    //     (spec §3.1: "分片作业把一条记录推进到 待跟进 时，若该记录 严重度 =
+    //     高"), not record's own pre-tagging 严重度 column — that column is
+    //     null for any record reaching this branch for the first time, which
+    //     would make the whole feature unreachable. (An earlier version of
+    //     this gate read record.severity directly; caught and corrected
+    //     before merge — see the commit history on this line.)
     //   - `warRoomDecision(record.warRoomChatId)` reads the opposite kind of
     //     data on purpose: a persisted fact about *history*, not this pass's
     //     computation. That column is the one place "already has a group" or
@@ -538,17 +570,22 @@ async function runShard(
     // gone up.
     if (
       dependencies.escalate &&
-      severity === "高" &&
+      freshTagging &&
+      freshTagging.severity === "高" &&
       warRoomDecision(record.warRoomChatId) === "create"
     ) {
       try {
         await dependencies.escalate({
-          // PendingRecord is a Pick of VocRecord's fields; the production
+          // PendingRecord is a Pick of VocRecord's identity/history fields
+          // (never the AI ones — EscalationRecord excludes them, and
+          // PendingRecord never carried them to begin with); the production
           // listPending already returns full VocRecord values under the
           // narrower static type (see PendingRecord's own comment above), so
           // this widens rather than lies. Tests inject their own escalate
           // fake and never read the fields this cast doesn't guarantee.
-          record: record as unknown as VocRecord,
+          record: record as unknown as EscalationRecord,
+          tag: freshTagging.tag,
+          severity: freshTagging.severity,
           fallbackOpenIds,
         });
         escalated += 1;
@@ -893,30 +930,49 @@ export function resolveTagSource(
     : "field-shortcut";
 }
 
-// Builds one escalation card from the record's own AI columns and sends it to
-// every deduplicated fallback approver. No fallback resolves ("负责人表" has
-// no row with 兜底 checked) is a missing piece of configuration, not a shard
-// failure — spec §3.1 calls for a silent return, no send and no throw, rather
-// than surfacing it as an error nobody asked to see on every Cron tick.
+// Builds one escalation card and sends it to every deduplicated fallback
+// approver. No fallback resolves ("负责人表" has no row with 兜底 checked) is
+// a missing piece of configuration, not a shard failure — spec §3.1 calls
+// for a silent return, no send and no throw, rather than surfacing it as an
+// error nobody asked to see on every Cron tick.
+//
+// The card's AI content (summary/polarity/dimensions/severity) comes from
+// `input.tag`/`input.severity` — this pass's own fresh results — not from
+// `input.record`. That split is enforced by EscalateInput's type, not by
+// this function remembering it: EscalationRecord has no summary/polarity/
+// dimensions/replies/severity fields to read by mistake. Only ownerNames (a
+// person's display name, resolved by Base's own people-field, which this
+// pass's tagging does not produce) is read off `input.record`.
+//
 // Exported (like the other production-wiring functions above) so this one
 // real branch is directly testable: an empty fallbackOpenIds list must return
 // before ever touching readBotEnv() or the network, which is what makes it
 // safe regardless of bot credentials.
-export async function escalateToWarRoom(
-  input: Readonly<{ record: VocRecord; fallbackOpenIds: readonly string[] }>,
-): Promise<void> {
+export async function escalateToWarRoom(input: EscalateInput): Promise<void> {
   if (input.fallbackOpenIds.length === 0) return;
 
   const message: FeishuOutboundMessage = {
     msgType: "interactive",
     content: JSON.stringify(
       createWarRoomEscalationCard(
-        input.record,
         {
-          summary: input.record.summary,
-          polarity: input.record.polarity ?? "",
-          dimensions: input.record.dimensions,
-          replies: input.record.replies,
+          recordId: input.record.recordId,
+          recordNumber: input.record.recordNumber,
+          channel: input.record.channel,
+          category: input.record.category,
+          content: input.record.content,
+          feedbackAt: input.record.feedbackAt,
+          state: input.record.state,
+          // The one AI-shaped field VocTicketCardRecord asks for, sourced
+          // from this pass's own triage() verdict — not input.record, which
+          // has no severity field to reach into by mistake.
+          severity: input.severity,
+        },
+        {
+          summary: input.tag.summary,
+          polarity: input.tag.polarity,
+          dimensions: input.tag.dimensions,
+          replies: input.tag.replies,
         },
         input.record.ownerNames,
       ),
