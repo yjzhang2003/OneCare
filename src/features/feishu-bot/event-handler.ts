@@ -20,6 +20,16 @@ import {
 export type FeishuEventOutcome =
   | Readonly<{ kind: "challenge"; challenge: string }>
   | Readonly<{ kind: "message"; messageId: string; text: string }>
+  // A group message reaches the bot only via an @-mention (this app has no
+  // "read every group message" grant), and the answer always goes back to
+  // the group itself rather than as a threaded reply to one message — so
+  // this outcome carries `chatId`, never `messageId`. Kept as its own kind
+  // instead of a `p2p | group` flag on "message": the war room's fact-only
+  // answering (Task 8) and the p2p command menu (createBotReply) read their
+  // text for entirely different purposes, and a shared shape is exactly the
+  // kind of same-name-two-meanings mixup that has bitten this codebase
+  // before.
+  | Readonly<{ kind: "group_question"; chatId: string; text: string }>
   | Readonly<{ kind: "entered"; chatId: string }>
   | Readonly<{
       kind: "card_action";
@@ -50,6 +60,7 @@ type JsonObject = Record<string, unknown>;
 type ReceiveMessageEvent = {
   message?: {
     message_id?: string;
+    chat_id?: string;
     chat_type?: string;
     message_type?: string;
     content?: string;
@@ -308,8 +319,7 @@ export async function parseFeishuEvent({
     "im.message.receive_v1": (event: ReceiveMessageEvent) => {
       const message = event.message;
       if (
-        message?.chat_type !== "p2p" ||
-        message.message_type !== "text" ||
+        message?.message_type !== "text" ||
         typeof message.message_id !== "string" ||
         typeof message.content !== "string"
       ) {
@@ -317,9 +327,20 @@ export async function parseFeishuEvent({
       }
 
       const text = textFromContent(message.content);
-      return text
-        ? ({ kind: "message", messageId: message.message_id, text } as const)
-        : ({ kind: "ignored" } as const);
+      if (!text) return { kind: "ignored" } as const;
+
+      if (message.chat_type === "p2p") {
+        return { kind: "message", messageId: message.message_id, text } as const;
+      }
+
+      if (message.chat_type === "group" && typeof message.chat_id === "string") {
+        const chatId = message.chat_id.trim();
+        if (chatId) {
+          return { kind: "group_question", chatId, text } as const;
+        }
+      }
+
+      return { kind: "ignored" } as const;
     },
     "im.chat.access_event.bot_p2p_chat_entered_v1": (
       event: BotP2pEnteredEvent,
@@ -337,6 +358,7 @@ export async function parseFeishuEvent({
 
   return isJsonObject(outcome) &&
     (outcome.kind === "message" ||
+      outcome.kind === "group_question" ||
       outcome.kind === "entered" ||
       outcome.kind === "ignored")
     ? (outcome as FeishuEventOutcome)

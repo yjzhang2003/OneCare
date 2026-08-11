@@ -1644,6 +1644,7 @@ describe("resolveTagSource", () => {
           provider: "aily",
           ailyAppId: "spring_x",
           taggingSkillId: "skill_x",
+          answerSkillId: "skill_answer_x",
           credential: null,
         },
         () => 1700000000000,

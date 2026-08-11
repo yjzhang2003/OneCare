@@ -61,8 +61,12 @@ export type OneCareCardState = "initial" | "completed";
 
 export type FeishuCard = Record<string, unknown>;
 
+// "interactive" carries a card's JSON as `content`; "text" (added for the war
+// room's free-Q&A replies, Task 8) carries a plain `{"text": "..."}` payload —
+// a prose answer or a one-line failure message is an ordinary chat message,
+// not another card to render.
 export type FeishuOutboundMessage = Readonly<{
-  msgType: "interactive";
+  msgType: "interactive" | "text";
   content: string;
 }>;
 

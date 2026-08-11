@@ -301,10 +301,10 @@ describe("parseFeishuEvent", () => {
     ).resolves.toEqual({ kind: "unauthorized" });
   });
 
-  it("ignores authentic group and non-text events", async () => {
+  it("ignores authentic non-text events regardless of chat type", async () => {
     for (const body of [
-      messageBody({ chatType: "group" }),
       messageBody({ messageType: "image" }),
+      messageBody({ chatType: "group", messageType: "image" }),
     ]) {
       const rawBody = JSON.stringify(body);
 
@@ -312,6 +312,43 @@ describe("parseFeishuEvent", () => {
         parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
       ).resolves.toEqual({ kind: "ignored" });
     }
+  });
+
+  it("accepts an authenticated group text event as a group question", async () => {
+    // A group message reaches im.message.receive_v1 at all only because this
+    // app's event subscription fires on an @-mention in groups, not on every
+    // message — so the mention placeholder text ("@_user_1 ") is expected to
+    // still be here; stripMention (Task 8) removes it downstream, not this
+    // parser.
+    const rawBody = JSON.stringify(
+      messageBody({ chatType: "group", text: "@_user_1 这条投诉以前出现过吗" }),
+    );
+
+    await expect(
+      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({
+      kind: "group_question",
+      chatId: "oc_onecare_chat",
+      text: "@_user_1 这条投诉以前出现过吗",
+    });
+  });
+
+  it.each([
+    ["a missing chat id", undefined],
+    ["a whitespace-only chat id", "   "],
+  ])("ignores a group text event with %s", async (_label, chatId) => {
+    const body = messageBody({ chatType: "group" });
+    const rawBody = JSON.stringify({
+      ...body,
+      event: {
+        ...body.event,
+        message: { ...body.event.message, chat_id: chatId },
+      },
+    });
+
+    await expect(
+      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({ kind: "ignored" });
   });
 
   it("ignores authentic subscribed group lifecycle events", async () => {

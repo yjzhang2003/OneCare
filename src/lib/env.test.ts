@@ -106,15 +106,27 @@ describe("readTaggingEnv", () => {
         TAGGING_PROVIDER: "aily",
         FEISHU_AILY_APP_ID: "spring_demo__c",
         FEISHU_AILY_SKILL_TAGGING: "skill_demo",
+        FEISHU_AILY_SKILL_ANSWER: "skill_answer_demo",
       }),
     ).toEqual({
       provider: "aily",
       ailyAppId: "spring_demo__c",
       taggingSkillId: "skill_demo",
+      answerSkillId: "skill_answer_demo",
       // Null means "sign the aily call with the main app", which is right for a
       // tenant whose aily application lives under that app.
       credential: null,
     });
+  });
+
+  it("requires the war room answer skill id on the aily track", () => {
+    expect(() =>
+      readTaggingEnv({
+        TAGGING_PROVIDER: "aily",
+        FEISHU_AILY_APP_ID: "spring_demo__c",
+        FEISHU_AILY_SKILL_TAGGING: "skill_demo",
+      }),
+    ).toThrow(/FEISHU_AILY_SKILL_ANSWER/);
   });
 
   it("reads a dedicated aily credential when the aily app is published under its own", () => {
@@ -128,6 +140,7 @@ describe("readTaggingEnv", () => {
         TAGGING_PROVIDER: "aily",
         FEISHU_AILY_APP_ID: "spring_demo__c",
         FEISHU_AILY_SKILL_TAGGING: "skill_demo",
+        FEISHU_AILY_SKILL_ANSWER: "skill_answer_demo",
         FEISHU_AILY_BOT_APP_ID: "cli_demo",
         FEISHU_AILY_BOT_APP_SECRET: "secret_demo",
       }),
@@ -148,6 +161,7 @@ describe("readTaggingEnv", () => {
           TAGGING_PROVIDER: "aily",
           FEISHU_AILY_APP_ID: "spring_demo__c",
           FEISHU_AILY_SKILL_TAGGING: "skill_demo",
+          FEISHU_AILY_SKILL_ANSWER: "skill_answer_demo",
           ...half,
         }),
       ).toThrow(/must be set together/);

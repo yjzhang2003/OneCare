@@ -34,6 +34,10 @@ export type TaggingEnv =
       provider: "aily";
       ailyAppId: string;
       taggingSkillId: string;
+      // The war room's free-Q&A skill (Task 8) — a second, separately
+      // published skill on the same aily app as taggingSkillId, not a
+      // fallback for it.
+      answerSkillId: string;
       credential: AilyCredential | null;
     };
 
@@ -49,6 +53,7 @@ type ServerEnvironmentName =
   | "FEISHU_BITABLE_TABLE_OWNER"
   | "FEISHU_AILY_APP_ID"
   | "FEISHU_AILY_SKILL_TAGGING"
+  | "FEISHU_AILY_SKILL_ANSWER"
   | "FEISHU_AILY_BOT_APP_ID"
   | "FEISHU_AILY_BOT_APP_SECRET";
 
@@ -130,6 +135,7 @@ export function readTaggingEnv(
       provider: "aily",
       ailyAppId: readRequired(source, "FEISHU_AILY_APP_ID"),
       taggingSkillId: readRequired(source, "FEISHU_AILY_SKILL_TAGGING"),
+      answerSkillId: readRequired(source, "FEISHU_AILY_SKILL_ANSWER"),
       credential:
         botAppId && botAppSecret
           ? { appId: botAppId, appSecret: botAppSecret }

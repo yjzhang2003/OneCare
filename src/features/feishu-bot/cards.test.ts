@@ -14,6 +14,7 @@ import {
 } from "./card-types";
 import {
   createCardMessage,
+  createTextMessage,
   createVocTicketCard,
   createVocTicketMessage,
   createWarRoomEscalationCard,
@@ -493,5 +494,16 @@ describe("createVocTicketCard fullContent option", () => {
     const json = JSON.stringify(createVocTicketCard({ ...ticketRecord, content: long }, ticketTag));
 
     expect(json).not.toContain(long);
+  });
+});
+
+describe("createTextMessage", () => {
+  it("wraps the text as a plain chat message, not a card", () => {
+    const message = createTextMessage("这条投诉本周同维度还有 12 条。");
+
+    expect(message.msgType).toBe("text");
+    expect(JSON.parse(message.content)).toEqual({
+      text: "这条投诉本周同维度还有 12 条。",
+    });
   });
 });

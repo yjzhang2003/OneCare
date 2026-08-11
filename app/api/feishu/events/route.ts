@@ -1,9 +1,11 @@
 import { after } from "next/server";
 
+import type { VocRecord } from "../../../../src/features/bitable/field-map";
 import {
   createBitableClient,
   createTenantTokenProvider,
   type BitableClient,
+  type TenantTokenProvider,
 } from "../../../../src/features/bitable/client";
 import {
   createBotReply,
@@ -21,7 +23,11 @@ import {
   type OneCareCardAction,
   type VocCardAction,
 } from "../../../../src/features/feishu-bot/card-types";
-import { createWelcomeMessage } from "../../../../src/features/feishu-bot/cards";
+import {
+  createTextMessage,
+  createVocTicketCard,
+  createWelcomeMessage,
+} from "../../../../src/features/feishu-bot/cards";
 import {
   replyToFeishuMessage,
   sendFeishuMessage,
@@ -31,8 +37,18 @@ import {
   type FeishuEventOutcome,
 } from "../../../../src/features/feishu-bot/event-handler";
 import {
+  buildAnswerFacts,
+  computeFactsAggregates,
+  stripMention,
+} from "../../../../src/features/warroom/facts";
+import {
+  createAnswerProvider,
+  type AnswerProvider,
+} from "../../../../src/features/tagging/answer-provider";
+import {
   readBitableEnv,
   readBotEnv,
+  readTaggingEnv,
   type BotEnv,
 } from "../../../../src/lib/env";
 
@@ -63,6 +79,9 @@ type FeishuEventRouteDependencies = {
     message: FeishuOutboundMessage;
   }) => Promise<void>;
   resolveAction: (input: CardActionRequest) => Promise<CardActionResult>;
+  answerGroupQuestion: (
+    input: Readonly<{ chatId: string; text: string }>,
+  ) => Promise<FeishuOutboundMessage>;
   schedule: Scheduler;
   reportFailure: () => void;
 };
@@ -88,21 +107,146 @@ function isVocCardAction(
 // Built once per server instance and reused across requests, exactly like
 // createTenantTokenProvider's own internal cache: a card callback has a
 // three second budget and cannot afford to re-read env vars or re-exchange a
-// token on every click. Constructed lazily (only when a VOC action actually
-// arrives) so a missing Bitable env var never breaks the nine demo actions,
-// which never touch it.
+// token on every click. Constructed lazily (only when a VOC action or a war
+// room question actually arrives) so a missing Bitable env var never breaks
+// the nine demo actions, which never touch it.
+let tokenProvider: TenantTokenProvider | null = null;
+function getTokenProvider(): TenantTokenProvider {
+  if (!tokenProvider) {
+    const botEnv = readBotEnv();
+    tokenProvider = createTenantTokenProvider(botEnv.appId, botEnv.appSecret);
+  }
+  return tokenProvider;
+}
+
 let bitableClient: BitableClient | null = null;
 function getBitableClient(): BitableClient {
   if (!bitableClient) {
-    const botEnv = readBotEnv();
-    const bitableEnv = readBitableEnv();
-    const tokenProvider = createTenantTokenProvider(
-      botEnv.appId,
-      botEnv.appSecret,
-    );
-    bitableClient = createBitableClient(bitableEnv, tokenProvider);
+    bitableClient = createBitableClient(readBitableEnv(), getTokenProvider());
   }
   return bitableClient;
+}
+
+// Lazy and swallowing its own configuration errors on purpose: a tenant
+// running the field-shortcut tagging track (or one that has not configured
+// the war room answer skill at all) has no aily answer skill to call, and
+// that absence must read exactly like any other "cannot answer right now"
+// failure — never as a 503 that takes the rest of this route down with it.
+let answerProvider: AnswerProvider | null = null;
+function getAnswerProvider(): AnswerProvider | null {
+  try {
+    if (!answerProvider) {
+      const taggingEnv = readTaggingEnv();
+      if (taggingEnv.provider !== "aily") return null;
+      answerProvider = createAnswerProvider({
+        ailyAppId: taggingEnv.ailyAppId,
+        skillId: taggingEnv.answerSkillId,
+        // Same credential rule as the tagging call (Task 8 prerequisite P1,
+        // analyze/route.ts's getTaggingProvider): the aily skill-start API
+        // resolves the calling application from the credential, not from the
+        // app id in the URL, so a tenant whose aily app is published under
+        // its own app id needs that app's credential here too.
+        tenantAccessToken: taggingEnv.credential
+          ? createTenantTokenProvider(
+              taggingEnv.credential.appId,
+              taggingEnv.credential.appSecret,
+            )
+          : getTokenProvider(),
+      });
+    }
+    return answerProvider;
+  } catch {
+    return null;
+  }
+}
+
+const NO_TICKET_MESSAGE = "这个群没有关联的 VOC 工单";
+const CANNOT_ANSWER_MESSAGE =
+  "暂时答不上来，可以稍后再问，或直接在多维表格里查这条记录";
+
+function ticketCardMessage(ticket: VocRecord): FeishuOutboundMessage {
+  return {
+    msgType: "interactive",
+    content: JSON.stringify(
+      createVocTicketCard(
+        ticket,
+        {
+          summary: ticket.summary,
+          polarity: ticket.polarity ?? "—",
+          dimensions: ticket.dimensions,
+          replies: ticket.replies,
+        },
+        // Untruncated, like the war room's opening card (war-room-actions.ts):
+        // everyone in this group was deliberately added to work the ticket.
+        { fullContent: true },
+      ),
+    ),
+  };
+}
+
+// Everything the group Q&A flow needs from Bitable, named narrowly (like
+// VocActionBitable above it) rather than accepting the whole BitableClient —
+// a fake standing in for this in a test cannot silently support a wider
+// surface than this flow actually touches.
+type GroupAnswerBitable = Pick<
+  BitableClient,
+  "findByWarRoomChatId" | "listRecords"
+>;
+
+// Spec §6.1's ordered flow, and the one place the "查不到关联工单时不要去问模型"
+// requirement is enforced: a chat id that resolves to no ticket returns
+// NO_TICKET_MESSAGE and never reaches `answer` at all — there is no fact base
+// to ground a reply in, and answering anyway is exactly the behaviour that
+// would make the whole feature untrustworthy. A Bitable failure while looking
+// the ticket up (a real outage, not "no ticket") gets the same
+// CANNOT_ANSWER_MESSAGE as an answer-skill failure — both mean "the bot could
+// not do its job this time", and neither is the group's problem to guess at.
+export function createAnswerGroupQuestion(
+  bitable: () => GroupAnswerBitable,
+  answer: (question: string, facts: string) => Promise<string | null>,
+): (
+  input: Readonly<{ chatId: string; text: string }>,
+) => Promise<FeishuOutboundMessage> {
+  return async function answerGroupQuestion(input) {
+    let ticket: VocRecord | null;
+    try {
+      ticket = await bitable().findByWarRoomChatId(input.chatId);
+    } catch {
+      return createTextMessage(CANNOT_ANSWER_MESSAGE);
+    }
+
+    if (!ticket) {
+      return createTextMessage(NO_TICKET_MESSAGE);
+    }
+
+    const question = stripMention(input.text);
+    if (question.length === 0) {
+      return ticketCardMessage(ticket);
+    }
+
+    let records: readonly VocRecord[];
+    try {
+      records = await bitable().listRecords();
+    } catch {
+      return createTextMessage(CANNOT_ANSWER_MESSAGE);
+    }
+
+    const facts = buildAnswerFacts({
+      ticket,
+      ...computeFactsAggregates(ticket, records),
+    });
+
+    let prose: string | null;
+    try {
+      prose = await answer(question, facts);
+    } catch {
+      prose = null;
+    }
+
+    return prose
+      ? createTextMessage(prose)
+      : createTextMessage(CANNOT_ANSWER_MESSAGE);
+  };
 }
 
 // The single dispatch point for every card click, demo or real: a VOC action
@@ -140,6 +284,10 @@ const defaultDependencies: FeishuEventRouteDependencies = {
   replyMessage: replyToFeishuMessage,
   sendMessage: sendFeishuMessage,
   resolveAction: createResolveAction(getBitableClient),
+  answerGroupQuestion: createAnswerGroupQuestion(getBitableClient, async (question, facts) => {
+    const provider = getAnswerProvider();
+    return provider ? provider.answer(question, facts) : null;
+  }),
   schedule: (task) => after(task),
   reportFailure: () => console.error("[onecare-bot] reply_failed"),
 };
@@ -221,6 +369,25 @@ export function createFeishuEventRoute(
           }
         });
         return json({ toast: { type: "info", content: result.toast } });
+      }
+
+      if (outcome.kind === "group_question") {
+        dependencies.schedule(async () => {
+          try {
+            const message = await dependencies.answerGroupQuestion({
+              chatId: outcome.chatId,
+              text: outcome.text,
+            });
+            await dependencies.sendMessage({
+              env,
+              chatId: outcome.chatId,
+              message,
+            });
+          } catch {
+            dependencies.reportFailure();
+          }
+        });
+        return json({});
       }
 
       const reply = dependencies.createReply(outcome.text);

@@ -16,10 +16,15 @@ import {
   ONECARE_CARD_ACTIONS,
   ONECARE_CASE_ID,
   VOC_NOTE_FIELD_NAME,
+  type FeishuOutboundMessage,
   type OneCareCardAction,
   type VocCardAction,
 } from "../../../../src/features/feishu-bot/card-types";
-import { createFeishuEventRoute, createResolveAction } from "./route";
+import {
+  createAnswerGroupQuestion,
+  createFeishuEventRoute,
+  createResolveAction,
+} from "./route";
 
 const env: BotEnv = {
   appId: "cli_onecare",
@@ -69,6 +74,12 @@ function dependencies(outcome: FeishuEventOutcome) {
             content: JSON.stringify({ schema: "2.0", view: "pending" }),
           },
           toast: "已打开待确认服务",
+        }),
+      ),
+      answerGroupQuestion: vi.fn(
+        async (_input: { chatId: string; text: string }) => ({
+          msgType: "text" as const,
+          content: JSON.stringify({ text: "这条投诉本周同维度还有 12 条。" }),
         }),
       ),
       schedule: vi.fn((task: () => Promise<void>) => scheduled.push(task)),
@@ -499,6 +510,16 @@ function liveDependencies(client: VocActionBitable) {
       replyMessage: vi.fn(async () => undefined),
       sendMessage: vi.fn(async () => undefined),
       resolveAction: createResolveAction(() => client),
+      // None of the card-action tests this factory serves ever produce a
+      // group_question outcome, so this is never exercised — present only to
+      // satisfy FeishuEventRouteDependencies.
+      answerGroupQuestion: createAnswerGroupQuestion(
+        () => ({
+          findByWarRoomChatId: async () => null,
+          listRecords: async () => [],
+        }),
+        async () => null,
+      ),
       schedule: (task: () => Promise<void>) => {
         scheduled.push(task);
       },
@@ -786,4 +807,328 @@ describe("POST /api/feishu/events — VOC closure loop end to end", () => {
       });
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// Group @ Q&A, end to end through the same seam as the VOC closure loop
+// above: real parseFeishuEvent, real createAnswerGroupQuestion, only the
+// Bitable HTTP boundary and the answer-skill call are faked. This is where
+// "does not answer when there is no ticket" and "any failure comes back as
+// null, not a guess" are actually exercised, rather than asserted at the unit
+// level against a mock that could not tell a correct wiring from a broken one.
+// ---------------------------------------------------------------------------
+
+function groupMessageBody(text: string, chatId = "oc_group_chat") {
+  return {
+    schema: "2.0",
+    header: {
+      event_id: "evt_group_message",
+      event_type: "im.message.receive_v1",
+      create_time: "1784371200000",
+      token: env.verificationToken,
+      app_id: env.appId,
+      tenant_key: "tenant_onecare",
+    },
+    event: {
+      sender: {
+        sender_id: { open_id: "ou_onecare" },
+        sender_type: "user",
+        tenant_key: "tenant_onecare",
+      },
+      message: {
+        message_id: "om_group_message",
+        chat_id: chatId,
+        chat_type: "group",
+        message_type: "text",
+        content: JSON.stringify({ text }),
+      },
+    },
+  };
+}
+
+function groupBitable(
+  ticket: VocRecord | null,
+  records: readonly VocRecord[] = [],
+) {
+  return {
+    findByWarRoomChatId: vi.fn(async (_chatId: string) => ticket),
+    listRecords: vi.fn(async () => records),
+  };
+}
+
+function groupTicket(overrides: Partial<VocRecord> = {}): VocRecord {
+  return {
+    recordId: "rec_group_1",
+    recordNumber: "VOC-0099",
+    channel: "电商评价",
+    category: "冰箱",
+    model: "BCD-525WNK1PU",
+    content: "维修师傅约了三天还没上门",
+    rating: 2,
+    feedbackAt: "2026-08-09T00:00:00.000Z",
+    state: "跟进中",
+    polarity: "差评",
+    dimensions: ["维修时间"],
+    summary: "用户反馈上门维修延迟三天",
+    replies: [{ tone: "致歉安抚", text: "非常抱歉给您带来不便" }],
+    severity: "高",
+    ownerOpenIds: ["ou_owner"],
+    ownerNames: ["张三"],
+    retryCount: 0,
+    ticketOpenedAt: "2026-08-09T02:00:00.000Z",
+    closedAt: null,
+    warRoomChatId: "oc_group_chat",
+    ...overrides,
+  };
+}
+
+// Only readEnv and the two outbound message senders are faked; parseEvent
+// and answerGroupQuestion (the real createAnswerGroupQuestion) are the
+// production functions, over a fake Bitable client and a fake answer skill.
+function liveGroupDependencies(
+  bitable: ReturnType<typeof groupBitable>,
+  answer: (question: string, facts: string) => Promise<string | null>,
+) {
+  const scheduled: Array<() => Promise<void>> = [];
+  return {
+    scheduled,
+    dependencies: {
+      readEnv: () => env,
+      parseEvent: parseFeishuEvent,
+      createReply: vi.fn((text: string) => ({
+        kind: "help" as const,
+        message: {
+          msgType: "interactive" as const,
+          content: JSON.stringify({ reply: text }),
+        },
+      })),
+      createWelcome: vi.fn(() => ({
+        msgType: "interactive" as const,
+        content: JSON.stringify({ welcome: true }),
+      })),
+      replyMessage: vi.fn(async () => undefined),
+      // Explicitly typed (not inferred from a zero-arg `async () => ...`) so
+      // `.mock.calls[0]` below is a real one-element tuple rather than `[]` —
+      // the same trap the project's own fetcher fakes already guard against.
+      sendMessage: vi.fn(
+        async (_input: {
+          env: BotEnv;
+          chatId: string;
+          message: FeishuOutboundMessage;
+        }) => undefined,
+      ),
+      // No card action test in this describe block ever fires, so this stub
+      // is never invoked.
+      resolveAction: vi.fn(
+        async (_input: {
+          action: OneCareCardAction | VocCardAction;
+          recordId: string;
+          operatorOpenId: string;
+          note: string;
+        }): Promise<CardActionResult> => ({
+          kind: "update",
+          response: {},
+        }),
+      ),
+      answerGroupQuestion: createAnswerGroupQuestion(() => bitable, answer),
+      schedule: (task: () => Promise<void>) => {
+        scheduled.push(task);
+      },
+      reportFailure: vi.fn(),
+    },
+  };
+}
+
+type TextMessageResponse = Readonly<{ text: string }>;
+
+function textOf(message: { content: string }): string {
+  return (JSON.parse(message.content) as TextMessageResponse).text;
+}
+
+describe("POST /api/feishu/events — group @ Q&A end to end", () => {
+  it("acknowledges the group message before the lookup and reply run", async () => {
+    const bitable = groupBitable(groupTicket());
+    const answer = vi.fn(async (_q: string, _f: string) => "answer");
+    const setup = liveGroupDependencies(bitable, answer);
+
+    const response = await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(groupMessageBody("@_user_1 同维度还有几条")),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({});
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+    expect(setup.scheduled).toHaveLength(1);
+
+    await setup.scheduled[0]();
+
+    expect(setup.dependencies.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("tells the group there is no ticket rather than asking the model anything", async () => {
+    const bitable = groupBitable(null);
+    const answer = vi.fn(async (_q: string, _f: string) => "should never be seen");
+    const setup = liveGroupDependencies(bitable, answer);
+
+    await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(groupMessageBody("@_user_1 这条投诉以前出现过吗")),
+    );
+    await setup.scheduled[0]();
+
+    // The load-bearing assertion: a group with no linked ticket must never
+    // reach the model at all.
+    expect(answer).not.toHaveBeenCalled();
+    const [call] = setup.dependencies.sendMessage.mock.calls;
+    expect(call[0].chatId).toBe("oc_group_chat");
+    expect(textOf(call[0].message)).toBe("这个群没有关联的 VOC 工单");
+  });
+
+  it("sends the ticket card instead of asking the model when the message is only a mention", async () => {
+    const ticket = groupTicket({ recordNumber: "VOC-0555" });
+    const bitable = groupBitable(ticket);
+    const answer = vi.fn(async (_q: string, _f: string) => "should never be seen");
+    const setup = liveGroupDependencies(bitable, answer);
+
+    await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(groupMessageBody("@_user_1")),
+    );
+    await setup.scheduled[0]();
+
+    expect(answer).not.toHaveBeenCalled();
+    const [call] = setup.dependencies.sendMessage.mock.calls;
+    expect(call[0].message.msgType).toBe("interactive");
+    expect(call[0].message.content).toContain("VOC-0555");
+    // The in-group card shows the untruncated complaint, like the war room's
+    // opening card.
+    expect(call[0].message.content).toContain(ticket.content);
+  });
+
+  it("answers from the ticket's own facts, with the record id kept out of them", async () => {
+    const ticket = groupTicket();
+    const other = groupTicket({
+      recordId: "rec_group_2",
+      feedbackAt: "2026-08-09T00:00:00.000Z",
+      state: "已闭环",
+    });
+    const bitable = groupBitable(ticket, [ticket, other]);
+    const answer = vi.fn(async (_question: string, _facts: string) => "这条投诉本周同维度还有 2 条。");
+    const setup = liveGroupDependencies(bitable, answer);
+
+    await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(groupMessageBody("@_user_1 同维度还有几条")),
+    );
+    await setup.scheduled[0]();
+
+    expect(answer).toHaveBeenCalledTimes(1);
+    const [question, facts] = answer.mock.calls[0];
+    expect(question).toBe("同维度还有几条");
+    expect(facts).not.toContain(ticket.recordId);
+    expect(facts).not.toContain(ticket.warRoomChatId);
+    expect(JSON.parse(facts)).toMatchObject({
+      aggregates: { sameDimensionLast7Days: 2, sameDimensionClosed: 1 },
+    });
+
+    const [call] = setup.dependencies.sendMessage.mock.calls;
+    expect(textOf(call[0].message)).toBe("这条投诉本周同维度还有 2 条。");
+  });
+
+  it("tells the group it cannot answer right now when the skill returns null", async () => {
+    const bitable = groupBitable(groupTicket());
+    const answer = vi.fn(async (_q: string, _f: string) => null);
+    const setup = liveGroupDependencies(bitable, answer);
+
+    await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(groupMessageBody("@_user_1 同维度还有几条")),
+    );
+    await setup.scheduled[0]();
+
+    const [call] = setup.dependencies.sendMessage.mock.calls;
+    expect(textOf(call[0].message)).toBe(
+      "暂时答不上来，可以稍后再问，或直接在多维表格里查这条记录",
+    );
+  });
+
+  it("tells the group it cannot answer right now when the Bitable lookup itself fails", async () => {
+    const bitable = {
+      findByWarRoomChatId: vi.fn(async (_chatId: string) => {
+        throw new Error("bitable outage");
+      }),
+      listRecords: vi.fn(async () => []),
+    };
+    const answer = vi.fn(async (_q: string, _f: string) => "should never be seen");
+    const setup = liveGroupDependencies(bitable, answer);
+
+    await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(groupMessageBody("@_user_1 同维度还有几条")),
+    );
+    await setup.scheduled[0]();
+
+    expect(answer).not.toHaveBeenCalled();
+    const [call] = setup.dependencies.sendMessage.mock.calls;
+    expect(textOf(call[0].message)).toBe(
+      "暂时答不上来，可以稍后再问，或直接在多维表格里查这条记录",
+    );
+  });
+
+  it("reports failure without a reply if even the fallback send fails", async () => {
+    const bitable = groupBitable(null);
+    const answer = vi.fn(async (_q: string, _f: string) => null);
+    const setup = liveGroupDependencies(bitable, answer);
+    setup.dependencies.sendMessage.mockRejectedValueOnce(
+      new Error("private upstream response"),
+    );
+
+    await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(groupMessageBody("@_user_1 问题")),
+    );
+    await setup.scheduled[0]();
+
+    expect(setup.dependencies.reportFailure).toHaveBeenCalledWith();
+  });
+
+  it("leaves the single-chat p2p command path untouched", async () => {
+    const bitable = groupBitable(groupTicket());
+    const answer = vi.fn(async (_q: string, _f: string) => "should never be seen");
+    const setup = liveGroupDependencies(bitable, answer);
+
+    const rawBody = JSON.stringify({
+      schema: "2.0",
+      header: {
+        event_id: "evt_p2p_message",
+        event_type: "im.message.receive_v1",
+        create_time: "1784371200000",
+        token: env.verificationToken,
+        app_id: env.appId,
+        tenant_key: "tenant_onecare",
+      },
+      event: {
+        sender: {
+          sender_id: { open_id: "ou_onecare" },
+          sender_type: "user",
+          tenant_key: "tenant_onecare",
+        },
+        message: {
+          message_id: "om_p2p_message",
+          chat_id: "oc_onecare_chat",
+          chat_type: "p2p",
+          message_type: "text",
+          content: JSON.stringify({ text: "开始体验" }),
+        },
+      },
+    });
+
+    await createFeishuEventRoute(setup.dependencies)(
+      new Request("https://onecare.example/api/feishu/events", {
+        method: "POST",
+        body: rawBody,
+        headers: signedHeaders(rawBody),
+      }),
+    );
+    await setup.scheduled[0]();
+
+    expect(bitable.findByWarRoomChatId).not.toHaveBeenCalled();
+    expect(answer).not.toHaveBeenCalled();
+    expect(setup.dependencies.replyMessage).toHaveBeenCalledTimes(1);
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+  });
 });

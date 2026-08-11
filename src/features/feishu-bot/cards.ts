@@ -410,6 +410,15 @@ export function createWelcomeMessage(): FeishuOutboundMessage {
   return createCardMessage("workbench");
 }
 
+// A bare chat message, not a card. Spec §6.1 step 5 calls for the war room
+// Q&A answer to land as an ordinary text message, and the same shape serves
+// its two failure fallbacks ("no ticket for this group" / "cannot answer
+// right now") — none of the three is a dashboard tile, they are prose meant
+// to be read in the flow of the conversation.
+export function createTextMessage(text: string): FeishuOutboundMessage {
+  return { msgType: "text", content: JSON.stringify({ text }) };
+}
+
 // Unlike callbackButton (which always ships the fixed demo case id), a VOC
 // ticket button addresses a real Bitable row: the callback's value carries
 // record_id instead of case_id, which is exactly what event-handler.ts's
