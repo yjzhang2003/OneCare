@@ -71,6 +71,8 @@ npm run dev
 - `TAGGING_PROVIDER`：AI 打标提供方，取值 `aily` 或 `field-shortcut`；
 - `FEISHU_AILY_APP_ID`：仅 `TAGGING_PROVIDER=aily` 时必填，aily 侧应用 ID（`spring_xxx__c` 形态，与飞书 `cli_xxx` App ID 是两个独立配置项）；
 - `FEISHU_AILY_SKILL_TAGGING`：仅 `TAGGING_PROVIDER=aily` 时必填，打标技能的 skill id；
+- `FEISHU_AILY_SKILL_ANSWER`：仅 `TAGGING_PROVIDER=aily` 时必填，VOC 协同群内 `@机器人` 自由问答用的**第二个**技能的 skill id，与打标技能是同一 aily 应用下两个互相独立的技能，不是它的降级或备用；
+- `FEISHU_AILY_BOT_APP_ID` / `FEISHU_AILY_BOT_APP_SECRET`：可选，且必须成对出现——只填一个会在启动时直接报错，而不是静默退回下面这条默认行为，因为半套凭据几乎总是配置失误而非有意为之。aily 的 skill-start 接口按**调用凭据**反查所属 aily 应用，不看请求路径里的 `app_id`；当 aily 应用发布成它自己的飞书机器人应用时，只有那个机器人应用自己的一套凭据能调通，用主应用（读 Bitable、发消息的那个）的凭据调用会返回 `2320008`。留空时打标与协同群问答两个技能调用都退回使用主应用凭据，这对 aily 应用发布在主应用名下的租户是正确的默认值；
 - `CRON_SECRET`：`/api/voc/analyze` 的调用方鉴权密钥，请求头须为 `Authorization: Bearer $CRON_SECRET`，否则返回 401。
 
 真实密钥不得提交到 Git。仓库会忽略 `.env*`，只保留无敏感值的 `.env.example`。
@@ -120,6 +122,35 @@ https://onecare.ohmyfeishu.top/api/auth/feishu/callback
 - **权限的信任边界就是多维表格的编辑权限**：负责人表的「负责人」「兜底」是运营可写的普通字段，任何拥有该 Base 编辑权限的人都能把自己填成负责人，或勾上兜底，从而获得对全部记录的操作权。这不是一套独立的角色/权限系统，只是一张可写的 ACL 表。
 - **人效数字是折算值，不是实测值**：工作台与 `/api/voc/dashboard` 的「折算节省工时」按「已完成打标记录数 × 假设的单条人工处理分钟数」计算，假设基线未经海信真实工时的实测，页面上会同时标注这一点，也不会把它换算成年化金额。
 - **Base 为空与读取失败是两种不同展示**：Base 里暂时没有记录时，看板如实显示 `0`；只有网络请求或飞书接口调用失败时才会显示「指标暂不可用」，两者不能混为一谈，也不会用同一套文案掩盖。
+
+## VOC 协同群
+
+单聊路由把每条工单交给一个负责人，够用于中低严重度；`严重度 = 高` 的工单往往需要多人同时在场，为此新增一条建群协同路径（设计见 `docs/superpowers/specs/2026-08-12-onecare-voc-warroom-design.md`）。状态写入的规则不变：仍然只发生在卡片回调里，身份仍然来自签名事件的 `event.operator.open_id`，三重校验（记录存在、操作者是负责人、状态转移合法）一个字不改。
+
+- **提请**：`/api/voc/analyze` 把一条记录判定为 `待跟进` 且**这一趟 triage 算出的**严重度为 `高` 时（`app/api/voc/analyze/route.ts` 的 `escalateToWarRoom`——读的是这一趟刚算出的严重度，不是这条记录此前存的 `严重度` 列，这两者在同一次分片作业里可能不同，读错哪一个曾经让整条功能变成死代码，见下方「实测结论」），向`负责人表`里所有勾了「兜底」的人发一张升级卡（`createWarRoomEscalationCard`，`src/features/feishu-bot/cards.ts`）：记录编号、渠道/品类、严重度、情绪极性、问题维度、AI 摘要、负责人姓名，**不含用户原文**——升级卡是通知，原文进群后再给。取不到兜底人时不发卡也不报错，记录照常进入 `待跟进`，走原有单聊派单路径。两个按钮 `voc_open_war_room`（确认拉群协同）/ `voc_decline_war_room`（暂不需要）已加入 `VOC_CARD_ACTIONS` 白名单。`VOC 记录表` 为此新增一列 `协同群 ID`（文本，真实 Base 上已建好），`VOC_FIELD_NAMES`/`VocRecord`/`schema-guard.ts` 已同步覆盖。
+- **建群与幂等**：`resolveWarRoomAction`（`src/features/feishu-bot/war-room-actions.ts`）读记录、按「操作者是负责人**或**兜底人」校验（比四个状态动作「仅负责人」更宽，因为批准升级本就是兜底人的职权）、按 `协同群 ID` 列的三态（空 → 建群；`oc_*` → 已存在；常量 `declined` → 已拒绝）决定动作；建群成功立刻回写 `chat_id`，随后把工单卡（含**完整用户原文**、不脱敏、不截断——群成员是被点名拉进来处理这条投诉的人，看不到原文没法处理）发进新群。群名规则为 `VOC-{记录编号后 6 位}-{品类}-{严重度}`，成员为该工单负责人全体、点击操作者与机器人自身去重后建群，建群接口为 `POST im/v1/chats`。这部分逻辑都是纯函数与独立单元测试覆盖的模块（`war-room-actions.test.ts`、`naming.test.ts`）。
+  **但生产分发点尚未接上它，这是本仓库当前对外暴露的最大缺口，如实记录如下**：`app/api/feishu/events/route.ts` 的 `createResolveAction` 目前把 `voc_open_war_room`/`voc_decline_war_room` 和四个状态动作一样统统送进 `resolveVocCardAction`（`src/features/feishu-bot/card-actions.ts`）。这个函数既没有为这两个动作把授权放宽成「负责人或兜底人」（校验仍是严格的「仅负责人」，兜底人若不在这条记录的 `ownerOpenIds` 里会在这一步直接被拒绝），也没有在 `ACTION_TO_TRANSITION`（一张 `Partial` 映射）里给它们定义状态转移，查不到就落进「该操作暂不支持」的兜底分支。**因此今天点击升级卡上的任一按钮都不会建群，也不会写 `协同群 ID` 列**——`resolveWarRoomAction` 是完整实现、测试齐全的死代码，把它接进这条生产分发点是需要另开一个任务做的事，不在本任务（文档与验证）范围内。这直接意味着规格 §12 验收清单第 2–5 条在这处接线补上之前无法通过。
+- **群内自由问答（已接入生产路由）**：群内 `@机器人 问题` 经 `im.message.receive_v1`（`chat_type = group`）到达；`event-handler.ts` 新增的 `group_question` 分支只在消息确实 `@` 了机器人自己（`GET bot/v3/info` 解析出的 open_id，进程内缓存）时才放行，避免这个应用已开通的「获取群组中所有消息」敏感权限把每一句群聊都送进模型。`createAnswerGroupQuestion`（`app/api/feishu/events/route.ts`）按 `协同群 ID = chat_id` 反查工单（新增的 `BitableClient.findByWarRoomChatId`，用 `POST records/search` 精确匹配，不做全表扫描——表里 3628 条记录，全扫是 8 次分页请求，每条群消息都这么来一遍既慢又浪费跨境调用），查不到就回「这个群没有关联的 VOC 工单」且从不调用模型；查到后取两个聚合事实（同问题维度近 7 天记录数及其中已闭环数、同机型总数，`computeFactsAggregates`）连同工单全量字段拼成一个 `facts` JSON 字符串（`buildAnswerFacts`，剔除其中的 `recordId`/`协同群 ID`），和用户问题一起调 aily 上**第二个**技能（`FEISHU_AILY_SKILL_ANSWER`）。回答以纯文本回群，不再套卡片；技能超时、返回非 `success`、或答案为空，统一回复「暂时答不上来，可以稍后再问，或直接在多维表格里查这条记录」，不重试、不编造。只要 `协同群 ID` 列上有一个真实 `chat_id`（在上一条接线补上之前，这只能靠人工写入 Base），这条路径就能验证。
+- **闭环归档（已接入生产路由）**：群内点击「确认闭环」时，状态与闭环时间的写入照旧不变；写入成功后追加一步——拉取群消息（`listChatMessages`，`GET im/v1/messages`，任何失败都归一成空数组而不是抛错，一次归档失败绝不能把已经发生的闭环事实倒回去），连同工单事实一起调同一个问答技能，固定问题为「请把这次协同过程收敛成一段闭环结论，说明问题、处理动作与结果」，结果写入 `闭环结论` 列并在群里公示；生成失败不影响已经写入的状态，只在 toast 里追加「（结论生成失败）」。这一步只在 `协同群 ID` 已经是真实 `chat_id`（不是空、也不是 `declined`）时才会触发。
+
+**明确不做**（不是待办，是本轮的范围边界）：
+
+- SLA 催办——Vercel Hobby 的 cron 一天只跑一次，精度只能到天，做出来是个日级提醒，不值当；
+- 话术改写、同类问题背景面板；
+- 两个机器人（本应用 + aily 智能体）同群——谁响应 `@` 会打架，且 aily 侧要打通 MCP 才能看见 Bitable 数据；
+- 群解散与归档自动化；
+- 通过通讯录接口解析姓名——见下方「实测结论」，权限未开通，且设计上也不需要。
+
+`redactVocContent` 的现状不变：本轮同样没有任何生产路径调用它。群内简报卡与问答事实都按设计明示原文、不脱敏——群成员是被点名拉进来处理这条投诉的人，这与公开面的克制是两回事，不矛盾。
+
+**2026-08-12 实测结论**（下一个人不必重新踩一遍）：
+
+- **通讯录接口不可用**：`contact/v3/users/batch_get_id`、`/scopes`、`/find_by_department` 三个都返回 `99991672`（未开通）。因此代码不解析姓名——负责人由运营在多维表格界面用人员选择器挑选，代码只读 Bitable 人员字段回包里已经带着的 `name`（`src/features/bitable/field-map.ts` 的 `personNames`，直接取 `item.name`，不发起任何通讯录调用），信任边界仍然是 Base 的编辑权限，与上文一致。
+- **aily 自定义技能参数只支持标量**：String / Boolean / Float / Integer，没有数组、没有对象。结构化入参（工单全量字段 + 两个聚合数字）因此序列化成一个 JSON 字符串（`buildAnswerFacts`）作为单个 String 参数传入，由技能内部自己解析。
+- **`data.output` 外面套了一层技能响应参数的信封**：`{"output":"<真实载荷>"}`，`unwrapSkillOutput()` 统一剥这一层，问答技能与打标技能共用同一处理逻辑。
+- **aily 提示词必须用裸名变量**：在提示词里写 `{{facts}}`，再到「提示词变量」面板里把这个变量绑定到 `{{开始节点.facts}}`；如果直接在提示词里写全限定引用 `{{开始节点.facts}}`，**不会解析**。失败形态极其隐蔽——接口照样返回 `code=0 status=success`，回答通顺，唯一症状是模型说「这条我不知道」，只有拿真实事实真调一次才能发现，光看提示词变量面板「看起来不需要配置」会被误导。
+- **一次 aily 技能调用约 8–36 秒**：打标轨道因此把「5 条一批」改成了「每条记录一次调用」（更早的批量写法会撞上 aily 网关的 504），问答技能延续同样的单次调用节奏，没有批量场景。
+- **协同群相关的四个权限均已开通**：建群、拉人入群、发消息、收群内 `@` 消息。验证方式是故意构造参数错误而不是等真正建群失败才发现——例如 `POST im/v1/chats?user_id_type=bogus_enum` 返回的是 `99992402`（参数校验失败）而不是权限错误，据此可以确认权限本身没问题。
 
 ## 验证
 
