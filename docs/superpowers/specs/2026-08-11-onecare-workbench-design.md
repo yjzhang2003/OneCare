@@ -90,7 +90,7 @@ GET /  无会话
 | 原始内容 | **真实原文，不脱敏** |
 | 情绪极性 / 问题维度 / 严重度 | 枚举 |
 | 流程状态 | 枚举 |
-| 负责人 | **真实姓名** |
+| 负责人 | **真实姓名**，来自新增的 `VocRecord.ownerNames`（见 §7 的唯一例外） |
 | 建单时间 / 闭环时间 / 时长 | 派生 |
 
 **因为已经门禁，展示真实原文与真实姓名。** 运营要看真实反馈才能干活，这正是门禁存在的意义。脱敏函数 `redactVocContent` 在本设计中**仍然不接入任何路径**——它保护的是「数据进入公网」这个场景，而本设计通过门禁消除了该场景。README 关于它的表述维持现状（如实说明它已实现、有测试、但不在任何生产路径上）。
@@ -136,7 +136,13 @@ FEISHU_REDIRECT_URI  onecare-loop.vercel.app     ← 实测确认
 
 ## 7. 不改动的范围
 
-`src/features/voc/`、`src/features/bitable/`、`src/features/tagging/`、`src/features/feishu-bot/` 一律不动。闭环逻辑与飞书侧已稳定并经真实验证，本次是展示层加一层身份分流。
+`src/features/voc/`、`src/features/tagging/`、`src/features/feishu-bot/` 一律不动。闭环逻辑与飞书侧已稳定并经真实验证，本次是展示层加一层身份分流。
+
+**`src/features/bitable/field-map.ts` 有且只有一处例外**：`VocRecord` 目前只有 `ownerOpenIds`，而 §4 要展示负责人真实姓名。多维表格人员字段读回的是 `{email, en_name, id, name}`，现有的 `openIds()` 只抽了 `id`。
+
+因此新增一个并列的 `ownerNames: readonly string[]`，抽取同一数组里的 `name`。这是**纯增量**：不改 `openIds()` 的行为、不改任何现有字段的解包方式，卡片鉴权仍然用 `ownerOpenIds` 比对身份。姓名只用于展示。
+
+除此之外 `bitable/` 不做任何改动。特别是三个校准辅助函数 `numberish` / `isoDate` / `openIds` 一个字都不能动——它们是对真实 Base 实测出来的，改坏了是静默失败。
 
 `/login` 页保留。`/dashboard → /login` 的 307 保留。
 
