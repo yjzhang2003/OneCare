@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createAilyTaggingProvider, type AilyTaggingConfig } from "./aily-provider";
+import {
+  createAilyTaggingProvider,
+  unwrapSkillOutput,
+  type AilyTaggingConfig,
+} from "./aily-provider";
 import type { TaggingRequestRecord } from "./provider-types";
 
 const config: AilyTaggingConfig = {
@@ -254,5 +258,155 @@ describe("createAilyTaggingProvider", () => {
     const provider = createAilyTaggingProvider(config, fetcher as unknown as typeof fetch);
     expect(await provider.tag([])).toEqual([]);
     expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe("unwrapSkillOutput", () => {
+  it("unwraps the response-parameter envelope aily actually returns", () => {
+    // Verbatim shape observed from the live API on 2026-08-11: the skill's one
+    // response parameter is named `output`, and data.output is an envelope keyed
+    // by that name whose value is the tag payload as a string.
+    const envelope = JSON.stringify({
+      output: JSON.stringify({ results: [{ id: "rec1" }] }),
+    });
+
+    expect(JSON.parse(unwrapSkillOutput(envelope))).toEqual({
+      results: [{ id: "rec1" }],
+    });
+  });
+
+  it("unwraps regardless of what the skill author named the parameter", () => {
+    const envelope = JSON.stringify({
+      taggingResult: JSON.stringify({ results: [{ id: "rec1" }] }),
+    });
+
+    expect(JSON.parse(unwrapSkillOutput(envelope))).toEqual({
+      results: [{ id: "rec1" }],
+    });
+  });
+
+  it("leaves a payload that already carries results untouched", () => {
+    // A skill that emits the contract shape directly must keep working, and a
+    // platform change that drops the envelope must not silently break this.
+    const direct = JSON.stringify({ results: [{ id: "rec1" }] });
+
+    expect(unwrapSkillOutput(direct)).toBe(direct);
+  });
+
+  it("passes through anything ambiguous or unparseable so the real text reaches the diagnostic", () => {
+    expect(unwrapSkillOutput("not json")).toBe("not json");
+    // Two string fields: guessing which is the payload would be worse than
+    // letting parseTagPayload report what it actually received.
+    const ambiguous = JSON.stringify({ a: "{}", b: "{}" });
+    expect(unwrapSkillOutput(ambiguous)).toBe(ambiguous);
+    const noStrings = JSON.stringify({ count: 1 });
+    expect(unwrapSkillOutput(noStrings)).toBe(noStrings);
+  });
+});
+
+describe("batching", () => {
+  it("splits a shard into one call per record", async () => {
+    // aily's gateway answered 504 for a five-record batch even though the same
+    // batch succeeded in 36.5s when called directly — the batch is not reliably
+    // deliverable at that size regardless of our own timeout. One record per
+    // call is ~7s and the shard's total work is unchanged.
+    const many: readonly TaggingRequestRecord[] = Array.from(
+      { length: 5 },
+      (_, i) => ({
+        recordId: `rec${i}`,
+        content: "等了三天没人上门",
+        channel: "电商评价",
+        category: "冰箱",
+      }),
+    );
+    const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(init?.body as string) as { input: string };
+      const sent = JSON.parse(
+        (JSON.parse(body.input) as { records: string }).records,
+      ) as ReadonlyArray<{ id: string }>;
+      return jsonResponse({
+        code: 0,
+        status: "success",
+        data: {
+          status: "success",
+          output: JSON.stringify({
+            results: sent.map((r) => ({
+              id: r.id,
+              sentiment: ["失望"],
+              polarity: "差评",
+              dimensions: ["维修时间"],
+              summary: "摘要",
+              replies: [],
+            })),
+          }),
+        },
+      });
+    });
+
+    const provider = createAilyTaggingProvider(
+      config,
+      fetcher as unknown as typeof fetch,
+    );
+    const outcomes = await provider.tag(many);
+
+    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(outcomes).toHaveLength(5);
+    expect(outcomes.every((o) => o.kind === "tagged")).toBe(true);
+    // Order and identity preserved across chunks, or a later write would put
+    // one record's tags onto another record's row.
+    expect(outcomes.map((o) => (o.kind === "tagged" ? o.result.recordId : ""))).toEqual([
+      "rec0",
+      "rec1",
+      "rec2",
+      "rec3",
+      "rec4",
+    ]);
+  });
+
+  it("keeps the surviving chunks when one fails", async () => {
+    const many: readonly TaggingRequestRecord[] = Array.from(
+      { length: 3 },
+      (_, i) => ({
+        recordId: `rec${i}`,
+        content: "内容",
+        channel: "电商评价",
+        category: "冰箱",
+      }),
+    );
+    let call = 0;
+    const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+      call += 1;
+      if (call === 2) return jsonResponse({}, 504);
+      const body = JSON.parse(init?.body as string) as { input: string };
+      const sent = JSON.parse(
+        (JSON.parse(body.input) as { records: string }).records,
+      ) as ReadonlyArray<{ id: string }>;
+      return jsonResponse({
+        code: 0,
+        data: {
+          status: "success",
+          output: JSON.stringify({
+            results: sent.map((r) => ({
+              id: r.id,
+              sentiment: ["失望"],
+              polarity: "差评",
+              dimensions: [],
+              summary: "摘要",
+              replies: [],
+            })),
+          }),
+        },
+      });
+    });
+
+    const provider = createAilyTaggingProvider(
+      config,
+      fetcher as unknown as typeof fetch,
+    );
+    const outcomes = await provider.tag(many);
+
+    // A gateway failure on one record must not discard the two that worked, and
+    // the failed one must still come back as a failure so it keeps its retry.
+    expect(outcomes.map((o) => o.kind)).toEqual(["tagged", "failed", "tagged"]);
   });
 });

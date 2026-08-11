@@ -4,7 +4,14 @@ import type { TaggingProvider } from "./provider-types";
 const SKILL_START_URL =
   "https://open.feishu.cn/open-apis/aily/v1/apps/:app_id/skills/:skill_id/start";
 
-export const TAGGING_TIMEOUT_MS = 25_000;
+// Measured against the live skill on 2026-08-11: a five-record batch takes
+// 36.5s and returns all five results. The previous 25s ceiling aborted every
+// call, and the symptom was five records marked 分析失败 with the reason "The
+// operation was aborted due to timeout" — a repo-side limit misreporting itself
+// as a model failure. 120s leaves room for a larger shard while staying well
+// under Vercel's 300s function ceiling, so the abort still happens here, with a
+// diagnosis, rather than as an opaque platform kill.
+export const TAGGING_TIMEOUT_MS = 120_000;
 
 export type AilyTaggingConfig = Readonly<{
   ailyAppId: string;
@@ -16,7 +23,87 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * `data.output` arrives wrapped in an envelope of the skill's declared response
+ * parameters, not as the payload itself. Observed against the live API on
+ * 2026-08-11, from a skill whose single response parameter is named `output`:
+ *
+ *   data.output === '{"output":"{\\"results\\":[...]}"}'
+ *
+ * So the tag payload is one level down, keyed by whatever the skill author named
+ * that parameter. Unwrapping here rather than in parseTagPayload keeps the
+ * envelope where it belongs: it is an aily transport detail, and the
+ * field-shortcut track builds its payload directly with no envelope at all.
+ *
+ * Deliberately tolerant in both directions — a payload that already carries
+ * `results` is returned untouched, so a skill that outputs the contract shape
+ * directly keeps working and a future platform change cannot silently break
+ * this. Anything else is passed through unchanged so the failure surfaces as
+ * parseTagPayload's own diagnostic against the real text.
+ */
+export function unwrapSkillOutput(raw: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+
+  if (!isRecord(parsed) || Array.isArray(parsed.results)) {
+    return raw;
+  }
+
+  const stringValues = Object.values(parsed).filter(
+    (value): value is string => typeof value === "string",
+  );
+  // Exactly one string field, or the ambiguity is not ours to resolve by
+  // guessing which of several is the payload.
+  return stringValues.length === 1 ? stringValues[0] : raw;
+}
+
+// One record per skill call. Measured on 2026-08-11: a five-record batch takes
+// 36.5s when it works, and the same batch through the route came back as
+// `aily HTTP 504` — aily's own gateway gives up before the model finishes, so a
+// batch that big is not reliably deliverable however long this side is willing
+// to wait. A single record is roughly seven seconds, far inside any gateway
+// limit, and the shard's total wall clock is unchanged because the work is the
+// same either way. The rate limit is 100 calls/minute, which one-record calls
+// stay well under at this shard size.
+export const AILY_RECORDS_PER_CALL = 1;
+
+function chunk<T>(items: readonly T[], size: number): readonly T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
+  return out;
+}
+
 export function createAilyTaggingProvider(
+  config: AilyTaggingConfig,
+  fetcher: typeof fetch = fetch,
+): TaggingProvider {
+  const single = createSingleBatchProvider(config, fetcher);
+  return {
+    name: "aily",
+    async tag(records) {
+      if (!Array.isArray(records) || records.length <= AILY_RECORDS_PER_CALL) {
+        return single.tag(records);
+      }
+
+      // Sequential, not concurrent: a shard is five records, the gateway is the
+      // scarce resource rather than our own throughput, and a failure in one
+      // chunk must not take its neighbours down with it.
+      const outcomes: TagOutcome[] = [];
+      for (const part of chunk(records, AILY_RECORDS_PER_CALL)) {
+        outcomes.push(...(await single.tag(part)));
+      }
+      return outcomes;
+    },
+  };
+}
+
+function createSingleBatchProvider(
   config: AilyTaggingConfig,
   fetcher: typeof fetch = fetch,
 ): TaggingProvider {
@@ -140,7 +227,7 @@ export function createAilyTaggingProvider(
           return failAll(`aily status 非 success：${String(data.status)}`);
         }
 
-        return parseTagPayload(data.output, recordIds);
+        return parseTagPayload(unwrapSkillOutput(data.output), recordIds);
       } catch (error) {
         const reason =
           error instanceof Error ? error.message : "aily 调用失败";
