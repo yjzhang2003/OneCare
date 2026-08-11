@@ -444,6 +444,7 @@ function vocRecord(overrides: Partial<VocRecord> = {}): VocRecord {
     recordNumber: "VOC-0001",
     channel: "电商评价",
     category: "冰箱",
+    model: "BCD-525WNK1PU",
     content: "维修师傅约了三天还没上门",
     rating: 2,
     feedbackAt: "2026-01-20T00:00:00.000Z",

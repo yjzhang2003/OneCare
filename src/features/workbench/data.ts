@@ -16,6 +16,11 @@ export type WorkbenchTicket = Readonly<{
   feedbackAt: string | null;
   channel: string;
   category: string;
+  // Included so an operator can search by product model — "show me every
+  // complaint about this fridge" is a real question, and 2482 of the 3628
+  // imported records leave it blank, which the absent-value rendering handles.
+  // Unlike recordId it identifies a product, not a person or a row.
+  model: string;
   content: string;
   polarity: VocPolarity | null;
   dimensions: readonly VocDimension[];
@@ -50,6 +55,7 @@ export function toWorkbenchTicket(record: VocRecord): WorkbenchTicket {
     feedbackAt: record.feedbackAt,
     channel: record.channel,
     category: record.category,
+    model: record.model,
     content: record.content,
     polarity: record.polarity,
     dimensions: record.dimensions,

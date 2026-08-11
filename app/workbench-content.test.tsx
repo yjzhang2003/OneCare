@@ -31,6 +31,7 @@ const ticket: WorkbenchTicket = {
   feedbackAt: "2026-01-23T02:00:00.000Z",
   channel: "电商评价",
   category: "冰箱",
+  model: "BCD-525WNK1PU",
   content: "报修后等了三天没人上门",
   polarity: "差评",
   dimensions: ["维修时间"],

@@ -17,6 +17,7 @@ const records: readonly VocRecord[] = [
     recordNumber: "VOC-0001",
     channel: "电商评价",
     category: "冰箱",
+    model: "BCD-525WNK1PU",
     content: "我的手机号是保密的，等了三天",
     rating: 2,
     feedbackAt: "2026-01-23T01:00:00.000Z",

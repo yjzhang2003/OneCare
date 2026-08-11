@@ -33,6 +33,11 @@ export type VocSentiment = (typeof VOC_SENTIMENTS)[number];
 
 export type VocSeverity = "高" | "中" | "低";
 
+// Lives beside the type it enumerates. field-map.ts used to keep a private copy
+// and the workbench query layer needed a third; one home for the enum means a
+// change cannot land in two of three places.
+export const VOC_SEVERITIES = ["高", "中", "低"] as const;
+
 export type TriageDecision = Readonly<{
   createTicket: boolean;
   severity: VocSeverity;

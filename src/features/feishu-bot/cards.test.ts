@@ -170,6 +170,7 @@ function vocRecord(overrides: Partial<VocRecord> = {}): VocRecord {
     recordNumber: "VOC-0001",
     channel: "电商评价",
     category: "冰箱",
+    model: "BCD-525WNK1PU",
     content: "冷藏室温度持续偏高，用户已联系三次",
     rating: 2,
     feedbackAt: "2026-01-20T00:00:00.000Z",

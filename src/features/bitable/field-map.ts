@@ -2,6 +2,7 @@ import { VOC_STATES, type VocState } from "../voc/service-event";
 import {
   VOC_DIMENSIONS,
   VOC_POLARITIES,
+  VOC_SEVERITIES,
   type VocDimension,
   type VocPolarity,
   type VocSeverity,
@@ -44,6 +45,11 @@ export type VocRecord = Readonly<{
   recordNumber: string;
   channel: string;
   category: string;
+  // 机型 has had a field name mapped since the beginning but was never read
+  // out, so the imported values sat in the Base unreachable. Surfaced now
+  // because the workbench lets an operator search by product model. Plain text,
+  // often blank — 2482 of the 3628 imported records have none.
+  model: string;
   content: string;
   rating: number | null;
   feedbackAt: string | null;
@@ -120,8 +126,9 @@ export function stringArray(value: unknown): readonly string[] {
 
 // 严重度 is a single-select written by triage.ts (never by the AI), but a
 // hand-edited Base row could still hold a stray value — treat anything
-// outside the enum as "not decided" rather than passing it through.
-const VOC_SEVERITIES: readonly VocSeverity[] = ["高", "中", "低"];
+// outside the enum as "not decided" rather than passing it through. The list
+// itself now lives in triage.ts beside the VocSeverity type, because the
+// workbench query layer needs the same enum and two copies is one too many.
 
 // Calibrated: a User field reads back as [{ email, en_name, id, name }] — the
 // key is `id`, NOT `open_id`. Reading open_id yields an empty owner list, which
@@ -204,6 +211,7 @@ export function toVocRecord(
     recordNumber: text(safeFields[VOC_FIELD_NAMES.recordNumber]),
     channel: text(safeFields[VOC_FIELD_NAMES.channel]),
     category: text(safeFields[VOC_FIELD_NAMES.category]),
+    model: text(safeFields[VOC_FIELD_NAMES.model]),
     content: text(safeFields[VOC_FIELD_NAMES.content]),
     rating: numberish(safeFields[VOC_FIELD_NAMES.rating]),
     feedbackAt: isoDate(safeFields[VOC_FIELD_NAMES.feedbackAt]),

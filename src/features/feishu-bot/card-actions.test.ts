@@ -73,6 +73,7 @@ const record: VocRecord = {
   recordNumber: "VOC-0001",
   channel: "电商评价",
   category: "冰箱",
+  model: "BCD-525WNK1PU",
   content: "等了三天",
   rating: 2,
   feedbackAt: "2026-01-20T00:00:00.000Z",
