@@ -100,8 +100,17 @@ describe("built Next.js authentication routes", () => {
 
     expect(response.status).toBe(302);
     const errorLocation = new URL(response.headers.get("location")!);
-    expect(errorLocation.pathname).toBe("/login");
+    // A failed callback now lands on "/" with both auth_error and the
+    // auth=tried loop-guard marker (app/api/auth/feishu/callback/route.ts,
+    // commit 90e0b5e — "land logins on /"; see also that route's own
+    // route.test.ts, which already asserts this). This assertion used to say
+    // "/login" and had drifted out of sync with the actual implementation
+    // ever since — caught here, not by `vitest run`, because tests/runtime
+    // is the only suite that boots the real built server and follows the
+    // real redirect chain.
+    expect(errorLocation.pathname).toBe("/");
     expect(errorLocation.searchParams.get("auth_error")).toBe("invalid_state");
+    expect(errorLocation.searchParams.get("auth")).toBe("tried");
     expect(response.headers.get("set-cookie")).toContain(
       "auto_insight_oauth_state=;",
     );
@@ -176,6 +185,23 @@ describe("built Next.js authentication routes", () => {
     // only proves the page rendered real content (its own heading), not that
     // it withheld anything — that guarantee is covered by
     // app/dashboard/voc/page.test.tsx's contract on the metrics type itself.
+  });
+
+  it("makes /enter a real dynamic redirect, not a prerendered 200", async () => {
+    // The exact regression class this project already hit once: a page whose
+    // body is a bare redirect() gets prerendered as static output under
+    // cacheComponents, and a non-JS caller sees 200 instead of a real HTTP
+    // redirect (see next.config.ts's comment on the old /dashboard page).
+    // /enter is a route handler specifically to avoid that, and this is the
+    // one check `vitest run` cannot perform — it never boots the built
+    // server. Anonymous, no cookies: the fresh visit falls through to
+    // starting authorization.
+    const response = await fetch(`${baseUrl}/enter`, { redirect: "manual" });
+
+    expect(response.status).toBe(302);
+    expect(
+      new URL(response.headers.get("location")!, baseUrl).pathname,
+    ).toBe("/api/auth/feishu/start");
   });
 
   it("answers Feishu URL verification in the built runtime", async () => {

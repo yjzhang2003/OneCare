@@ -25,6 +25,11 @@ const errorMessages: Record<string, string> = {
   invalid_state: "登录请求已失效，请重新发起。",
   token_exchange_failed: "飞书登录暂时未完成，请重新尝试。",
   user_info_failed: "暂时无法读取飞书身份，请重新尝试。",
+  // Set by app/page.tsx when the /enter loop guard (shouldStartAuthorization)
+  // reports a prior attempt that did not produce a session, with no more
+  // specific auth_error code attached. Deliberately generic — this must never
+  // surface the underlying reason to the client.
+  tried: "工作台授权未成功，你可以点击下方「进入工作台」重新尝试，或继续浏览方案展示厅。",
 };
 
 type LandingContentProps = {
@@ -77,6 +82,16 @@ export function LandingContent({ user, authError, metrics }: LandingContentProps
               <a className="secondary-action" href="/login">
                 使用飞书体验
               </a>
+              {user ? null : (
+                // Anonymous visitors (including a tenant member who opened
+                // this page from a shared link rather than the Feishu app
+                // icon) need a manual way to reach the workbench: opening the
+                // app icon lands on /enter without this link, but a shared
+                // /-link degrades to one click here instead.
+                <a className="secondary-action" href="/enter">
+                  进入工作台
+                </a>
+              )}
             </div>
           </div>
             </section>

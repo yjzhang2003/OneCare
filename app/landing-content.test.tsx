@@ -287,4 +287,34 @@ describe("LandingContent", () => {
       "登录请求已失效，请重新发起。",
     );
   });
+
+  it("offers a manual entry into the workbench for a session-less visitor", () => {
+    render(<LandingContent metrics={metrics} user={null} />);
+
+    expect(screen.getByRole("link", { name: "进入工作台" })).toHaveAttribute(
+      "href",
+      "/enter",
+    );
+  });
+
+  it("does not offer the workbench entry link to an already signed-in visitor", () => {
+    render(
+      <LandingContent
+        metrics={metrics}
+        user={{ openId: "ou_onecare", name: "服务运营员" }}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: "进入工作台" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a safe, generic notice when a prior authorization attempt failed", () => {
+    render(<LandingContent authError="tried" metrics={metrics} user={null} />);
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("工作台授权未成功");
+    expect(alert.textContent).not.toMatch(/error|exception|stack|token/i);
+  });
 });
