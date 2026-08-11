@@ -233,6 +233,16 @@ describe("toVocRecord", () => {
     expect(record.recordId).toBe("rec1");
   });
 
+  it("reads the war room chat id, and treats a missing column as no group", () => {
+    expect(
+      toVocRecord({ [VOC_FIELD_NAMES.warRoomChatId]: "oc_abc123" }, "rec1")
+        .warRoomChatId,
+    ).toBe("oc_abc123");
+    // 列不存在（老数据、或列被运营改名）时是空串而不是 undefined：下游用
+    // 「空串表示尚未建群」这一个判据，不必再区分 undefined 与 ""。
+    expect(toVocRecord({}, "rec1").warRoomChatId).toBe("");
+  });
+
   describe("ownerNames", () => {
     it("reads the display name alongside the open id", () => {
       const record = toVocRecord(

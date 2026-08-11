@@ -36,6 +36,7 @@ export const VOC_FIELD_NAMES = {
   followUpNote: "跟进记录",
   closedAt: "闭环时间",
   closingNote: "闭环结论",
+  warRoomChatId: "协同群 ID",
 } as const;
 
 export type BitableFields = Record<string, unknown>;
@@ -70,6 +71,12 @@ export type VocRecord = Readonly<{
   retryCount: number;
   ticketOpenedAt: string | null;
   closedAt: string | null;
+  // Recorded on the ticket row rather than kept in memory: the shard job
+  // re-runs and card buttons get double-clicked, so "has this ticket already
+  // got a group" must be answerable from the Base alone. Empty string means
+  // no group yet — the same missing-column-reads-as-"" convention text()
+  // already gives every other plain-text field in this record.
+  warRoomChatId: string;
 }>;
 
 // Card rendering (createVocTicketCard) and any other consumer that needs a
@@ -226,6 +233,7 @@ export function toVocRecord(
     retryCount: numberish(safeFields[VOC_FIELD_NAMES.retryCount]) ?? 0,
     ticketOpenedAt: isoDate(safeFields[VOC_FIELD_NAMES.ticketOpenedAt]),
     closedAt: isoDate(safeFields[VOC_FIELD_NAMES.closedAt]),
+    warRoomChatId: text(safeFields[VOC_FIELD_NAMES.warRoomChatId]),
   };
 }
 

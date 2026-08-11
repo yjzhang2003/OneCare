@@ -32,6 +32,7 @@ const records: readonly VocRecord[] = [
     retryCount: 0,
     ticketOpenedAt: "2026-01-23T02:00:00.000Z",
     closedAt: "2026-01-24T02:00:00.000Z",
+    warRoomChatId: "",
   },
 ];
 
