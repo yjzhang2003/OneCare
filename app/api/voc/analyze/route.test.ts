@@ -8,6 +8,7 @@ import {
   listOwnerRules,
   parseOwnerRules,
   POST,
+  readFieldShortcutRows,
   resolveTagSource,
 } from "./route";
 
@@ -717,6 +718,104 @@ describe("createAnalyzeRoute", () => {
   });
 });
 
+// I6: the field-shortcut (B) track's replies are parseReplyText's re-parse of
+// whatever prose Bitable's own AI field shortcut already wrote into AI 回复
+// 话术 (see readFieldShortcutRows below) — not freshly generated text. A
+// shortcut cell that doesn't match "【语气】正文" parses to result.replies = []
+// even though the cell itself holds real text. Before this fix, the same
+// updateRecord call that advanced the record's 流程状态 also re-serialized
+// that [] and overwrote the column with "", destroying the AI's actual
+// output. The aily (A) track generates replies itself (never re-parses an
+// existing column), so an empty result there is a genuine "no reply" and
+// must still be written.
+describe("B-track replies must not clobber unparsed AI prose", () => {
+  it("omits AI 回复话术 from the update payload when the field-shortcut track's reply text failed to parse", async () => {
+    const dependencies = deps({
+      tagSource: "field-shortcut",
+      tag: vi.fn(async () => [
+        {
+          kind: "tagged" as const,
+          result: {
+            recordId: "rec1",
+            sentiment: ["失望"],
+            polarity: "差评" as const,
+            dimensions: ["维修时间"] as const,
+            summary: "等待三天",
+            // Stands in for parseReplyText("散文，不是【语气】正文格式") — the
+            // provider already dropped the unparseable segment upstream of
+            // this route.
+            replies: [] as const,
+          },
+        },
+      ]),
+    });
+
+    const response = await createAnalyzeRoute(dependencies)(
+      request({ authorization: "Bearer s3cret" }),
+    );
+
+    expect(response.status).toBe(200);
+    const [, fields] = dependencies.updateRecord.mock.calls[0];
+    expect(fields).not.toHaveProperty("AI 回复话术");
+    // The rest of the write must be unaffected.
+    expect(fields["情绪极性"]).toBe("差评");
+    expect(fields["流程状态"]).toBe("待跟进");
+  });
+
+  it("writes AI 回复话术 normally when the field-shortcut track parses a well-formed reply", async () => {
+    const dependencies = deps({
+      tagSource: "field-shortcut",
+      tag: vi.fn(async () => [
+        {
+          kind: "tagged" as const,
+          result: {
+            recordId: "rec1",
+            sentiment: ["失望"],
+            polarity: "差评" as const,
+            dimensions: ["维修时间"] as const,
+            summary: "等待三天",
+            replies: [{ tone: "致歉安抚", text: "抱歉" }],
+          },
+        },
+      ]),
+    });
+
+    await createAnalyzeRoute(dependencies)(
+      request({ authorization: "Bearer s3cret" }),
+    );
+
+    const [, fields] = dependencies.updateRecord.mock.calls[0];
+    expect(fields).toHaveProperty("AI 回复话术");
+    expect(fields["AI 回复话术"]).toContain("致歉安抚");
+  });
+
+  it("still writes an empty AI 回复话术 for the aily track when the model genuinely returns no reply", async () => {
+    const dependencies = deps({
+      tagSource: "aily:skill_x@1700000000000",
+      tag: vi.fn(async () => [
+        {
+          kind: "tagged" as const,
+          result: {
+            recordId: "rec1",
+            sentiment: ["失望"],
+            polarity: "差评" as const,
+            dimensions: ["维修时间"] as const,
+            summary: "等待三天",
+            replies: [] as const,
+          },
+        },
+      ]),
+    });
+
+    await createAnalyzeRoute(dependencies)(
+      request({ authorization: "Bearer s3cret" }),
+    );
+
+    const [, fields] = dependencies.updateRecord.mock.calls[0];
+    expect(fields).toHaveProperty("AI 回复话术", "");
+  });
+});
+
 describe("route exports", () => {
   // Vercel Cron Jobs always invoke their target with an HTTP GET, never a
   // POST (per vercel.com/docs/cron-jobs), and vercel.json's crons entry has
@@ -936,6 +1035,164 @@ describe("listOwnerRules", () => {
 
     await expect(
       listOwnerRules(ownerBitableEnv, ownerToken, fetcher as unknown as typeof fetch),
+    ).rejects.toThrow("network down");
+  });
+});
+
+const shortcutBitableEnv = {
+  appToken: "bascn_demo",
+  vocTableId: "tblvoc",
+  ownerTableId: "tblowner",
+};
+const shortcutToken = async () => "t1";
+
+// I5: readFieldShortcutRows previously used a bare fetch that checked neither
+// response.ok nor payload.code !== 0 — every sibling read in this file
+// (listOwnerRules above, BitableClient.listRecords/updateRecord) checks both.
+// A non-2xx status or non-zero business code (rate limit 1254005, an expired
+// token, a permission change) has no `data.record`, so the row decoded as all
+// blanks. That blank row then failed downstream tag-payload validation with
+// "polarity 不在枚举内：" — a misdiagnosis that points an operator at the AI
+// model for what was actually a failed API call, while also burning one of
+// the record's limited retries. bitableEnv/token/fetcher are explicit
+// parameters (mirroring listOwnerRules) so this is testable without a live
+// Base call.
+describe("readFieldShortcutRows", () => {
+  it("builds the per-record URL with an Authorization header and a timeout signal", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: 0, data: { record: { fields: {} } } }),
+    );
+
+    await readFieldShortcutRows(
+      shortcutBitableEnv,
+      shortcutToken,
+      ["rec1"],
+      fetcher as unknown as typeof fetch,
+    );
+
+    const [url, init] = fetcher.mock.calls[0];
+    expect(url).toBe(
+      "https://open.feishu.cn/open-apis/bitable/v1/apps/bascn_demo/tables/tblvoc/records/rec1?user_id_type=open_id",
+    );
+    expect(init?.headers).toMatchObject({ Authorization: "Bearer t1" });
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("maps a well-formed response to a FieldShortcutRow, including parsed replies", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({
+        code: 0,
+        data: {
+          record: {
+            fields: {
+              情绪标签: ["着急"],
+              情绪极性: "差评",
+              问题维度: ["维修时间"],
+              "AI 摘要": "上门太慢",
+              "AI 回复话术": "【致歉安抚】抱歉",
+            },
+          },
+        },
+      }),
+    );
+
+    const rows = await readFieldShortcutRows(
+      shortcutBitableEnv,
+      shortcutToken,
+      ["rec1"],
+      fetcher as unknown as typeof fetch,
+    );
+
+    expect(rows).toEqual([
+      {
+        recordId: "rec1",
+        sentiment: ["着急"],
+        polarity: "差评",
+        dimensions: ["维修时间"],
+        summary: "上门太慢",
+        replies: [{ tone: "致歉安抚", text: "抱歉" }],
+      },
+    ]);
+  });
+
+  it("throws with the real Bitable code when the business code is non-zero, instead of decoding a blank row", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: 1254005, msg: "too many requests" }),
+    );
+
+    await expect(
+      readFieldShortcutRows(
+        shortcutBitableEnv,
+        shortcutToken,
+        ["rec1"],
+        fetcher as unknown as typeof fetch,
+      ),
+    ).rejects.toThrow(/1254005/);
+  });
+
+  it("throws with an unknown code when the payload is not an object", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse([]),
+    );
+
+    await expect(
+      readFieldShortcutRows(
+        shortcutBitableEnv,
+        shortcutToken,
+        ["rec1"],
+        fetcher as unknown as typeof fetch,
+      ),
+    ).rejects.toThrow(/unknown/);
+  });
+
+  it("throws when the HTTP response is not ok, even if the body parses as JSON", async () => {
+    const fetcher = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(JSON.stringify({ code: 0, data: {} }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+
+    await expect(
+      readFieldShortcutRows(
+        shortcutBitableEnv,
+        shortcutToken,
+        ["rec1"],
+        fetcher as unknown as typeof fetch,
+      ),
+    ).rejects.toThrow(/500/);
+  });
+
+  it("reads the token exactly once for a multi-record batch", async () => {
+    const token = vi.fn(async () => "t1");
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ code: 0, data: { record: { fields: {} } } }),
+    );
+
+    await readFieldShortcutRows(
+      shortcutBitableEnv,
+      token,
+      ["rec1", "rec2"],
+      fetcher as unknown as typeof fetch,
+    );
+
+    expect(token).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("propagates a rejection when the fetcher itself throws", async () => {
+    const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => {
+      throw new Error("network down");
+    });
+
+    await expect(
+      readFieldShortcutRows(
+        shortcutBitableEnv,
+        shortcutToken,
+        ["rec1"],
+        fetcher as unknown as typeof fetch,
+      ),
     ).rejects.toThrow("network down");
   });
 });

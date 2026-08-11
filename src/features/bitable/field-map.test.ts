@@ -255,6 +255,64 @@ describe("toTagFieldUpdate", () => {
     expect(update[VOC_FIELD_NAMES.severity]).toBe("高");
     expect(update[VOC_FIELD_NAMES.replies]).toContain("致歉安抚");
   });
+
+  it("writes an empty string for empty replies by default (no options passed)", () => {
+    const update = toTagFieldUpdate(
+      {
+        recordId: "rec1",
+        sentiment: ["满意"],
+        polarity: "好评",
+        dimensions: [],
+        summary: "上门很快",
+        replies: [],
+      },
+      "低",
+    );
+
+    expect(update).toHaveProperty(VOC_FIELD_NAMES.replies, "");
+  });
+
+  // I6: the field-shortcut track re-parses whatever prose Bitable's own AI
+  // field shortcut already wrote into AI 回复话术 (via parseReplyText,
+  // upstream of this function). A cell that does not match the "【语气】正文"
+  // shape parses to an empty replies array — but the cell itself is not
+  // empty. Re-serializing that empty array and writing it back would replace
+  // the AI's real output with "". omitEmptyReplies lets a caller that knows
+  // it is re-serializing a *re-parsed* column (as opposed to a freshly
+  // generated one) skip the write entirely rather than clobber it.
+  it("omits the replies key when omitEmptyReplies is set and replies is empty", () => {
+    const update = toTagFieldUpdate(
+      {
+        recordId: "rec1",
+        sentiment: ["失望"],
+        polarity: "差评",
+        dimensions: ["维修时间"],
+        summary: "等待三天",
+        replies: [],
+      },
+      "中",
+      { omitEmptyReplies: true },
+    );
+
+    expect(update).not.toHaveProperty(VOC_FIELD_NAMES.replies);
+  });
+
+  it("still writes the replies key when omitEmptyReplies is set but replies is non-empty", () => {
+    const update = toTagFieldUpdate(
+      {
+        recordId: "rec1",
+        sentiment: ["失望"],
+        polarity: "差评",
+        dimensions: ["维修时间"],
+        summary: "等待三天",
+        replies: [{ tone: "致歉安抚", text: "抱歉" }],
+      },
+      "中",
+      { omitEmptyReplies: true },
+    );
+
+    expect(update[VOC_FIELD_NAMES.replies]).toContain("致歉安抚");
+  });
 });
 
 // Moved here from app/api/voc/analyze/route.ts, where it was private and only

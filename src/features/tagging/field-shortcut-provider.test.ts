@@ -77,6 +77,29 @@ describe("createFieldShortcutTaggingProvider", () => {
     expect(outcomes[0]).toMatchObject({ kind: "failed" });
   });
 
+  // I5: readFieldShortcutRows (the real `read` this provider is wired to in
+  // production) now throws on a non-zero Bitable business code — e.g. rate
+  // limit 1254005 — instead of silently returning an all-blank row. Before
+  // that fix, an all-blank row reached parseTagPayload's validation and
+  // failed with "polarity 不在枚举内：", which reads as a model output defect
+  // even though the AI was never actually called for this attempt. This
+  // locks the failure reason this provider now surfaces: the real Bitable
+  // code, not that misleading enum message, so retries and operator
+  // diagnosis both point at the actual cause.
+  it("propagates the real Bitable error code as the failure reason instead of a misleading model-enum message", async () => {
+    const read = vi.fn(async (_ids: readonly string[]) => {
+      throw new Error("Bitable field shortcut read failed (code 1254005)");
+    });
+
+    const provider = createFieldShortcutTaggingProvider({ read });
+    const outcomes = await provider.tag([records[0]]);
+
+    expect(outcomes[0]).toMatchObject({ kind: "failed", recordId: "rec1" });
+    const reason = outcomes[0]?.kind === "failed" ? outcomes[0].reason : "";
+    expect(reason).toContain("1254005");
+    expect(reason).not.toContain("polarity 不在枚举内");
+  });
+
   it("returns no outcomes for an empty batch", async () => {
     const read = vi.fn();
     const provider = createFieldShortcutTaggingProvider({ read });

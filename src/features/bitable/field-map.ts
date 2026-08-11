@@ -203,18 +203,38 @@ export function toVocRecord(
   };
 }
 
+export type ToTagFieldUpdateOptions = Readonly<{
+  // Set by the field-shortcut (B) track only: that track's TagResult.replies
+  // is not freshly generated, it is parseReplyText's re-parse of whatever
+  // prose Bitable's own AI field shortcut already wrote into AI 回复话术. A
+  // cell that doesn't match the "【语气】正文" shape parses to [] even though
+  // the cell itself holds real text — re-serializing that [] and writing it
+  // back would silently replace the AI's actual output with "". The aily (A)
+  // track generates replies itself rather than re-parsing a column, so an
+  // empty result there is a genuine "no reply" and must still be written to
+  // clear out any stale value from a previous attempt.
+  omitEmptyReplies?: boolean;
+}>;
+
 export function toTagFieldUpdate(
   result: TagResult,
   severity: VocSeverity,
+  options: ToTagFieldUpdateOptions = {},
 ): BitableFields {
-  return {
+  const fields: BitableFields = {
     [VOC_FIELD_NAMES.sentiment]: [...result.sentiment],
     [VOC_FIELD_NAMES.polarity]: result.polarity,
     [VOC_FIELD_NAMES.dimensions]: [...result.dimensions],
     [VOC_FIELD_NAMES.summary]: result.summary,
-    [VOC_FIELD_NAMES.replies]: result.replies
-      .map((reply) => `【${reply.tone}】${reply.text}`)
-      .join("\n\n"),
     [VOC_FIELD_NAMES.severity]: severity,
   };
+
+  if (options.omitEmptyReplies && result.replies.length === 0) {
+    return fields;
+  }
+
+  fields[VOC_FIELD_NAMES.replies] = result.replies
+    .map((reply) => `【${reply.tone}】${reply.text}`)
+    .join("\n\n");
+  return fields;
 }

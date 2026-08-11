@@ -193,8 +193,17 @@ function buildTaggedWrite(
     polarity: result.polarity,
     dimensions: result.dimensions,
   });
+  // I6: tagSource identifies which track produced this result (the literal
+  // "field-shortcut" for B, "aily:<skill_id>@<批次号>" for A) and is reliable
+  // for that because a shard only ever runs one track — both dependencies.tag
+  // and dependencies.tagSource are derived from the same TAGGING_PROVIDER env
+  // read for the whole request. Only the B track's replies are a re-parse of
+  // an existing Base column (see ToTagFieldUpdateOptions), so only it is told
+  // to omit rather than blank out AI 回复话术 when parsing came up empty.
   const tagFields = {
-    ...toTagFieldUpdate(result, severity),
+    ...toTagFieldUpdate(result, severity, {
+      omitEmptyReplies: tagSource === "field-shortcut",
+    }),
     [VOC_FIELD_NAMES.tagSource]: tagSource,
   };
   const context: TransitionContext = {
@@ -641,21 +650,47 @@ export async function listOwnerRules(
 // (not reused from listPending's VocRecord, which doesn't decode these AI
 // columns at all) because the field shortcut can still be computing when the
 // row was first listed.
-async function readFieldShortcutRows(
+//
+// I5: bitableEnv/token/fetcher are explicit parameters (the same DI shape as
+// listOwnerRules above) rather than read from process.env / a module
+// singleton, so the network path is testable with a fake fetcher and no live
+// Base call. Both a non-2xx HTTP status and a non-zero Bitable business code
+// are now checked and thrown on — previously neither was, so a rate-limited
+// or expired-token response (HTTP 200, code != 0, no data.record) silently
+// decoded as an all-blank row. That blank row then failed downstream
+// tag-payload validation with "polarity 不在枚举内：" — a misdiagnosis
+// pointing at the AI model for what was actually a failed API call, while
+// also burning one of the record's limited retries. The thrown error here
+// carries the real Bitable code/HTTP status instead.
+export async function readFieldShortcutRows(
+  bitableEnv: BitableEnv,
+  token: TenantTokenProvider,
   recordIds: readonly string[],
+  fetcher: typeof fetch = fetch,
 ): Promise<readonly FieldShortcutRow[]> {
-  const bitableEnv = readBitableEnv();
-  const token = await getTokenProvider()();
+  const tokenValue = await token();
   const rows: FieldShortcutRow[] = [];
 
   for (const recordId of recordIds) {
     const url = `${BASE_URL}/bitable/v1/apps/${bitableEnv.appToken}/tables/${bitableEnv.vocTableId}/records/${recordId}?user_id_type=open_id`;
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
+    const response = await fetcher(url, {
+      headers: { Authorization: `Bearer ${tokenValue}` },
       signal: AbortSignal.timeout(BITABLE_TIMEOUT_MS),
     });
+
+    if (!response.ok) {
+      throw new Error(
+        `Bitable field shortcut read failed (HTTP ${response.status})`,
+      );
+    }
+
     const payload: unknown = await response.json();
-    const data = isRecord(payload) && isRecord(payload.data) ? payload.data : {};
+    if (!isRecord(payload) || payload.code !== 0) {
+      const code = isRecord(payload) ? String(payload.code) : "unknown";
+      throw new Error(`Bitable field shortcut read failed (code ${code})`);
+    }
+
+    const data = isRecord(payload.data) ? payload.data : {};
     const record = isRecord(data.record) ? data.record : null;
     const fields = record && isRecord(record.fields) ? record.fields : {};
 
@@ -691,7 +726,14 @@ function getTaggingProvider(): TaggingProvider {
         });
       },
       createFieldShortcut: () =>
-        createFieldShortcutTaggingProvider({ read: readFieldShortcutRows }),
+        createFieldShortcutTaggingProvider({
+          read: (recordIds) =>
+            readFieldShortcutRows(
+              readBitableEnv(),
+              getTokenProvider(),
+              recordIds,
+            ),
+        }),
     });
   }
   return taggingProvider;
