@@ -184,6 +184,60 @@ describe("parseTagPayload", () => {
     expect(outcomes[0]?.kind).toBe("failed");
   });
 
+  it("rejects a sentiment word the Base has no option for", () => {
+    // Not merely a schema nicety: these values are written to a Bitable
+    // multi-select, which auto-creates whatever option it is handed, and
+    // deleting the record afterwards does not remove it. One loose model output
+    // would permanently add a junk option to the enterprise's field. Four such
+    // leftovers already had to be cleaned out of 产品品类 by hand.
+    const outcomes = parseTagPayload(
+      payload([{ ...good, sentiment: ["郁闷"] }]),
+      ["rec1"],
+    );
+
+    expect(outcomes[0]).toMatchObject({ kind: "failed", recordId: "rec1" });
+    // The offending word must survive into the reason, or the only way to fix
+    // the prompt is to guess which word did it.
+    expect(
+      outcomes[0]?.kind === "failed" ? outcomes[0].reason : "",
+    ).toContain("郁闷");
+  });
+
+  it("rejects an unknown sentiment even when the rest of the entry is valid", () => {
+    const outcomes = parseTagPayload(
+      payload([{ ...good, sentiment: ["失望", "无语"] }]),
+      ["rec1"],
+    );
+
+    expect(outcomes[0]?.kind).toBe("failed");
+  });
+
+  it("accepts every sentiment option the Base actually defines", () => {
+    // Guards the other direction: a typo in the enum would silently fail every
+    // record carrying that word, and the symptom (everything goes to 分析失败)
+    // looks like a model problem rather than a one-character repo bug.
+    const outcomes = parseTagPayload(
+      payload([
+        {
+          ...good,
+          sentiment: [
+            "愤怒",
+            "失望",
+            "着急",
+            "沮丧",
+            "感激",
+            "开心",
+            "有爱",
+            "中性",
+          ],
+        },
+      ]),
+      ["rec1"],
+    );
+
+    expect(outcomes[0]?.kind).toBe("tagged");
+  });
+
   it("rejects replies with empty tone", () => {
     const outcomes = parseTagPayload(
       payload([{ ...good, replies: [{ tone: "", text: "非常抱歉" }] }]),

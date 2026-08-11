@@ -1,6 +1,7 @@
 import {
   VOC_DIMENSIONS,
   VOC_POLARITIES,
+  VOC_SENTIMENTS,
   type VocDimension,
   type VocPolarity,
 } from "../voc/triage";
@@ -90,6 +91,23 @@ function validate(entry: Record<string, unknown>, recordId: string): TagOutcome 
   }
   if (sentiment.some((item) => item.trim().length === 0)) {
     return { kind: "failed", recordId, reason: "sentiment 不能包含空字符串" };
+  }
+  // Checked against the enum for the same reason polarity and dimensions are,
+  // plus one this field makes sharper: these values are written to a Bitable
+  // multi-select, and Bitable auto-creates any option it receives. Deleting the
+  // record does not remove the option, so a single loose model output
+  // permanently alters the enterprise's field schema. Rejecting the record is
+  // louder than filtering the stray value out — the offending word lands in
+  // 失败原因 where it can be fixed in the prompt, instead of disappearing.
+  const unknownSentiment = sentiment.find(
+    (item) => !(VOC_SENTIMENTS as readonly string[]).includes(item),
+  );
+  if (unknownSentiment !== undefined) {
+    return {
+      kind: "failed",
+      recordId,
+      reason: `sentiment 不在枚举内：${unknownSentiment}`,
+    };
   }
 
   if (typeof entry.summary !== "string" || entry.summary.trim().length === 0) {

@@ -12,6 +12,25 @@ export const VOC_DIMENSIONS = [
 ] as const;
 export type VocDimension = (typeof VOC_DIMENSIONS)[number];
 
+// The eight options that actually exist on the Base's 情绪标签 multi-select,
+// read back from the live field schema rather than invented here. This list
+// exists because Bitable auto-creates any option it is handed and deleting the
+// record afterwards does not remove the option — so an unconstrained model
+// output permanently pollutes the enterprise's field schema. Four such leftovers
+// had to be cleaned out of 产品品类 by hand.
+export const VOC_SENTIMENTS = [
+  "愤怒",
+  "失望",
+  "着急",
+  "沮丧",
+  "感激",
+  "开心",
+  "有爱",
+  "中性",
+] as const;
+
+export type VocSentiment = (typeof VOC_SENTIMENTS)[number];
+
 export type VocSeverity = "高" | "中" | "低";
 
 export type TriageDecision = Readonly<{
