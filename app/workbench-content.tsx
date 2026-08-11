@@ -10,10 +10,11 @@ import type {
   WorkbenchTicket,
 } from "../src/features/workbench/data";
 
-// Same formatting rules as app/dashboard/voc/page.tsx: percentages only ever
-// come from ratios aggregateVocMetrics already computed, never from a count
-// divided ad hoc in the view, so every number here traces back to one
-// arithmetic source.
+// Percentages only ever come from ratios aggregateVocMetrics already computed,
+// never from a count divided ad hoc in the view, so every number here traces
+// back to one arithmetic source — the same rule the retired public aggregate
+// page followed, and the reason this page and a direct curl of
+// /api/voc/dashboard cannot disagree.
 function percent(ratio: number): string {
   return `${Math.round(ratio * 100)}%`;
 }

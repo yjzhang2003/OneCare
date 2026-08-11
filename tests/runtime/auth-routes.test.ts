@@ -169,22 +169,21 @@ describe("built Next.js authentication routes", () => {
     );
   });
 
-  it("leaves the public VOC dashboard reachable after the /dashboard redirect change", async () => {
-    // next.config.ts's redirects() source is the exact path "/dashboard",
-    // not a prefix or wildcard, so it must not swallow this sibling route —
-    // the one page a competition judge can verify unaided. A regression here
-    // would mean the /dashboard fix silently broke the more important page.
+  it("retires the public VOC dashboard with a real HTTP redirect", async () => {
+    // This route used to be the one page a judge could verify unaided, and it
+    // answered 200. It is now a config-level redirect to `/`, which is where
+    // the same numbers live behind the session gate. Asserting the status and
+    // not just the destination is the point: a page-level redirect() under
+    // cacheComponents would answer 200 with a baked client-side navigation,
+    // which is the regression class /dashboard already hit once.
     const response = await fetch(`${baseUrl}/dashboard/voc`, {
       redirect: "manual",
     });
-    const body = await response.text();
 
-    expect(response.status).toBe(200);
-    expect(body).toContain("VOC 闭环看板");
-    // Not a substring assertion on `原始内容` or any record_id shape: this
-    // only proves the page rendered real content (its own heading), not that
-    // it withheld anything — that guarantee is covered by
-    // app/dashboard/voc/page.test.tsx's contract on the metrics type itself.
+    expect(response.status).toBe(307);
+    expect(new URL(response.headers.get("location")!, baseUrl).pathname).toBe(
+      "/",
+    );
   });
 
   it("makes /enter a real dynamic redirect, not a prerendered 200", async () => {

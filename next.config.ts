@@ -36,6 +36,19 @@ const nextConfig: NextConfig = {
         destination: "/login",
         permanent: false,
       },
+      // The public aggregate page is gone: the workbench at `/` supersedes it
+      // for anyone who can sign in, and it existed so an anonymous judge could
+      // check the numbers unaided — a need the tenant switch removed, since
+      // the judges are now inside the enterprise the app belongs to. This
+      // lives here for the same reason as `/dashboard` above rather than as a
+      // page calling `redirect()`: under `cacheComponents` such a page is
+      // prerendered and answers a non-JS caller with 200. `permanent: false`
+      // keeps the claim reversible — the page may come back.
+      {
+        source: "/dashboard/voc",
+        destination: "/",
+        permanent: false,
+      },
     ];
   },
 };
