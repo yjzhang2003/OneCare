@@ -44,6 +44,15 @@ function shanghaiTime(iso: string | null): string | null {
 
 const ABSENT = "未填写";
 
+// The real dataset is one enterprise weekly report: 3628 records. Rendering all
+// of them puts several megabytes of HTML on the wire for a page nobody scrolls
+// to the bottom of. The cap lives here rather than in buildWorkbench because the
+// data layer guarantees its row count equals the record count — an operator who
+// cannot see a record cannot fix it, and a silently shorter list stops
+// reconciling against the Base. So the aggregates and the state tally below
+// still cover every record; only the table is windowed, and it says so.
+const LIST_LIMIT = 200;
+
 function text(value: string | null): string {
   return value ?? ABSENT;
 }
@@ -442,14 +451,18 @@ export function WorkbenchContent({ data, user }: WorkbenchContentProps) {
         ) : (
           <>
             <p className="workbench__note">
-              共 {data.tickets.length} 条，按反馈时间从新到旧排列；无反馈时间的记录排在末尾而不被丢弃。
+              共 {data.tickets.length} 条
+              {data.tickets.length > LIST_LIMIT
+                ? `，下表显示按反馈时间最新的 ${LIST_LIMIT} 条`
+                : "，按反馈时间从新到旧排列"}
+              ；无反馈时间的记录排在末尾而不被丢弃。
               {stateCounts.length === 0
                 ? null
-                : ` 流程状态分布：${stateCounts
+                : ` 流程状态分布（全部 ${data.tickets.length} 条）：${stateCounts
                     .map((row) => `${row.state} ${row.count}`)
                     .join("、")}。`}
             </p>
-            <TicketTable tickets={data.tickets} />
+            <TicketTable tickets={data.tickets.slice(0, LIST_LIMIT)} />
           </>
         )}
       </section>

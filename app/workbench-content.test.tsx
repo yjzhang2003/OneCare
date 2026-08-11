@@ -44,6 +44,12 @@ const ticket: WorkbenchTicket = {
 
 const user = { openId: "ou_a", name: "张三" };
 
+// Mirrors LIST_LIMIT in workbench-content.tsx. Written out here rather than
+// imported so that raising the cap has to be a deliberate two-file edit: the
+// assertion below is about the page staying small, and a test that reads the
+// constant it is checking would pass at any value.
+const LIST_LIMIT_FOR_TEST = 200;
+
 describe("WorkbenchContent", () => {
   it("renders the ticket's real content and owner", () => {
     render(
@@ -197,5 +203,36 @@ describe("WorkbenchContent", () => {
     // showing a tally that contradicts the list underneath it.
     expect(screen.getByText(/待跟进 2、已闭环 1/)).toBeInTheDocument();
     expect(screen.getByText(/共 3 条/)).toBeInTheDocument();
+  });
+
+  it("windows a long list but keeps the counts over every record", () => {
+    const many = Array.from({ length: 250 }, (_, index) => ({
+      ...ticket,
+      recordNumber: `R-${index}`,
+      state: index === 249 ? ("已闭环" as const) : ("待跟进" as const),
+    }));
+
+    const { container } = render(
+      <WorkbenchContent
+        data={{ metrics: { status: "ok", metrics: emptyMetrics() }, tickets: many }}
+        user={user}
+      />,
+    );
+
+    // The real dataset is 3628 records. The table is capped so the page does not
+    // ship megabytes of HTML, but the totals must still describe everything —
+    // a count that quietly shrank to the window size is a number that no longer
+    // reconciles against the Base. The 250th row's state proves the tally read
+    // past the window.
+    //
+    // Scoped to the ticket table rather than counting every row on the page: the
+    // distribution panels have tables of their own, so a page-wide row count
+    // would move whenever an unrelated panel gains a line.
+    expect(
+      container.querySelectorAll(".workbench__tickets tbody tr"),
+    ).toHaveLength(LIST_LIMIT_FOR_TEST);
+    expect(screen.getByText(/共 250 条/)).toBeInTheDocument();
+    expect(screen.getByText(/最新的 200 条/)).toBeInTheDocument();
+    expect(screen.getByText(/全部 250 条）：待跟进 249、已闭环 1/)).toBeInTheDocument();
   });
 });
