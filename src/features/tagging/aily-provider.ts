@@ -81,18 +81,31 @@ export function createAilyTaggingProvider(
 
         // The official contract takes `input` as a JSON String, not a nested
         // object; sending an object silently produces an empty skill input.
+        // Its keys are the skill's declared custom parameters.
+        //
+        // `records` is itself a JSON string rather than an array. Verified in
+        // the aily skill editor on 2026-08-11: the custom-parameter type picker
+        // offers String, Boolean, Float and Integer — there is no array or
+        // object type, so the skill declares `records` as String and parses the
+        // text inside the workflow. Handing a real array to a String parameter
+        // is a type mismatch at the platform boundary, and the failure mode
+        // would be an empty or coerced input rather than an error.
         const input = JSON.stringify({
-          records: records.map((record) => {
-            const fields: Record<string, unknown> = isRecord(record) ? record : {};
-            const rating = fields.rating;
-            return {
-              id: fields.recordId,
-              content: fields.content,
-              channel: fields.channel,
-              category: fields.category,
-              ...(rating === undefined ? {} : { rating }),
-            };
-          }),
+          records: JSON.stringify(
+            records.map((record) => {
+              const fields: Record<string, unknown> = isRecord(record)
+                ? record
+                : {};
+              const rating = fields.rating;
+              return {
+                id: fields.recordId,
+                content: fields.content,
+                channel: fields.channel,
+                category: fields.category,
+                ...(rating === undefined ? {} : { rating }),
+              };
+            }),
+          ),
         });
 
         const token = await config.tenantAccessToken();

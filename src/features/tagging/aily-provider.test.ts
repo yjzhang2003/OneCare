@@ -71,17 +71,25 @@ describe("createAilyTaggingProvider", () => {
     const body = JSON.parse(init?.body as string) as { input: unknown };
 
     expect(typeof body.input).toBe("string");
-    expect(JSON.parse(body.input as string)).toEqual({
-      records: [
-        {
-          id: "rec1",
-          content: "等了三天没人上门",
-          channel: "电商评价",
-          category: "冰箱",
-          rating: 2,
-        },
-      ],
-    });
+    const parsed = JSON.parse(body.input as string) as { records: unknown };
+
+    // Doubly encoded on purpose. `input` is a JSON string whose keys are the
+    // skill's declared custom parameters, and aily's parameter type picker
+    // offers only String, Boolean, Float and Integer — there is no array type
+    // (verified in the skill editor on 2026-08-11). So `records` is a String
+    // parameter carrying the array as text, which the workflow parses. Handing
+    // a real array to a String parameter is a type mismatch at the platform
+    // boundary, and it would fail by arriving empty rather than by erroring.
+    expect(typeof parsed.records).toBe("string");
+    expect(JSON.parse(parsed.records as string)).toEqual([
+      {
+        id: "rec1",
+        content: "等了三天没人上门",
+        channel: "电商评价",
+        category: "冰箱",
+        rating: 2,
+      },
+    ]);
   });
 
   it("reports the provider name", () => {
