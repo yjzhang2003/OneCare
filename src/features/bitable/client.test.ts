@@ -296,4 +296,45 @@ describe("createBitableClient", () => {
       client.updateRecord("rec1", { bad: 1 }),
     ).rejects.toThrow(/1254005/);
   });
+
+  it("finds a ticket by its war room chat id with a filtered search, not a full scan", async () => {
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toContain("/records/search");
+      const body = JSON.parse(init?.body as string) as {
+        filter: { conditions: ReadonlyArray<{ field_name: string; value: string[] }> };
+      };
+      expect(body.filter.conditions[0]?.field_name).toBe("协同群 ID");
+      expect(body.filter.conditions[0]?.value).toEqual(["oc_abc123"]);
+      return new Response(
+        JSON.stringify({
+          code: 0,
+          data: { items: [{ record_id: "rec1", fields: { 记录编号: "R-1" } }] },
+        }),
+        { status: 200 },
+      );
+    });
+
+    const client = createBitableClient(env, async () => "t", fetcher as unknown as typeof fetch);
+
+    expect((await client.findByWarRoomChatId("oc_abc123"))?.recordId).toBe("rec1");
+  });
+
+  it("returns null rather than throwing when no ticket carries that chat id", async () => {
+    const fetcher = vi.fn(async () =>
+      new Response(JSON.stringify({ code: 0, data: { items: [] } }), { status: 200 }),
+    );
+    const client = createBitableClient(env, async () => "t", fetcher as unknown as typeof fetch);
+
+    expect(await client.findByWarRoomChatId("oc_missing")).toBeNull();
+  });
+
+  it("returns null for a blank chat id without calling the API", async () => {
+    // Otherwise every non-group message would cost a cross-border request to look
+    // up the empty string.
+    const fetcher = vi.fn(async () => new Response("{}", { status: 200 }));
+    const client = createBitableClient(env, async () => "t", fetcher as unknown as typeof fetch);
+
+    expect(await client.findByWarRoomChatId("")).toBeNull();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 });

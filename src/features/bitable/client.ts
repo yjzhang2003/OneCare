@@ -1,5 +1,5 @@
 import type { BitableEnv } from "../../lib/env";
-import { toVocRecord, type BitableFields, type VocRecord } from "./field-map";
+import { toVocRecord, VOC_FIELD_NAMES, type BitableFields, type VocRecord } from "./field-map";
 
 const BASE_URL = "https://open.feishu.cn/open-apis";
 const TOKEN_URL = `${BASE_URL}/auth/v3/tenant_access_token/internal`;
@@ -84,6 +84,7 @@ export type BitableClient = Readonly<{
   listRecords(options?: ListRecordsOptions): Promise<readonly VocRecord[]>;
   updateRecord(recordId: string, fields: BitableFields): Promise<void>;
   listFieldNames(): Promise<readonly string[]>;
+  findByWarRoomChatId(chatId: string): Promise<VocRecord | null>;
 }>;
 
 export function createBitableClient(
@@ -199,6 +200,41 @@ export function createBitableClient(
           ? [item.field_name]
           : [],
       );
+    },
+
+    async findByWarRoomChatId(chatId) {
+      // Short-circuit before the network: most inbound traffic is not a war
+      // room message, and a blank id would otherwise cost a cross-border
+      // request to look up an empty string on every single one.
+      const trimmed = chatId.trim();
+      if (trimmed.length === 0) return null;
+
+      const payload = await call(
+        `${recordsUrl}/search?user_id_type=open_id&page_size=1`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            filter: {
+              conjunction: "and",
+              conditions: [
+                {
+                  field_name: VOC_FIELD_NAMES.warRoomChatId,
+                  operator: "is",
+                  value: [trimmed],
+                },
+              ],
+            },
+          }),
+        },
+      );
+
+      if (payload.code !== 0) {
+        throw new Error(`Bitable search failed (code ${String(payload.code)})`);
+      }
+
+      const data = isRecord(payload.data) ? payload.data : {};
+      const records = itemsToRecords(data.items);
+      return records[0] ?? null;
     },
   };
 }
