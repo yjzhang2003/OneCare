@@ -24,6 +24,7 @@ import {
   createAnswerGroupQuestion,
   createFeishuEventRoute,
   createResolveAction,
+  type WarRoomActionDependencies,
 } from "./route";
 
 const env: BotEnv = {
@@ -487,9 +488,31 @@ function bitable(record: VocRecord | null) {
   };
 }
 
+// Default war-room dependencies for `liveDependencies` callers that never
+// intend to exercise voc_open_war_room/voc_decline_war_room: every function
+// throws if actually invoked. This is deliberate, not a placeholder — every
+// existing state-action test below builds its setup with these defaults, so
+// if createResolveAction's routing ever regressed to sending a state action
+// through resolveWarRoomAction (or vice versa), the thrown error would
+// surface as a changed toast rather than passing silently.
+const unusedWarRoomDependencies: WarRoomActionDependencies = {
+  fallbackOpenIds: async () => {
+    throw new Error("fallbackOpenIds should not be called for this test");
+  },
+  createChat: async () => {
+    throw new Error("createChat should not be called for this test");
+  },
+  sendToChat: async () => {
+    throw new Error("sendToChat should not be called for this test");
+  },
+};
+
 // Only `readEnv` and the two outbound message senders are faked; parseEvent
 // and resolveAction are the production functions.
-function liveDependencies(client: VocActionBitable) {
+function liveDependencies(
+  client: VocActionBitable,
+  warRoom: WarRoomActionDependencies = unusedWarRoomDependencies,
+) {
   const scheduled: Array<() => Promise<void>> = [];
   return {
     scheduled,
@@ -515,7 +538,7 @@ function liveDependencies(client: VocActionBitable) {
       })),
       replyMessage: vi.fn(async () => undefined),
       sendMessage: vi.fn(async () => undefined),
-      resolveAction: createResolveAction(() => client),
+      resolveAction: createResolveAction(() => client, warRoom),
       // None of the card-action tests this factory serves ever produce a
       // group_question outcome, so this is never exercised — present only to
       // satisfy FeishuEventRouteDependencies.
@@ -813,6 +836,185 @@ describe("POST /api/feishu/events — VOC closure loop end to end", () => {
       });
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// Task 11: createResolveAction actually dispatches voc_open_war_room /
+// voc_decline_war_room to resolveWarRoomAction instead of letting them fall
+// into resolveVocCardAction's inert "该操作暂不支持" guard. Same seam as the
+// closure-loop describe block above (real parseFeishuEvent, real
+// createResolveAction, only the Bitable/war-room network boundary faked) —
+// stubbing resolveAction itself is exactly how this gap went unnoticed before.
+// ---------------------------------------------------------------------------
+describe("POST /api/feishu/events — VOC war room actions, wired for real", () => {
+  it("routes voc_open_war_room to resolveWarRoomAction: creates a chat whose members include both the owner and the operator", async () => {
+    const client = bitable(
+      vocRecord({ ownerOpenIds: ["ou_owner"], warRoomChatId: "" }),
+    );
+    const createChat = vi.fn(
+      async (_name: string, _memberOpenIds: readonly string[]): Promise<string> =>
+        "oc_new_room",
+    );
+    const sendToChat = vi.fn(
+      async (_chatId: string, _card: Record<string, unknown>): Promise<void> =>
+        undefined,
+    );
+    const setup = liveDependencies(client, {
+      // The operator approving the escalation is a fallback owner, not this
+      // ticket's assigned owner — the one case that actually distinguishes
+      // "operator" from "owner" in the members list.
+      fallbackOpenIds: async () => ["ou_fallback"],
+      createChat,
+      sendToChat,
+    });
+
+    const response = await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(
+        cardActionBody(
+          "voc_open_war_room",
+          { record_id: "rec12345" },
+          { operatorOpenId: "ou_fallback" },
+        ),
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createChat).toHaveBeenCalledTimes(1);
+    const [, members] = createChat.mock.calls[0];
+    expect(members).toContain("ou_owner");
+    expect(members).toContain("ou_fallback");
+    expect(sendToChat).toHaveBeenCalledWith("oc_new_room", expect.anything());
+
+    expect(client.updateRecord).toHaveBeenCalledTimes(1);
+    const [, fields] = client.updateRecord.mock.calls[0];
+    expect(fields["协同群 ID"]).toBe("oc_new_room");
+
+    const body = (await response.json()) as CardCallbackResponse;
+    expect(body.toast?.type).toBe("success");
+  });
+
+  it("routes voc_decline_war_room to resolveWarRoomAction: writes declined and never creates a chat", async () => {
+    const client = bitable(
+      vocRecord({ ownerOpenIds: ["ou_owner"], warRoomChatId: "" }),
+    );
+    const createChat = vi.fn(
+      async (_name: string, _memberOpenIds: readonly string[]): Promise<string> => {
+        throw new Error("createChat should not be called for a decline");
+      },
+    );
+    const setup = liveDependencies(client, {
+      fallbackOpenIds: async () => [],
+      createChat,
+      sendToChat: async () => {
+        throw new Error("sendToChat should not be called for a decline");
+      },
+    });
+
+    const response = await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(
+        cardActionBody(
+          "voc_decline_war_room",
+          { record_id: "rec12345" },
+          { operatorOpenId: "ou_owner" },
+        ),
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createChat).not.toHaveBeenCalled();
+    expect(client.updateRecord).toHaveBeenCalledTimes(1);
+    const [, fields] = client.updateRecord.mock.calls[0];
+    expect(fields["协同群 ID"]).toBe("declined");
+
+    const body = (await response.json()) as CardCallbackResponse;
+    expect(body.toast?.content).toContain("暂不需要");
+  });
+
+  // The load-bearing case: the same relaxation that lets a fallback approver
+  // (who is not this ticket's owner) open the war room must not leak into the
+  // four status actions, which keep resolveVocCardAction's strict
+  // owner-only check. One record, one operator identity, two different card
+  // clicks — proving both halves at once is the point, not a convenience.
+  it("lets a fallback (non-owner) open the war room, but still rejects the same fallback for a state action", async () => {
+    const client = bitable(
+      vocRecord({
+        state: "待跟进",
+        ownerOpenIds: ["ou_owner"],
+        warRoomChatId: "",
+      }),
+    );
+    const createChat = vi.fn(
+      async (_name: string, _memberOpenIds: readonly string[]): Promise<string> =>
+        "oc_fallback_room",
+    );
+    const sendToChat = vi.fn(
+      async (_chatId: string, _card: Record<string, unknown>): Promise<void> =>
+        undefined,
+    );
+    const setup = liveDependencies(client, {
+      fallbackOpenIds: async () => ["ou_fallback"],
+      createChat,
+      sendToChat,
+    });
+
+    const openResponse = await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(
+        cardActionBody(
+          "voc_open_war_room",
+          { record_id: "rec12345" },
+          { operatorOpenId: "ou_fallback" },
+        ),
+      ),
+    );
+    const openBody = (await openResponse.json()) as CardCallbackResponse;
+    expect(openBody.toast?.type).toBe("success");
+    expect(createChat).toHaveBeenCalledTimes(1);
+
+    // Same record, same operator, a status action instead: resolveVocCardAction
+    // reads this ticket's ownerOpenIds (["ou_owner"]) — "ou_fallback" is not in
+    // it — and must reject exactly as it would for any other non-owner.
+    const followUpResponse = await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(
+        cardActionBody(
+          "voc_start_follow_up",
+          { record_id: "rec12345" },
+          { operatorOpenId: "ou_fallback" },
+        ),
+      ),
+    );
+    const followUpBody = (await followUpResponse.json()) as CardCallbackResponse;
+    expect(followUpBody.toast?.type).toBe("error");
+    expect(followUpBody.toast?.content).toContain("负责人");
+    // Only the war-room click above wrote anything; the rejected state click
+    // must not have touched the record.
+    expect(client.updateRecord).toHaveBeenCalledTimes(1);
+  });
+
+  // Complements the closure-loop describe block above: those tests already
+  // pin down state-action behavior (transitions, notes, rejections) using
+  // `liveDependencies`' default war-room fakes, which throw if ever invoked.
+  // This test names the property directly instead of leaving it implicit.
+  it("never touches the war-room dependencies (fallbackOpenIds/createChat/sendToChat) for a status action", async () => {
+    const client = bitable(vocRecord({ state: "待跟进", ownerOpenIds: ["ou_owner"] }));
+    // liveDependencies' default `unusedWarRoomDependencies` throws on any
+    // call, so simply not throwing here already proves the point; the
+    // explicit success assertion below is what makes that intent legible.
+    const setup = liveDependencies(client);
+
+    const response = await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(
+        cardActionBody(
+          "voc_start_follow_up",
+          { record_id: "rec12345" },
+          { operatorOpenId: "ou_owner" },
+        ),
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as CardCallbackResponse;
+    expect(body.toast?.type).toBe("success");
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -19,6 +19,7 @@ import {
 } from "../../../../src/features/feishu-bot/card-actions";
 import {
   VOC_CARD_ACTIONS,
+  type FeishuCard,
   type FeishuOutboundMessage,
   type OneCareCardAction,
   type VocCardAction,
@@ -30,6 +31,7 @@ import {
 } from "../../../../src/features/feishu-bot/cards";
 import {
   createBotOpenIdProvider,
+  createWarRoomChat,
   listChatMessages,
 } from "../../../../src/features/feishu-bot/chat-client";
 import {
@@ -40,6 +42,7 @@ import {
   parseFeishuEvent,
   type FeishuEventOutcome,
 } from "../../../../src/features/feishu-bot/event-handler";
+import { resolveWarRoomAction } from "../../../../src/features/feishu-bot/war-room-actions";
 import {
   buildAnswerFacts,
   computeFactsAggregates,
@@ -55,6 +58,14 @@ import {
   readTaggingEnv,
   type BotEnv,
 } from "../../../../src/lib/env";
+// Task 11: the fix for this file's own oldest gap reuses analyze/route.ts's
+// existing 负责人表 read and its "usable, deduplicated 兜底 openId list" filter
+// rather than re-parsing the owner table a second, independent way — see
+// getFallbackOpenIds below.
+import {
+  fallbackOwnerOpenIds,
+  listOwnerRules,
+} from "../../voc/analyze/route";
 
 // `runtime = "nodejs"` was dropped: it is the App Router default anyway, and
 // task 14 enables `cacheComponents` in next.config.ts (for the VOC
@@ -322,10 +333,74 @@ export function createAnswerGroupQuestion(
   };
 }
 
+// The three capabilities resolveWarRoomAction (Task 6) needs beyond
+// getRecord/updateRecord (already covered by VocActionBitable, reused as-is
+// below). Pulled out as its own injectable type — like VocActionBitable next
+// to it — so a test can drive createResolveAction's real routing logic over
+// fakes instead of stubbing resolveAction itself, which is exactly how the
+// missing wiring this task fixes went unnoticed for ten prior tasks.
+export type WarRoomActionDependencies = Readonly<{
+  fallbackOpenIds: () => Promise<readonly string[]>;
+  createChat: (name: string, memberOpenIds: readonly string[]) => Promise<string>;
+  sendToChat: (chatId: string, card: FeishuCard) => Promise<void>;
+}>;
+
+// 负责人表's fallback column, read fresh on every call (no caching layer):
+// escalateToWarRoom in analyze/route.ts reads the same table the same way,
+// once per Cron shard, and that call is not cached either — a cache here
+// would just be a second, differently-invalidated source of truth for a
+// table small enough that re-reading it costs one Bitable round trip.
+async function getFallbackOpenIds(): Promise<readonly string[]> {
+  const ownerRules = await listOwnerRules(readBitableEnv(), getTokenProvider());
+  return fallbackOwnerOpenIds(ownerRules);
+}
+
+function createWarRoomChatForRecord(
+  name: string,
+  memberOpenIds: readonly string[],
+): Promise<string> {
+  return createWarRoomChat({ env: readBotEnv(), name, memberOpenIds });
+}
+
+// sendFeishuMessage's input is a discriminated union of "chatId" or "openId"
+// (never both) — this always takes the chatId branch, since resolveWarRoomAction
+// only ever posts into the war room chat it just created, never to a person.
+function sendCardToWarRoomChat(chatId: string, card: FeishuCard): Promise<void> {
+  return sendFeishuMessage({
+    env: readBotEnv(),
+    chatId,
+    message: { msgType: "interactive", content: JSON.stringify(card) },
+  });
+}
+
+const defaultWarRoomDependencies: WarRoomActionDependencies = {
+  fallbackOpenIds: getFallbackOpenIds,
+  createChat: createWarRoomChatForRecord,
+  sendToChat: sendCardToWarRoomChat,
+};
+
+function isWarRoomCardAction(
+  action: OneCareCardAction | VocCardAction,
+): action is "voc_open_war_room" | "voc_decline_war_room" {
+  return action === "voc_open_war_room" || action === "voc_decline_war_room";
+}
+
 // The single dispatch point for every card click, demo or real: a VOC action
 // carries a real record id and operator identity and goes through the triple
 // check (Task 12); the nine demo actions keep using the untouched, synchronous
 // demo resolver.
+//
+// Task 11: voc_open_war_room / voc_decline_war_room are checked, and
+// dispatched to resolveWarRoomAction, before the isVocCardAction branch below
+// — even though VOC_CARD_ACTIONS (and therefore isVocCardAction) still
+// considers both of them VocCardActions. Without this earlier branch they
+// fall through to resolveVocCardAction, which enforces strict owner-only
+// authorization and has no state-machine transition defined for either
+// action (see its own ACTION_TO_TRANSITION comment) — that misrouting is the
+// entire defect this task exists to fix: every real click on either button
+// returned "该操作暂不支持" and created nothing. resolveWarRoomAction's own
+// "owner OR fallback" relaxation is not reimplemented here; it is applied
+// only inside that function, and only for these two actions.
 //
 // The Bitable client arrives as a parameter so this dispatcher — the exact
 // code production runs — can be driven end to end over a fake Bitable
@@ -334,8 +409,21 @@ export function createAnswerGroupQuestion(
 // actually makes.
 export function createResolveAction(
   bitable: () => VocActionBitable,
+  warRoom: WarRoomActionDependencies = defaultWarRoomDependencies,
 ): (input: CardActionRequest) => Promise<CardActionResult> {
   return async function resolveAction(input) {
+    if (isWarRoomCardAction(input.action)) {
+      return resolveWarRoomAction({
+        action: input.action,
+        recordId: input.recordId,
+        operatorOpenId: input.operatorOpenId,
+        getRecord: (recordId) => bitable().getRecord(recordId),
+        updateRecord: (recordId, fields) => bitable().updateRecord(recordId, fields),
+        fallbackOpenIds: warRoom.fallbackOpenIds,
+        createChat: warRoom.createChat,
+        sendToChat: warRoom.sendToChat,
+      });
+    }
     if (isVocCardAction(input.action)) {
       return resolveVocCardAction({
         action: input.action,
