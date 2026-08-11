@@ -495,7 +495,13 @@ function liveDependencies(client: VocActionBitable) {
     scheduled,
     dependencies: {
       readEnv: () => env,
-      parseEvent: parseFeishuEvent,
+      // None of the tests this factory serves send a group message, so the
+      // bot identity lookup is never exercised — a fixed stub is enough.
+      parseEvent: (input: {
+        rawBody: string;
+        headers: Headers;
+        env: BotEnv;
+      }) => parseFeishuEvent({ ...input, botOpenId: async () => "ou_bot_unused" }),
       createReply: vi.fn((text: string) => ({
         kind: "help" as const,
         message: {
@@ -818,7 +824,31 @@ describe("POST /api/feishu/events — VOC closure loop end to end", () => {
 // level against a mock that could not tell a correct wiring from a broken one.
 // ---------------------------------------------------------------------------
 
-function groupMessageBody(text: string, chatId = "oc_group_chat") {
+// This app holds the "获取群组中所有消息" grant (confirmed live on
+// 2026-08-12), so im.message.receive_v1 fires for every group message, not
+// only ones that @ the bot. GROUP_BOT_OPEN_ID is what liveGroupDependencies'
+// botOpenId stub resolves to, so a mentions array containing it is "this
+// message addresses the bot" and any other content is ordinary group
+// chatter the tests below must prove gets ignored.
+const GROUP_BOT_OPEN_ID = "ou_group_bot_self";
+
+function botMention() {
+  return {
+    key: "@_user_1",
+    id: { open_id: GROUP_BOT_OPEN_ID, union_id: "on_bot", user_id: "bot" },
+    name: "OneCare",
+    tenant_key: "tenant_onecare",
+  };
+}
+
+function groupMessageBody(
+  text: string,
+  chatId = "oc_group_chat",
+  // Defaults to "the bot is mentioned" so every test written for the answer
+  // pipeline itself (not for mention-gating specifically) keeps exercising a
+  // legitimate question unless it deliberately overrides this.
+  mentions: readonly unknown[] = [botMention()],
+) {
   return {
     schema: "2.0",
     header: {
@@ -841,6 +871,7 @@ function groupMessageBody(text: string, chatId = "oc_group_chat") {
         chat_type: "group",
         message_type: "text",
         content: JSON.stringify({ text }),
+        mentions,
       },
     },
   };
@@ -894,7 +925,8 @@ function liveGroupDependencies(
     scheduled,
     dependencies: {
       readEnv: () => env,
-      parseEvent: parseFeishuEvent,
+      parseEvent: (input: { rawBody: string; headers: Headers; env: BotEnv }) =>
+        parseFeishuEvent({ ...input, botOpenId: async () => GROUP_BOT_OPEN_ID }),
       createReply: vi.fn((text: string) => ({
         kind: "help" as const,
         message: {
@@ -962,6 +994,74 @@ describe("POST /api/feishu/events — group @ Q&A end to end", () => {
 
     await setup.scheduled[0]();
 
+    expect(setup.dependencies.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  // This app holds the "获取群组中所有消息" grant, so im.message.receive_v1
+  // fires for every message in every group the bot belongs to — including
+  // members talking to each other with no intention of asking the bot
+  // anything. The three tests below are the positive proof that mention
+  // gating, not the event subscription, is what keeps this route from
+  // answering all of it: each asserts zero calls to both Bitable and the
+  // answer skill, not just "no reply sent".
+  it("ignores a group message that mentions someone else, never touching Bitable or the skill", async () => {
+    const bitable = groupBitable(groupTicket());
+    const answer = vi.fn(async (_q: string, _f: string) => "should never be seen");
+    const setup = liveGroupDependencies(bitable, answer);
+
+    const response = await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(
+        groupMessageBody("@_user_1 这个你处理一下", "oc_group_chat", [
+          { key: "@_user_1", id: { open_id: "ou_someone_else" }, name: "张三" },
+        ]),
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({});
+    expect(setup.scheduled).toHaveLength(0);
+    expect(bitable.findByWarRoomChatId).not.toHaveBeenCalled();
+    expect(bitable.listRecords).not.toHaveBeenCalled();
+    expect(answer).not.toHaveBeenCalled();
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("ignores an ordinary group message with no mentions, never touching Bitable or the skill", async () => {
+    const bitable = groupBitable(groupTicket());
+    const answer = vi.fn(async (_q: string, _f: string) => "should never be seen");
+    const setup = liveGroupDependencies(bitable, answer);
+
+    const response = await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(groupMessageBody("今天天气不错", "oc_group_chat", [])),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({});
+    expect(setup.scheduled).toHaveLength(0);
+    expect(bitable.findByWarRoomChatId).not.toHaveBeenCalled();
+    expect(bitable.listRecords).not.toHaveBeenCalled();
+    expect(answer).not.toHaveBeenCalled();
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("answers when the mentions array actually names the bot", async () => {
+    const bitable = groupBitable(groupTicket());
+    const answer = vi.fn(async (_q: string, _f: string) => "answer");
+    const setup = liveGroupDependencies(bitable, answer);
+
+    const response = await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(
+        groupMessageBody("@_user_1 同维度还有几条", "oc_group_chat", [botMention()]),
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(setup.scheduled).toHaveLength(1);
+
+    await setup.scheduled[0]();
+
+    expect(bitable.findByWarRoomChatId).toHaveBeenCalledTimes(1);
+    expect(answer).toHaveBeenCalledTimes(1);
     expect(setup.dependencies.sendMessage).toHaveBeenCalledTimes(1);
   });
 

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import type { BotEnv } from "../../lib/env";
 import { VOC_CARD_ACTIONS, VOC_NOTE_FIELD_NAME } from "./card-types";
-import { parseFeishuEvent } from "./event-handler";
+import { parseFeishuEvent, type ParseFeishuEventInput } from "./event-handler";
 
 const env: BotEnv = {
   appId: "cli_onecare",
@@ -13,11 +13,49 @@ const env: BotEnv = {
   encryptKey: "12345678901234567890123456789012",
 };
 
+// The bot's own open_id, as bot/v3/info would report it. Fixed for the whole
+// file so a test only ever has to vary the *event's* mentions, never this.
+const BOT_OPEN_ID = "ou_bot_self";
+
+// Every existing call site defaults to "the bot successfully confirms its
+// own identity as BOT_OPEN_ID" — the tests that care about mention-gating
+// vary `mentions` on the event body instead of this, and only the identity-
+// lookup-failure test overrides `botOpenId` itself.
+function parse(
+  input: Omit<ParseFeishuEventInput, "botOpenId">,
+  botOpenId: () => Promise<string> = async () => BOT_OPEN_ID,
+) {
+  return parseFeishuEvent({ ...input, botOpenId });
+}
+
+function botMention() {
+  return {
+    key: "@_user_1",
+    id: { open_id: BOT_OPEN_ID, union_id: "on_bot", user_id: "bot" },
+    name: "OneCare",
+    tenant_key: "tenant_onecare",
+  };
+}
+
+function otherMention() {
+  return {
+    key: "@_user_1",
+    id: { open_id: "ou_someone_else", union_id: "on_someone", user_id: "someone" },
+    name: "张三",
+    tenant_key: "tenant_onecare",
+  };
+}
+
 function messageBody(overrides?: {
   chatType?: "p2p" | "group";
   messageType?: string;
   text?: string;
   token?: string;
+  // Only meaningful for chatType "group" — the p2p path never reads mentions
+  // at all. Defaults to "the bot itself is mentioned" so every existing group
+  // test (written before mention-gating existed) keeps exercising "a
+  // legitimate group question" unless a test deliberately asks otherwise.
+  mentions?: readonly unknown[];
 }) {
   return {
     schema: "2.0",
@@ -41,6 +79,9 @@ function messageBody(overrides?: {
         chat_type: overrides?.chatType ?? "p2p",
         message_type: overrides?.messageType ?? "text",
         content: JSON.stringify({ text: overrides?.text ?? "开始体验" }),
+        ...(overrides?.chatType === "group"
+          ? { mentions: overrides?.mentions ?? [botMention()] }
+          : {}),
       },
     },
   };
@@ -150,7 +191,7 @@ function vocCardActionOutcome(overrides: {
       ...overrides,
     }),
   );
-  return parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env });
+  return parse({ rawBody, headers: signedHeaders(rawBody), env });
 }
 
 function signedHeaders(rawBody: string, valid = true): Headers {
@@ -176,7 +217,7 @@ describe("parseFeishuEvent", () => {
     });
 
     await expect(
-      parseFeishuEvent({ rawBody, headers: new Headers(), env }),
+      parse({ rawBody, headers: new Headers(), env }),
     ).resolves.toEqual({ kind: "challenge", challenge: "challenge-value" });
   });
 
@@ -188,7 +229,7 @@ describe("parseFeishuEvent", () => {
     });
 
     await expect(
-      parseFeishuEvent({ rawBody, headers: new Headers(), env }),
+      parse({ rawBody, headers: new Headers(), env }),
     ).resolves.toEqual({ kind: "unauthorized" });
   });
 
@@ -196,7 +237,7 @@ describe("parseFeishuEvent", () => {
     const rawBody = JSON.stringify(messageBody({ text: "转人工" }));
 
     await expect(
-      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
     ).resolves.toEqual({
       kind: "message",
       messageId: "om_onecare_message",
@@ -208,7 +249,7 @@ describe("parseFeishuEvent", () => {
     const rawBody = JSON.stringify(enteredBody("oc_onecare_chat"));
 
     await expect(
-      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
     ).resolves.toEqual({
       kind: "entered",
       chatId: "oc_onecare_chat",
@@ -219,7 +260,7 @@ describe("parseFeishuEvent", () => {
     const rawBody = JSON.stringify(cardActionBody());
 
     await expect(
-      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
     ).resolves.toEqual({
       kind: "card_action",
       action: "open_pending",
@@ -245,7 +286,7 @@ describe("parseFeishuEvent", () => {
     const rawBody = JSON.stringify(cardActionBody(overrides));
 
     await expect(
-      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
     ).resolves.toEqual({ kind: "invalid_card_action" });
   });
 
@@ -257,7 +298,7 @@ describe("parseFeishuEvent", () => {
     const rawBody = JSON.stringify(cardActionBody(overrides));
 
     await expect(
-      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
     ).resolves.toEqual({ kind: "unauthorized" });
   });
 
@@ -265,7 +306,7 @@ describe("parseFeishuEvent", () => {
     const rawBody = JSON.stringify(cardActionBody());
 
     await expect(
-      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody, false), env }),
+      parse({ rawBody, headers: signedHeaders(rawBody, false), env }),
     ).resolves.toEqual({ kind: "unauthorized" });
   });
 
@@ -274,7 +315,7 @@ describe("parseFeishuEvent", () => {
       const rawBody = JSON.stringify(enteredBody(chatId));
 
       await expect(
-        parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+        parse({ rawBody, headers: signedHeaders(rawBody), env }),
       ).resolves.toEqual({ kind: "ignored" });
     }
   });
@@ -286,14 +327,14 @@ describe("parseFeishuEvent", () => {
     );
 
     await expect(
-      parseFeishuEvent({
+      parse({
         rawBody: validBody,
         headers: signedHeaders(validBody, false),
         env,
       }),
     ).resolves.toEqual({ kind: "unauthorized" });
     await expect(
-      parseFeishuEvent({
+      parse({
         rawBody: wrongTokenBody,
         headers: signedHeaders(wrongTokenBody),
         env,
@@ -309,28 +350,97 @@ describe("parseFeishuEvent", () => {
       const rawBody = JSON.stringify(body);
 
       await expect(
-        parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+        parse({ rawBody, headers: signedHeaders(rawBody), env }),
       ).resolves.toEqual({ kind: "ignored" });
     }
   });
 
-  it("accepts an authenticated group text event as a group question", async () => {
-    // A group message reaches im.message.receive_v1 at all only because this
-    // app's event subscription fires on an @-mention in groups, not on every
-    // message — so the mention placeholder text ("@_user_1 ") is expected to
-    // still be here; stripMention (Task 8) removes it downstream, not this
-    // parser.
+  it("accepts a group text event that actually mentions the bot as a group question", async () => {
+    // This app has the "获取群组中所有消息" grant, so im.message.receive_v1
+    // fires for every group message, not only ones that @ the bot — the
+    // mention check below (not the event subscription) is what keeps this
+    // route from answering every line of group chatter. The mention
+    // placeholder text ("@_user_1 ") is expected to still be here regardless;
+    // stripMention (Task 8) removes it downstream, not this parser.
     const rawBody = JSON.stringify(
-      messageBody({ chatType: "group", text: "@_user_1 这条投诉以前出现过吗" }),
+      messageBody({
+        chatType: "group",
+        text: "@_user_1 这条投诉以前出现过吗",
+        mentions: [botMention()],
+      }),
     );
 
     await expect(
-      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
     ).resolves.toEqual({
       kind: "group_question",
       chatId: "oc_onecare_chat",
       text: "@_user_1 这条投诉以前出现过吗",
     });
+  });
+
+  // The load-bearing regression net for the mention-gating fix: this app can
+  // see every group message (see the grant note above), so a message that
+  // does not actually address the bot must come back "ignored" — not
+  // "group_question" — or the bot answers every line said in every war room.
+  it("ignores a group message that mentions someone else, not the bot", async () => {
+    const rawBody = JSON.stringify(
+      messageBody({
+        chatType: "group",
+        text: "@_user_1 这个你处理一下",
+        mentions: [otherMention()],
+      }),
+    );
+
+    await expect(
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({ kind: "ignored" });
+  });
+
+  it("ignores an ordinary group message with no mentions at all", async () => {
+    const rawBody = JSON.stringify(
+      messageBody({ chatType: "group", text: "今天天气不错", mentions: [] }),
+    );
+
+    await expect(
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({ kind: "ignored" });
+  });
+
+  it("ignores a group message mentioning the bot among several people", async () => {
+    // mentions can carry more than one entry; the bot's open_id only has to
+    // be one of them, in any position.
+    const rawBody = JSON.stringify(
+      messageBody({
+        chatType: "group",
+        text: "@_user_1 @_user_2 同维度还有几条",
+        mentions: [otherMention(), botMention()],
+      }),
+    );
+
+    await expect(
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toMatchObject({ kind: "group_question" });
+  });
+
+  it("ignores a group message when confirming the bot's own identity fails", async () => {
+    // bot/v3/info can fail (network blip, token exchange failure). Rather
+    // than guess, a failure to resolve the bot's own open_id must be treated
+    // exactly like "not mentioned" — the alternative is answering every
+    // message in every war room the one time that lookup has a bad day.
+    const rawBody = JSON.stringify(
+      messageBody({
+        chatType: "group",
+        text: "@_user_1 同维度还有几条",
+        mentions: [botMention()],
+      }),
+    );
+
+    await expect(
+      parse({ rawBody, headers: signedHeaders(rawBody), env }, async () => {
+        throw new Error("bot/v3/info unreachable");
+      }),
+    ).resolves.toEqual({ kind: "ignored" });
   });
 
   it.each([
@@ -347,7 +457,7 @@ describe("parseFeishuEvent", () => {
     });
 
     await expect(
-      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
     ).resolves.toEqual({ kind: "ignored" });
   });
 
@@ -355,13 +465,13 @@ describe("parseFeishuEvent", () => {
     const rawBody = JSON.stringify(groupLifecycleBody());
 
     await expect(
-      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
     ).resolves.toEqual({ kind: "ignored" });
   });
 
   it("ignores malformed request bodies", async () => {
     await expect(
-      parseFeishuEvent({ rawBody: "not-json", headers: new Headers(), env }),
+      parse({ rawBody: "not-json", headers: new Headers(), env }),
     ).resolves.toEqual({ kind: "ignored" });
   });
 });
@@ -470,7 +580,7 @@ describe("parseFeishuEvent VOC form values", () => {
     );
 
     await expect(
-      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
     ).resolves.toMatchObject({ kind: "card_action", note: "" });
   });
 

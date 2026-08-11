@@ -1,5 +1,5 @@
 import type { BotEnv } from "../../lib/env";
-import { createTenantTokenProvider } from "../bitable/client";
+import { createTenantTokenProvider, type TenantTokenProvider } from "../bitable/client";
 
 const BASE_URL = "https://open.feishu.cn/open-apis";
 export const CHAT_TIMEOUT_MS = 15_000;
@@ -126,4 +126,62 @@ export async function listChatMessages(
   } catch {
     return [];
   }
+}
+
+export type BotOpenIdProvider = () => Promise<string>;
+
+// Answers "who is this bot" — used to tell a group message that actually @s
+// the bot apart from ordinary chatter the bot merely overhears (this app has
+// the "获取群组中所有消息" grant, so it receives every message in every group
+// it belongs to, addressed or not). Verified against the live API on
+// 2026-08-12: GET bot/v3/info returns `{ code: 0, bot: { open_id, app_name,
+// avatar_url, ip_white_list, activate_status } }` for a bearer tenant token,
+// no extra scope required.
+//
+// Cached forever once resolved — unlike createTenantTokenProvider's expiring
+// cache, the bot's own identity does not change for the life of this server
+// process, and event handling has a three-second budget that a fresh lookup
+// on every message would not reliably fit. A failed lookup is deliberately
+// NOT cached: the next message gets its own attempt rather than every
+// message for the rest of this process's life being treated as
+// unidentifiable. Concurrent callers before the first resolution share one
+// in-flight request, the same dedupe createTenantTokenProvider uses.
+export function createBotOpenIdProvider(
+  token: TenantTokenProvider,
+  fetcher: typeof fetch = fetch,
+): BotOpenIdProvider {
+  let cached: string | null = null;
+  let pending: Promise<string> | null = null;
+
+  async function fetchOpenId(): Promise<string> {
+    const response = await fetcher(`${BASE_URL}/bot/v3/info`, {
+      headers: { Authorization: `Bearer ${await token()}` },
+      signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+    });
+
+    const payload: unknown = await response.json();
+    if (!isRecord(payload) || payload.code !== 0) {
+      const code = isRecord(payload) ? String(payload.code) : "unknown";
+      throw new Error(`Feishu bot/v3/info failed (code ${code})`);
+    }
+
+    const bot = isRecord(payload.bot) ? payload.bot : {};
+    if (typeof bot.open_id !== "string" || bot.open_id.length === 0) {
+      throw new Error("Feishu bot/v3/info response missing open_id");
+    }
+
+    cached = bot.open_id;
+    return cached;
+  }
+
+  return () => {
+    if (cached) return Promise.resolve(cached);
+
+    if (!pending) {
+      pending = fetchOpenId().finally(() => {
+        pending = null;
+      });
+    }
+    return pending;
+  };
 }

@@ -28,6 +28,7 @@ import {
   createVocTicketCard,
   createWelcomeMessage,
 } from "../../../../src/features/feishu-bot/cards";
+import { createBotOpenIdProvider } from "../../../../src/features/feishu-bot/chat-client";
 import {
   replyToFeishuMessage,
   sendFeishuMessage,
@@ -125,6 +126,21 @@ function getBitableClient(): BitableClient {
     bitableClient = createBitableClient(readBitableEnv(), getTokenProvider());
   }
   return bitableClient;
+}
+
+// Feeds event-handler.ts's mention check (see ParseFeishuEventInput there for
+// why this exists at all: this app can see every group message, not only
+// ones that @ it). `async` so a synchronous throw from getTokenProvider()
+// (a missing bot credential) becomes a rejected promise like any other
+// failure here, rather than an uncaught exception — parseFeishuEvent treats
+// any rejection the same as "cannot confirm identity" and ignores the
+// message rather than guessing it was mentioned.
+let botOpenIdProvider: ReturnType<typeof createBotOpenIdProvider> | null = null;
+async function getBotOpenId(): Promise<string> {
+  if (!botOpenIdProvider) {
+    botOpenIdProvider = createBotOpenIdProvider(getTokenProvider());
+  }
+  return botOpenIdProvider();
 }
 
 // Lazy and swallowing its own configuration errors on purpose: a tenant
@@ -278,7 +294,7 @@ export function createResolveAction(
 
 const defaultDependencies: FeishuEventRouteDependencies = {
   readEnv: () => readBotEnv(),
-  parseEvent: parseFeishuEvent,
+  parseEvent: (input) => parseFeishuEvent({ ...input, botOpenId: getBotOpenId }),
   createReply: createBotReply,
   createWelcome: createWelcomeMessage,
   replyMessage: replyToFeishuMessage,

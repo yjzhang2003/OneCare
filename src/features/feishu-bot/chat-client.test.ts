@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BotEnv } from "../../lib/env";
-import { createWarRoomChat, listChatMessages } from "./chat-client";
+import { createBotOpenIdProvider, createWarRoomChat, listChatMessages } from "./chat-client";
 
 const env: BotEnv = {
   appId: "cli_onecare",
@@ -147,5 +147,94 @@ describe("listChatMessages", () => {
     await expect(
       listChatMessages({ env, chatId: "oc_1" }, fetcher as unknown as typeof fetch),
     ).resolves.toEqual([]);
+  });
+});
+
+describe("createBotOpenIdProvider", () => {
+  const token = async () => "tenant-token";
+
+  it("resolves the bot's own open_id from bot/v3/info", async () => {
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toContain("/bot/v3/info");
+      expect((init?.headers as Record<string, string>).Authorization).toBe(
+        "Bearer tenant-token",
+      );
+      return jsonResponse({
+        code: 0,
+        bot: {
+          activate_status: 2,
+          app_name: "OneCare",
+          avatar_url: "https://example.com/avatar.png",
+          ip_white_list: [],
+          open_id: "ou_bot_self",
+        },
+      });
+    });
+
+    const botOpenId = createBotOpenIdProvider(token, fetcher as unknown as typeof fetch);
+
+    expect(await botOpenId()).toBe("ou_bot_self");
+  });
+
+  it("fetches once and caches the open_id forever, unlike the expiring token cache", async () => {
+    const fetcher = vi.fn(async () =>
+      jsonResponse({ code: 0, bot: { open_id: "ou_bot_self" } }),
+    );
+
+    const botOpenId = createBotOpenIdProvider(token, fetcher as unknown as typeof fetch);
+
+    expect(await botOpenId()).toBe("ou_bot_self");
+    expect(await botOpenId()).toBe("ou_bot_self");
+    expect(await botOpenId()).toBe("ou_bot_self");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares a single in-flight lookup across concurrent callers", async () => {
+    const fetcher = vi.fn(async () =>
+      jsonResponse({ code: 0, bot: { open_id: "ou_bot_self" } }),
+    );
+
+    const botOpenId = createBotOpenIdProvider(token, fetcher as unknown as typeof fetch);
+
+    const results = await Promise.all([botOpenId(), botOpenId(), botOpenId()]);
+
+    expect(results).toEqual(["ou_bot_self", "ou_bot_self", "ou_bot_self"]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects on a non-zero business code and does not cache the failure", async () => {
+    let call = 0;
+    const fetcher = vi.fn(async () => {
+      call += 1;
+      return call === 1
+        ? jsonResponse({ code: 99991663, msg: "invalid access token" })
+        : jsonResponse({ code: 0, bot: { open_id: "ou_bot_self" } });
+    });
+
+    const botOpenId = createBotOpenIdProvider(token, fetcher as unknown as typeof fetch);
+
+    await expect(botOpenId()).rejects.toThrow(/99991663/);
+    // A failed lookup is not remembered — the next message gets its own
+    // attempt, which here succeeds.
+    expect(await botOpenId()).toBe("ou_bot_self");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects when the response is missing bot.open_id", async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ code: 0, bot: {} }));
+
+    const botOpenId = createBotOpenIdProvider(token, fetcher as unknown as typeof fetch);
+
+    await expect(botOpenId()).rejects.toThrow(/open_id/);
+  });
+
+  it("rejects on a transport error", async () => {
+    const fetcher = vi.fn(async () => {
+      throw new Error("socket hang up");
+    });
+
+    const botOpenId = createBotOpenIdProvider(token, fetcher as unknown as typeof fetch);
+
+    await expect(botOpenId()).rejects.toThrow("socket hang up");
   });
 });

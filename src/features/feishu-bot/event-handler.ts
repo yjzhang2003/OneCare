@@ -53,9 +53,23 @@ export type ParseFeishuEventInput = Readonly<{
   rawBody: string;
   headers: Headers;
   env: BotEnv;
+  // Resolves to the bot's own open_id (GET bot/v3/info). Only ever awaited
+  // for a group message — this app has the "获取群组中所有消息" grant, so
+  // im.message.receive_v1 fires for every message in a group it belongs to,
+  // not only ones that @ it, and this is the one thing that tells a message
+  // actually addressed to the bot apart from ordinary group chatter.
+  botOpenId: () => Promise<string>;
 }>;
 
 type JsonObject = Record<string, unknown>;
+
+// The shape Feishu sends for each @-mention inside a message: `id.open_id`
+// identifies who was mentioned, `key` is the placeholder token
+// ("@_user_1", ...) that appears in the message's own text in that person's
+// place. Only `id.open_id` is read here.
+type MessageMention = {
+  id?: { open_id?: string };
+};
 
 type ReceiveMessageEvent = {
   message?: {
@@ -64,6 +78,7 @@ type ReceiveMessageEvent = {
     chat_type?: string;
     message_type?: string;
     content?: string;
+    mentions?: readonly MessageMention[];
   };
 };
 
@@ -270,10 +285,40 @@ function textFromContent(content: string): string | null {
   }
 }
 
+// The one thing standing between "answers a war room question" and "answers
+// every line said in every group this bot is a member of" — this app holds
+// the "获取群组中所有消息" grant, confirmed live on 2026-08-12, so
+// im.message.receive_v1 fires for every group message regardless of whether
+// the bot was addressed. `mentions` is empty for ordinary chatter and
+// non-empty only when someone was @-ed; matching it against the bot's own
+// open_id (not against placeholder text like "@_user_1", which any member
+// can produce by @-ing anyone) is the only reliable signal.
+//
+// A failure to resolve the bot's own identity is treated the same as "not
+// mentioned", never as "mentioned" — answering every message in every war
+// room because bot/v3/info had one bad call would be far worse than missing
+// a single legitimate question.
+async function isBotMentioned(
+  mentions: readonly MessageMention[] | undefined,
+  botOpenId: () => Promise<string>,
+): Promise<boolean> {
+  if (!Array.isArray(mentions) || mentions.length === 0) return false;
+
+  let selfOpenId: string;
+  try {
+    selfOpenId = await botOpenId();
+  } catch {
+    return false;
+  }
+
+  return mentions.some((mention) => mention.id?.open_id === selfOpenId);
+}
+
 export async function parseFeishuEvent({
   rawBody,
   headers,
   env,
+  botOpenId,
 }: ParseFeishuEventInput): Promise<FeishuEventOutcome> {
   let body: JsonObject;
   try {
@@ -316,7 +361,7 @@ export async function parseFeishuEvent({
     encryptKey: env.encryptKey,
     loggerLevel: LoggerLevel.fatal,
   }).register({
-    "im.message.receive_v1": (event: ReceiveMessageEvent) => {
+    "im.message.receive_v1": async (event: ReceiveMessageEvent) => {
       const message = event.message;
       if (
         message?.message_type !== "text" ||
@@ -335,7 +380,10 @@ export async function parseFeishuEvent({
 
       if (message.chat_type === "group" && typeof message.chat_id === "string") {
         const chatId = message.chat_id.trim();
-        if (chatId) {
+        // Both conditions are cheap-to-expensive ordered: a blank chat id
+        // (never observed in practice, but not Feishu's contract to keep)
+        // short-circuits before ever awaiting the bot's own identity.
+        if (chatId && (await isBotMentioned(message.mentions, botOpenId))) {
           return { kind: "group_question", chatId, text } as const;
         }
       }
