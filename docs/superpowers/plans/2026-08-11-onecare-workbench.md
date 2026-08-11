@@ -159,7 +159,9 @@ keeps those two concerns from drifting into one."
 
 **Interfaces:**
 - Consumes: `VocRecord`（Task 1 起含 `ownerNames`）、`aggregateVocMetrics` / `VocMetrics` / `VocMetricsResult`（`src/features/voc/metrics.ts`）
-- Produces: `WorkbenchTicket`、`WorkbenchData`、`WorkbenchResult`、`toWorkbenchTicket(record)`、`buildWorkbench(records, options)`
+- Produces: `WorkbenchTicket`、`WorkbenchData`、`BuildWorkbenchOptions`、`toWorkbenchTicket(record)`、`buildWorkbench(records, options)`
+
+**不要引入第二层 ok/unavailable 判别。** `WorkbenchData.metrics` 已经是 `VocMetricsResult`（自带 `status`），读取失败由 Task 3 表达为 `{ metrics: { status: "unavailable" }, tickets: [] }`。再套一层 `WorkbenchResult` 会让 UI 要判两次状态，而 `app/dashboard/voc/page.tsx` 现有的渲染逻辑只判一层。
 
 纯函数，零 IO。把 `VocRecord[]` 同时转成聚合与列表行。
 
@@ -421,7 +423,9 @@ that silently shortens stops reconciling against the Base."
 
 **Interfaces:**
 - Consumes: `getCurrentSession()`（`src/features/auth/current-session.ts`，返回 `Promise<AuthUser | null>`）、`buildWorkbench`（Task 2）
-- Produces: `createDashboardRoute` 的依赖新增 `session: () => Promise<AuthUser | null>`；`readWorkbenchCached(): Promise<WorkbenchResult>`
+- Produces: `createDashboardRoute` 的依赖新增 `session: () => Promise<AuthUser | null>`；`readWorkbenchCached(): Promise<WorkbenchData>`
+
+读取失败时返回 `{ metrics: { status: "unavailable" }, tickets: [] }`——**不要新增第二层判别联合**，UI 只判 `metrics.status` 一层。
 
 `/api/voc/dashboard` 现在完全公开。规格 §5 要求无会话返回 401 **且不触达 Bitable**。
 
