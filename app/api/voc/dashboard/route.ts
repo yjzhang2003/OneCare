@@ -223,11 +223,21 @@ const defaultDependencies: DashboardRouteDependencies = {
 
 export const GET = createDashboardRoute(defaultDependencies);
 
-// The cached read backing the gated workbench surface: same "use cache" +
-// cacheLife + internal-try/catch shape as readVocRecordsCached above, for
-// the same reason (task 14 fix round 1 — a "use cache" function that throws
-// fails `next build` outright, regardless of whether an awaiting caller
-// catches the rejection, so the catch has to live in here). Returns a
+// The cached read backing the gated workbench surface. Composes
+// readVocRecordsCached above rather than issuing its own
+// getBitableClient().listRecords() call: this route and the public
+// dashboard page both ultimately read the same Base table, and
+// getVocDashboardMetrics's own comment states the reason plainly — "a judge
+// comparing the rendered page against a direct curl sees identical numbers
+// because both paths run through this one function". A second, independent
+// "use cache" boundary here would mean a second cache key with its own
+// revalidation clock, so the two surfaces could disagree at the edge of the
+// cache window even though they describe the exact same records. Sharing the
+// one cached fetch keeps that guarantee true for this surface too.
+//
+// Still never throws, per the same rule as readVocRecordsCached (task 14 fix
+// round 1 — a "use cache" function that throws fails `next build` outright,
+// regardless of whether an awaiting caller catches the rejection). Returns a
 // WorkbenchData directly — never a second, route-specific discriminated
 // union wrapped around it — because WorkbenchData.metrics is already a
 // VocMetricsResult with its own "ok" | "unavailable" status, and every
@@ -236,17 +246,27 @@ export const GET = createDashboardRoute(defaultDependencies);
 export async function readWorkbenchCached(): Promise<WorkbenchData> {
   "use cache";
   cacheLife("minutes");
+  const result = await readVocRecordsCached();
+  if (!result.ok) {
+    // readVocRecordsCached's own catch already logged the Bitable failure
+    // reason once; logging it again here under a different function name
+    // would just duplicate that line for the same underlying event.
+    return { metrics: { status: "unavailable" }, tickets: [] };
+  }
   try {
-    const records = await getBitableClient().listRecords();
-    return buildWorkbench(records, {
+    return buildWorkbench(result.records, {
       manualMinutesPerRecord: ASSUMED_MANUAL_MINUTES_PER_RECORD,
     });
   } catch (error) {
-    // Server-side log only, for the same reason readVocRecordsCached's
-    // catch below never forwards `error` to its caller: the reason can
-    // carry Bitable error codes or token-exchange failure detail that has
-    // no business reaching a client, even an authenticated one.
-    console.error("VOC workbench read failed:", errorReason(error));
+    // buildWorkbench is a pure in-memory aggregation over records
+    // readVocRecordsCached already fetched successfully, so this should
+    // never actually throw. But it still runs inside this "use cache"
+    // boundary, and a throw from anywhere inside one fails `next build`
+    // outright regardless of whether a caller catches it — so the guard has
+    // to live here, not one level up. A distinct log message from the
+    // Bitable-read-failed one above, because this is a different failure
+    // mode (the read succeeded; aggregating what it returned did not).
+    console.error("VOC workbench aggregation failed:", errorReason(error));
     return { metrics: { status: "unavailable" }, tickets: [] };
   }
 }
