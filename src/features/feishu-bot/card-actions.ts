@@ -1,6 +1,7 @@
 import type { BitableClient } from "../bitable/client";
 import { VOC_FIELD_NAMES } from "../bitable/field-map";
 import { transition, type VocAction } from "../voc/service-event";
+import { buildAnswerFacts } from "../warroom/facts";
 import type {
   FeishuCardCallbackResponse,
   FeishuOutboundMessage,
@@ -135,6 +136,26 @@ export type ResolveVocCardActionInput = Readonly<{
   // the action rather than chosen by the caller.
   note: string;
   bitable: VocActionBitable;
+  // Closure archival (Task 9) — all three optional so every existing caller
+  // (and every test above this one) that has no notion of a group keeps
+  // compiling unchanged. `chatId` is the gate: `null` or omitted means there
+  // is nothing to archive — most importantly the single-chat case the four
+  // state actions have always supported, which has no group at all — and
+  // `readTranscript`/`summarise` are then never even invoked. `readTranscript`
+  // takes no argument because *which* chat to read is the caller's business,
+  // already closed over by whatever function it hands in here.
+  chatId?: string | null;
+  readTranscript?: () => Promise<readonly string[]>;
+  // `facts` (built from the very record this call already read, via Task 8's
+  // buildAnswerFacts) and whatever `readTranscript` returned are the only
+  // grounding a closing summary gets. `null` means "cannot summarise right
+  // now" — the same never-invent-an-answer contract createAnswerProvider
+  // (Task 8) already keeps for the group's own questions, reused here rather
+  // than redefined.
+  summarise?: (
+    facts: string,
+    transcript: readonly string[],
+  ) => Promise<string | null>;
 }>;
 
 function errorToast(content: string): CardActionResult {
@@ -223,6 +244,56 @@ export async function resolveVocCardAction(
     return errorToast("状态写回失败，请稍后重试");
   }
 
+  // Closure is a fact that already happened the instant the write above
+  // landed — everything below is a second, independent write layered on top
+  // of that fact, never a rollback path for it. This is the one rule the
+  // whole feature exists to protect: a model outage must close over the
+  // summary alone, not reopen (or fail to close) a ticket that is already
+  // closed in the Base. `readTranscript`/`summarise` are captured into local
+  // consts (rather than read off `input` again after the `await`s below) so
+  // the narrowing from this guard survives across them.
+  const readTranscript = input.readTranscript;
+  const summarise = input.summarise;
+  let closureSuffix = "";
+  if (outcome.next === "已闭环" && input.chatId && readTranscript && summarise) {
+    try {
+      const transcript = await readTranscript();
+      const facts = buildAnswerFacts({
+        // `record` is what getRecord returned before this call's own write —
+        // still showing the pre-closure state. The write above has already
+        // landed, so the facts handed to the model describe the ticket as of
+        // right now (`outcome.next`), the same correction the card re-render
+        // below makes for the same reason.
+        ticket: { ...record, state: outcome.next },
+        // No cross-ticket aggregates: a closing summary is grounded in this
+        // ticket and this conversation alone, unlike the group Q&A skill
+        // (Task 8) which cites how many other tickets share a dimension or
+        // model. VocActionBitable (above) exposes only getRecord/
+        // updateRecord, so there is no listRecords call here to compute real
+        // aggregates from even if the question wanted them.
+        sameDimension: { total: 0, closed: 0 },
+        sameModel: 0,
+      });
+      const closingSummary = await summarise(facts, transcript);
+      if (closingSummary) {
+        // Its own updateRecord, deliberately not merged into the write
+        // above: that write already landed and is not being revisited here,
+        // only appended to. Writes only 闭环结论 — the state and closedAt
+        // set moments ago are not this call's concern.
+        await input.bitable.updateRecord(input.recordId, {
+          [VOC_FIELD_NAMES.closingNote]: closingSummary,
+        });
+      } else {
+        closureSuffix = "（结论生成失败）";
+      }
+    } catch {
+      // Transcript read, model call, or this second write itself — any of
+      // the three failing lands here. The ticket is closed regardless; only
+      // the toast says the summary did not make it.
+      closureSuffix = "（结论生成失败）";
+    }
+  }
+
   // One card, in this one synchronous response. Without it the owner got a
   // green toast on a card still showing the old status tag and the button they
   // just used — in an unedited screen recording the card looks frozen while
@@ -233,7 +304,10 @@ export async function resolveVocCardAction(
   return {
     kind: "update",
     response: {
-      toast: { type: "success", content: `已更新为${outcome.next}` },
+      toast: {
+        type: "success",
+        content: `已更新为${outcome.next}${closureSuffix}`,
+      },
       card: {
         type: "raw",
         data: createVocTicketCard(

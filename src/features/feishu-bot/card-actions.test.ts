@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { VocRecord } from "../bitable/field-map";
+import { VOC_FIELD_NAMES, type VocRecord } from "../bitable/field-map";
 import type { OneCareCardAction, OneCareCardView } from "./card-types";
 import { resolveCardAction, resolveVocCardAction } from "./card-actions";
 
@@ -418,5 +418,72 @@ describe("resolveVocCardAction card refresh", () => {
     expect(JSON.stringify(result.response.card?.data)).not.toContain(
       "AI 回复话术建议",
     );
+  });
+});
+
+// Task 9: the archival step appended after 确认闭环's own write already
+// landed. `note` (required — see ResolveVocCardActionInput above) is filled
+// in here with a placeholder: the load-bearing thing under test is that the
+// closure write and the summary write are two separate calls, not the exact
+// content of the manual note the second write goes on to overwrite. `bitable`
+// is built fresh per test (via client(), same helper every other describe
+// block here uses) with the record already parked at 待闭环 — the transition
+// 确认闭环 requires — rather than reused across tests, so one test's call
+// count can never leak into another's assertions.
+describe("resolveVocCardAction closure archival", () => {
+  function readyForClosure() {
+    const bitable = client();
+    bitable.getRecord = vi.fn(async () => ({ ...record, state: "待闭环" as const }));
+    return bitable;
+  }
+
+  it("writes the closure first and the summary second", async () => {
+    const writes: Array<Record<string, unknown>> = [];
+    const bitable = readyForClosure();
+
+    await resolveVocCardAction({
+      action: "voc_confirm_closure", recordId: "rec1", operatorOpenId: "ou_owner",
+      note: "已处理",
+      bitable: { ...bitable, updateRecord: async (_id: string, fields: Record<string, unknown>) => { writes.push(fields); } },
+      chatId: "oc_1",
+      readTranscript: async () => ["先跟进了", "已上门解决"],
+      summarise: async () => "已上门更换配件，用户确认解决。",
+    });
+
+    expect(writes[0]?.[VOC_FIELD_NAMES.state]).toBe("已闭环");
+    expect(writes[1]?.[VOC_FIELD_NAMES.closingNote]).toBe("已上门更换配件，用户确认解决。");
+  });
+
+  it("keeps the closure when the summary fails", async () => {
+    // This is the load-bearing rule of the whole design. Closure is a fact that
+    // already happened; a failed summary must not be able to undo it.
+    const writes: Array<Record<string, unknown>> = [];
+    const bitable = readyForClosure();
+
+    const result = await resolveVocCardAction({
+      action: "voc_confirm_closure", recordId: "rec1", operatorOpenId: "ou_owner",
+      note: "已处理",
+      bitable: { ...bitable, updateRecord: async (_id: string, fields: Record<string, unknown>) => { writes.push(fields); } },
+      chatId: "oc_1",
+      readTranscript: async () => ["内容"],
+      summarise: async () => null,
+    });
+
+    expect(writes[0]?.[VOC_FIELD_NAMES.state]).toBe("已闭环");
+    expect(writes).toHaveLength(1);
+    expect(JSON.stringify(result)).toMatch(/结论生成失败/);
+  });
+
+  it("skips the summary entirely for a single-chat closure", async () => {
+    const summarise = vi.fn(async () => "x");
+    const bitable = readyForClosure();
+
+    await resolveVocCardAction({
+      action: "voc_confirm_closure", recordId: "rec1", operatorOpenId: "ou_owner",
+      note: "已处理",
+      bitable, chatId: null, readTranscript: async () => [], summarise,
+    });
+
+    expect(summarise).not.toHaveBeenCalled();
   });
 });
