@@ -7,27 +7,48 @@ import {
   type TenantTokenProvider,
 } from "../../../../src/features/bitable/client";
 import type { VocRecord } from "../../../../src/features/bitable/field-map";
+import { getCurrentSession } from "../../../../src/features/auth/current-session";
+import type { AuthUser } from "../../../../src/features/auth/types";
 import {
   aggregateVocMetrics,
   type VocMetricsInput,
   type VocMetricsResult,
 } from "../../../../src/features/voc/metrics";
+import {
+  buildWorkbench,
+  type BuildWorkbenchOptions,
+  type WorkbenchData,
+} from "../../../../src/features/workbench/data";
 import { readBitableEnv, readBotEnv } from "../../../../src/lib/env";
 
-// This page is the only evidence a judge can verify unaided (public repo, no
-// login), so the response must reconcile against the real Base while never
-// carrying anything a judge could read as someone's personal data. Only the
-// six fields aggregateVocMetrics actually consumes are named here — pulling
-// the whole VocRecord in and trusting that JSON.stringify of VocMetrics
-// "happens to" drop 原始内容/record_id would make that guarantee an accident
-// of the current field list rather than something this file enforces.
+// getVocDashboardMetrics (below) still backs the public, unauthenticated
+// /dashboard/voc page, and that page's only evidence-of-real-data guarantee
+// is that it reconciles against the real Base while never carrying anything
+// a judge could read as someone's personal data. Only the six fields
+// aggregateVocMetrics actually consumes are named here — pulling the whole
+// VocRecord in and trusting that JSON.stringify of VocMetrics "happens to"
+// drop 原始内容/record_id would make that guarantee an accident of the
+// current field list rather than something this file enforces. This is
+// deliberately narrower than what the *gated* route below returns — that
+// route now serves real per-ticket detail, but only after the session check
+// this task adds, which is exactly why it needed one.
 type DashboardRecord = Pick<
   VocRecord,
   "state" | "polarity" | "dimensions" | "channel" | "ticketOpenedAt" | "closedAt"
 >;
 
 type DashboardRouteDependencies = Readonly<{
-  listAll: () => Promise<readonly DashboardRecord[]>;
+  // Full VocRecord (not the narrow DashboardRecord above): this route's
+  // response now includes per-ticket detail via buildWorkbench, which is
+  // exactly why an anonymous caller must never reach it (see the session
+  // check below).
+  listAll: () => Promise<readonly VocRecord[]>;
+  // Checked before listAll is ever called. A missing session must cost
+  // nothing — no Base read, no aggregation — both because an unauthenticated
+  // caller has no business seeing this data and because a public-facing
+  // endpoint that lets anyone trigger a paid, cross-border Bitable read is a
+  // standing invitation to abuse.
+  session: () => Promise<AuthUser | null>;
   // Optional on the type (not required) so a caller — including the tests
   // below — can omit it entirely and get a response with no `effort` block
   // at all, rather than this route inventing a baseline of its own.
@@ -59,19 +80,38 @@ function errorReason(error: unknown): string {
 
 export function createDashboardRoute(dependencies: DashboardRouteDependencies) {
   return async function GET(): Promise<Response> {
-    // One guard around the entire handler: this is a public, unauthenticated
-    // page a competition judge opens directly, so an unguarded read that
-    // throws must never surface as Next.js's opaque uncaught 500 — it must
-    // read as "the Base is temporarily unreachable", not "the site is
-    // broken".
+    // One guard around the entire handler: an unguarded read that throws
+    // must never surface as Next.js's opaque uncaught 500 — it must read as
+    // "the Base is temporarily unreachable", not "the site is broken".
     try {
+      // First thing this handler does, and returns before touching
+      // `listAll` at all: this response now carries per-record fields (see
+      // the DashboardRouteDependencies comment above), so an unauthenticated
+      // caller must not be able to trigger the Base read that produces them,
+      // let alone see the result.
+      const user = await dependencies.session();
+      if (!user) {
+        return Response.json({ error: "unauthorized" }, { status: 401 });
+      }
+
       const records = await dependencies.listAll();
-      const options =
+      const options: BuildWorkbenchOptions =
         dependencies.manualMinutesPerRecord === undefined
           ? {}
           : { manualMinutesPerRecord: dependencies.manualMinutesPerRecord };
-      const metrics = aggregateVocMetrics(records.map(toMetricsInput), options);
-      return Response.json(metrics);
+      const workbench = buildWorkbench(records, options);
+      if (workbench.metrics.status !== "ok") {
+        // buildWorkbench is a pure function over already-fetched records and
+        // never actually returns "unavailable" itself — this branch exists
+        // so TypeScript narrows workbench.metrics before the spread below,
+        // and so a future change to buildWorkbench can't silently turn into
+        // a runtime crash here.
+        return Response.json(
+          { error: "service_unavailable", reason: "aggregation unavailable" },
+          { status: 503 },
+        );
+      }
+      return Response.json({ ...workbench.metrics.metrics, tickets: workbench.tickets });
     } catch (error) {
       return Response.json(
         { error: "service_unavailable", reason: errorReason(error) },
@@ -115,8 +155,15 @@ function getBitableClient(): BitableClient {
 // level up in what is now getVocDashboardMetrics.) The fix is that the code
 // running *inside* the `use cache` boundary itself must never throw; the
 // catch has to live here, not in a caller.
+// `records` carries the full VocRecord (not the narrow DashboardRecord) —
+// the underlying Bitable client always reads full records; DashboardRecord
+// is a type-level promise `getVocDashboardMetrics` makes to itself about
+// which fields it will touch, not a runtime shape the network layer
+// produces. Widened (rather than duplicated) so the gated route's
+// `listAll` shim below can share this exact cache entry instead of this
+// file making a second, near-identical Bitable call.
 type VocRecordsRead =
-  | Readonly<{ ok: true; records: readonly DashboardRecord[] }>
+  | Readonly<{ ok: true; records: readonly VocRecord[] }>
   | Readonly<{ ok: false }>;
 
 // The only network call this route makes, cached so an anonymous visitor
@@ -159,6 +206,10 @@ const defaultDependencies: DashboardRouteDependencies = {
   // The throw here happens in a plain function, not inside "use cache", so
   // it is an ordinary rejected promise createDashboardRoute's try/catch
   // handles exactly as before; it never reaches Next's cache machinery.
+  // Shares readVocRecordsCached's cache entry with getVocDashboardMetrics
+  // below rather than opening a second cached reader for the same Base
+  // table — the session gate this task adds is the boundary that decides
+  // who gets to see the full records this returns, not a second fetch.
   listAll: async () => {
     const result = await readVocRecordsCached();
     if (!result.ok) {
@@ -166,15 +217,47 @@ const defaultDependencies: DashboardRouteDependencies = {
     }
     return result.records;
   },
+  session: getCurrentSession,
   manualMinutesPerRecord: ASSUMED_MANUAL_MINUTES_PER_RECORD,
 };
 
 export const GET = createDashboardRoute(defaultDependencies);
 
-// Single source of truth for the page: same cached read, same assumed
-// baseline, same aggregation the JSON API uses — a judge comparing the
-// rendered page against a direct `curl /api/voc/dashboard` sees identical
-// numbers because both paths run through this one function.
+// The cached read backing the gated workbench surface: same "use cache" +
+// cacheLife + internal-try/catch shape as readVocRecordsCached above, for
+// the same reason (task 14 fix round 1 — a "use cache" function that throws
+// fails `next build` outright, regardless of whether an awaiting caller
+// catches the rejection, so the catch has to live in here). Returns a
+// WorkbenchData directly — never a second, route-specific discriminated
+// union wrapped around it — because WorkbenchData.metrics is already a
+// VocMetricsResult with its own "ok" | "unavailable" status, and every
+// consumer of this data (this route today, a future workbench page) should
+// only ever have to check that one status field once.
+export async function readWorkbenchCached(): Promise<WorkbenchData> {
+  "use cache";
+  cacheLife("minutes");
+  try {
+    const records = await getBitableClient().listRecords();
+    return buildWorkbench(records, {
+      manualMinutesPerRecord: ASSUMED_MANUAL_MINUTES_PER_RECORD,
+    });
+  } catch (error) {
+    // Server-side log only, for the same reason readVocRecordsCached's
+    // catch below never forwards `error` to its caller: the reason can
+    // carry Bitable error codes or token-exchange failure detail that has
+    // no business reaching a client, even an authenticated one.
+    console.error("VOC workbench read failed:", errorReason(error));
+    return { metrics: { status: "unavailable" }, tickets: [] };
+  }
+}
+
+// Single source of truth for the public dashboard page and the home page's
+// showcase panel: same cached read, same assumed baseline, same aggregation
+// both render — a judge comparing the two sees identical numbers because
+// both run through this one function. This is now independent of the JSON
+// API above: that route serves the session-gated workbench's per-ticket
+// detail, while this one keeps serving the aggregate-only numbers the
+// public, unauthenticated page has always shown.
 //
 // Never throws. This is called directly inside the home page's and the
 // dashboard page's top-level render (no try/catch of their own, and no

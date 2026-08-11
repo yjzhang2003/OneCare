@@ -34,6 +34,20 @@ function dependencies() {
   };
 }
 
+function handlerWithValidState() {
+  const deps = dependencies();
+  return createCallbackHandler(deps)(
+    callbackRequest("code=oauth-code&state=expected-state"),
+  );
+}
+
+function handlerWithMismatchedState() {
+  const deps = dependencies();
+  return createCallbackHandler(deps)(
+    callbackRequest("code=oauth-code&state=wrong-state"),
+  );
+}
+
 describe("GET /api/auth/feishu/callback", () => {
   it("rejects a missing or mismatched state before network calls", async () => {
     for (const request of [
@@ -45,7 +59,7 @@ describe("GET /api/auth/feishu/callback", () => {
 
       expect(response.status).toBe(302);
       expect(response.headers.get("location")).toBe(
-        "https://auto-insight.example/login?auth_error=invalid_state",
+        "https://auto-insight.example/?auth_error=invalid_state&auth=tried",
       );
       expect(response.headers.get("set-cookie")).toContain(
         "auto_insight_oauth_state=;",
@@ -61,7 +75,7 @@ describe("GET /api/auth/feishu/callback", () => {
     );
 
     expect(response.headers.get("location")).toBe(
-      "https://auto-insight.example/login?auth_error=access_denied",
+      "https://auto-insight.example/?auth_error=access_denied&auth=tried",
     );
     expect(response.headers.get("set-cookie")).toContain(
       "auto_insight_oauth_state=;",
@@ -77,7 +91,7 @@ describe("GET /api/auth/feishu/callback", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "https://auto-insight.example/login?auth=success",
+      "https://auto-insight.example/?auth=success",
     );
     expect(deps.exchangeCode).toHaveBeenCalledWith({ code: "oauth-code", env });
     expect(deps.fetchUser).toHaveBeenCalledWith("user-access-token");
@@ -91,5 +105,21 @@ describe("GET /api/auth/feishu/callback", () => {
     expect(cookie).toContain("Max-Age=28800");
     expect(cookie).toContain("HttpOnly");
     expect(cookie).toContain("auto_insight_oauth_state=;");
+  });
+
+  it("sends a successful login back to the workbench, not the experience page", async () => {
+    const response = await handlerWithValidState();
+
+    expect(response.status).toBe(302);
+    expect(new URL(response.headers.get("location")!, "https://x").pathname).toBe("/");
+  });
+
+  it("sends a failed login back to the workbench with an error and a tried marker", async () => {
+    const response = await handlerWithMismatchedState();
+    const location = new URL(response.headers.get("location")!, "https://x");
+
+    expect(location.pathname).toBe("/");
+    expect(location.searchParams.get("auth_error")).toBe("invalid_state");
+    expect(location.searchParams.get("auth")).toBe("tried");
   });
 });
