@@ -16,7 +16,10 @@ import {
   type VocRecord,
 } from "../../../../src/features/bitable/field-map";
 import type { FeishuOutboundMessage } from "../../../../src/features/feishu-bot/card-types";
-import { createVocTicketMessage } from "../../../../src/features/feishu-bot/cards";
+import {
+  createVocTicketMessage,
+  createWarRoomEscalationCard,
+} from "../../../../src/features/feishu-bot/cards";
 import { sendFeishuMessage } from "../../../../src/features/feishu-bot/client";
 import { createAilyTaggingProvider } from "../../../../src/features/tagging/aily-provider";
 import type {
@@ -42,6 +45,7 @@ import {
   type VocState,
 } from "../../../../src/features/voc/service-event";
 import { triage } from "../../../../src/features/voc/triage";
+import { warRoomDecision } from "../../../../src/features/warroom/naming";
 import {
   readBitableEnv,
   readBotEnv,
@@ -70,6 +74,11 @@ const SHARD_SIZE = 5;
 // delivers puts both on screen (spec §6.1) — reading them off the row already
 // listed costs nothing, and omitting them would render the owner's card with
 // two placeholder dashes.
+// severity and warRoomChatId are here for Task 7's escalation gate: whether a
+// war room gets proposed reads record.severity (this row's own 严重度 column,
+// as already stored in the Base), and whether it gets proposed *again* reads
+// record.warRoomChatId through warRoomDecision — the one column that records
+// both "a group already exists" and "the approver already declined."
 type PendingRecord = Pick<
   VocRecord,
   | "recordId"
@@ -81,6 +90,8 @@ type PendingRecord = Pick<
   | "rating"
   | "state"
   | "retryCount"
+  | "severity"
+  | "warRoomChatId"
 >;
 
 // Announcing a ticket to its owner, resolved as one value so the write path
@@ -106,6 +117,20 @@ type AnalyzeRouteDependencies = Readonly<{
   // committed, and its failure means "the row is correct but nobody was
   // told" — a different fact from "the row was not written".
   notifyOwner: (delivery: TicketDelivery) => Promise<void>;
+  // Optional: a shard's tests overwhelmingly never exercise the high-severity
+  // path, and an escalation-less run must behave exactly as it did before
+  // this task existed. `record` is a full VocRecord (not the narrower
+  // PendingRecord this route reads off listPending) because the default
+  // implementation needs the AI columns (summary/polarity/dimensions/
+  // replies) and ownerNames to build the escalation card, and — same
+  // reasoning as PendingRecord's own comment above — the real listPending
+  // already returns full VocRecord values under the hood, so this is a
+  // widening, not a lie. fallbackOpenIds is computed once per shard (the
+  // fallback set does not vary per record) and handed down rather than
+  // re-derived inside every call.
+  escalate?: (
+    input: Readonly<{ record: VocRecord; fallbackOpenIds: readonly string[] }>,
+  ) => Promise<void>;
   // Spec §3.2: 打标来源 records "aily:<skill_id>@<批次号>" or "field-shortcut"
   // so a tagged/failed row is explainable and traceable. A plain string
   // (not a thunk) so the whole shard call — potentially several records —
@@ -120,6 +145,10 @@ type AnalyzeRouteDependencies = Readonly<{
 // every row correctly but told nobody is a different, equally urgent failure.
 // Collapsing the two would make "0 writeErrors" read as a clean run while no
 // owner ever saw a card.
+// escalated has no error-counting sibling the way notified/notifyErrors do:
+// per the brief, a failed proposal is swallowed with no counter at all
+// ("仅不计数") — escalation is a pure enhancement, and its failure carries no
+// operator-facing accounting distinct from "the number didn't go up".
 type AnalyzeResponseBody = Readonly<{
   processed: number;
   tagged: number;
@@ -127,6 +156,7 @@ type AnalyzeResponseBody = Readonly<{
   writeErrors: number;
   notified: number;
   notifyErrors: number;
+  escalated: number;
 }>;
 
 function json(data: object, status = 200): Response {
@@ -282,6 +312,23 @@ function buildTaggedWrite(
   };
 }
 
+// Every 负责人表 row with 兜底 checked, deduplicated by open_id and with a
+// blank id dropped — the same "usable" filter resolveOwner already applies
+// for ticket assignment. Pulled out (and exported) so the escalation gate's
+// one real piece of logic — "no fallback resolves" — is testable without a
+// fetcher or a live Base call, the same reason parseOwnerRules exists below.
+// Computed once per shard from the ownerRules already fetched for owner
+// resolution: the fallback set does not vary per record, so recomputing it
+// inside the per-record loop would repeat the same filter for nothing.
+export function fallbackOwnerOpenIds(
+  ownerRules: readonly OwnerRule[],
+): readonly string[] {
+  const openIdList = ownerRules
+    .filter((rule) => rule.fallback && rule.openId.trim().length > 0)
+    .map((rule) => rule.openId);
+  return [...new Set(openIdList)];
+}
+
 // "listPending"/"ownerRules" name the two reads whose failure is expected and
 // diagnosable — seeing which one failed in a Vercel log is worth keeping.
 // "unexpected" is the catch-all: everything else, named as such precisely
@@ -336,6 +383,7 @@ async function runShard(
       writeErrors: 0,
       notified: 0,
       notifyErrors: 0,
+      escalated: 0,
     };
     return json(empty);
   }
@@ -354,6 +402,11 @@ async function runShard(
   } catch (error) {
     return serviceUnavailable("ownerRules", error);
   }
+
+  // Derived once per shard from the same ownerRules read above, for the same
+  // reason tagSource is read once below: the fallback set does not vary per
+  // record, so every escalate() call in this shard reuses the one list.
+  const fallbackOpenIds = fallbackOwnerOpenIds(ownerRules);
 
   // Read once per request, not once per record: dependencies.tagSource is a
   // getter in production so a fresh aily batch number is minted per Cron
@@ -379,6 +432,7 @@ async function runShard(
   let writeErrors = 0;
   let notified = 0;
   let notifyErrors = 0;
+  let escalated = 0;
 
   for (const record of records) {
     const outcome =
@@ -431,6 +485,44 @@ async function runShard(
     } catch {
       notifyErrors += 1;
     }
+
+    // Escalation is an enhancement on top of the closed loop above, never a
+    // condition of it: the ticket already reached 待跟进 and its owner was
+    // already (attempted to be) notified by this point, regardless of
+    // anything below. Gated on three independent things: only 严重度 高
+    // (spec's trigger), only warRoomDecision's "create" (so a ticket that
+    // already has a group, or whose approver already declined, is never
+    // re-proposed — the shard re-runs daily and retries failures, and an
+    // unconditional proposal would nag the approver about a ticket they
+    // already answered), and only when a real escalate dependency was
+    // injected (most tests, and any caller that hasn't wired one up, get
+    // silent no-ops here). A throw falls into this record's own try/catch,
+    // exactly like the write and push above, but is not counted — the brief
+    // is explicit that a failed proposal costs no counter of its own, only
+    // the chance to have gone up.
+    if (
+      dependencies.escalate &&
+      record.severity === "高" &&
+      warRoomDecision(record.warRoomChatId) === "create"
+    ) {
+      try {
+        await dependencies.escalate({
+          // PendingRecord is a Pick of VocRecord's fields; the production
+          // listPending already returns full VocRecord values under the
+          // narrower static type (see PendingRecord's own comment above), so
+          // this widens rather than lies. Tests inject their own escalate
+          // fake and never read the fields this cast doesn't guarantee.
+          record: record as unknown as VocRecord,
+          fallbackOpenIds,
+        });
+        escalated += 1;
+      } catch {
+        // Swallowed on purpose: the ticket is already at 待跟进 and its owner
+        // already has the single-chat card. Letting this throw reach the
+        // handler's catch-all would turn a working closed loop into a 503
+        // over a feature that is, by design, optional.
+      }
+    }
   }
 
   const body: AnalyzeResponseBody = {
@@ -440,6 +532,7 @@ async function runShard(
     writeErrors,
     notified,
     notifyErrors,
+    escalated,
   };
   return json(body);
 }
@@ -764,6 +857,42 @@ export function resolveTagSource(
     : "field-shortcut";
 }
 
+// Builds one escalation card from the record's own AI columns and sends it to
+// every deduplicated fallback approver. No fallback resolves ("负责人表" has
+// no row with 兜底 checked) is a missing piece of configuration, not a shard
+// failure — spec §3.1 calls for a silent return, no send and no throw, rather
+// than surfacing it as an error nobody asked to see on every Cron tick.
+// Exported (like the other production-wiring functions above) so this one
+// real branch is directly testable: an empty fallbackOpenIds list must return
+// before ever touching readBotEnv() or the network, which is what makes it
+// safe regardless of bot credentials.
+export async function escalateToWarRoom(
+  input: Readonly<{ record: VocRecord; fallbackOpenIds: readonly string[] }>,
+): Promise<void> {
+  if (input.fallbackOpenIds.length === 0) return;
+
+  const message: FeishuOutboundMessage = {
+    msgType: "interactive",
+    content: JSON.stringify(
+      createWarRoomEscalationCard(
+        input.record,
+        {
+          summary: input.record.summary,
+          polarity: input.record.polarity ?? "",
+          dimensions: input.record.dimensions,
+          replies: input.record.replies,
+        },
+        input.record.ownerNames,
+      ),
+    ),
+  };
+
+  const env = readBotEnv();
+  for (const openId of input.fallbackOpenIds) {
+    await sendFeishuMessage({ env, openId, message });
+  }
+}
+
 const defaultDependencies: AnalyzeRouteDependencies = {
   get cronSecret() {
     return readCronSecret();
@@ -785,6 +914,7 @@ const defaultDependencies: AnalyzeRouteDependencies = {
       openId: delivery.openId,
       message: delivery.message,
     }),
+  escalate: escalateToWarRoom,
   // A getter (like cronSecret) so each Cron tick — not each import — gets a
   // fresh aily batch number; createAnalyzeRoute reads this once per request
   // and reuses it for every record in the shard.

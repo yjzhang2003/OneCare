@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { VocRecord } from "../../../../src/features/bitable/field-map";
 import type { FeishuOutboundMessage } from "../../../../src/features/feishu-bot/card-types";
 import {
   buildPendingShard,
   createAnalyzeRoute,
+  escalateToWarRoom,
+  fallbackOwnerOpenIds,
   GET,
   listOwnerRules,
   parseOwnerRules,
@@ -47,27 +50,37 @@ function deps(overrides: Record<string, unknown> = {}) {
         retryCount: 0,
         ticketOpenedAt: null,
         closedAt: null,
+        // Blank/null by default — a freshly-listed 待分析 row has not been
+        // through triage yet and carries no escalation memory. Task 7's own
+        // fixtures (highSeverityRecord/midSeverityRecord below) override
+        // these explicitly.
+        severity: null,
+        warRoomChatId: "",
       },
     ]),
-    tag: vi.fn(async () => [
-      {
-        kind: "tagged" as const,
-        result: {
-          recordId: "rec1",
-          sentiment: ["失望"],
-          polarity: "差评" as const,
-          dimensions: ["维修时间"] as const,
-          summary: "等待三天",
-          replies: [],
-        },
-      },
-    ]),
+    // Recordid-aware (not a fixed single-item array) so a shard of more than
+    // one record — as Task 7's escalation tests supply, without overriding
+    // this fixture — tags every record it is handed, not just "rec1". Same
+    // shape as taggedOutcome() below for any id, so this is a pure
+    // generalisation: existing single-record tests still get exactly the
+    // same one outcome they did before.
+    tag: vi.fn(async (records: readonly { recordId: string }[]) =>
+      records.map((record) => taggedOutcome(record.recordId)),
+    ),
     ownerRules: vi.fn(async () => [
       { scope: "", openId: "ou_backstop", fallback: true },
     ]),
     updateRecord: vi.fn(
       async (_recordId: string, _fields: Record<string, unknown>) => undefined,
     ),
+    // Present (as undefined) rather than left off entirely, so the property
+    // exists on deps()'s own inferred return type with a concrete type of its
+    // own — the same reason every other overridable dependency above is a
+    // named property of this base object rather than something callers can
+    // only ever add via the generic `overrides: Record<string, unknown>`
+    // parameter. Every test but Task 7's own runs escalation-less by default,
+    // exactly as this route behaved before that task existed.
+    escalate: undefined,
     ...overrides,
   };
 }
@@ -77,6 +90,13 @@ function request(headers: Record<string, string> = {}): Request {
     method: "POST",
     headers,
   });
+}
+
+// The authorized request every Task 7 escalation test sends — same shape as
+// request({ authorization: "Bearer s3cret" }), named for what it represents
+// (Vercel Cron's own call) rather than what header it carries.
+function cronRequest(): Request {
+  return request({ authorization: "Bearer s3cret" });
 }
 
 // tagSource is a plain string on the dependency type but a *getter* in
@@ -105,6 +125,33 @@ function taggedOutcome(recordId: string) {
     },
   };
 }
+
+// Fixtures for the escalation gate (Task 7). Both reach 待跟进 through the
+// same deps() tag()/ownerRules() fixtures above (tag() now answers any
+// recordId it is handed), so escalate() is reached for both — only their own
+// 严重度/协同群 ID columns differ, which is exactly what the gate reads.
+// Plain object literals, not built through pendingRecord() below, so their
+// own field types stay concrete rather than merged through that helper's
+// generic Record<string, unknown> overrides parameter.
+const highSeverityRecord = {
+  recordId: "rec-high",
+  recordNumber: "VOC-0002",
+  feedbackAt: "2026-01-21T00:00:00.000Z",
+  channel: "电商评价",
+  category: "冰箱",
+  content: "严重问题",
+  rating: 1,
+  state: "待分析" as const,
+  retryCount: 0,
+  severity: "高" as const,
+  warRoomChatId: "",
+};
+
+const midSeverityRecord = {
+  ...highSeverityRecord,
+  recordId: "rec-mid",
+  severity: "中" as const,
+};
 
 describe("createAnalyzeRoute", () => {
   it("rejects a request with no cron secret", async () => {
@@ -212,7 +259,7 @@ describe("createAnalyzeRoute", () => {
     );
 
     expect(response.status).toBe(200);
-    // Exactly the six contracted keys — the fail-closed work must not have
+    // Exactly the seven contracted keys — the fail-closed work must not have
     // leaked a diagnostic field into the success body.
     expect(await response.json()).toEqual({
       processed: 0,
@@ -221,6 +268,7 @@ describe("createAnalyzeRoute", () => {
       writeErrors: 0,
       notified: 0,
       notifyErrors: 0,
+      escalated: 0,
     });
     expect(dependencies.tag).toHaveBeenCalledTimes(0);
     // Nothing to route means no reason to read the owner table, and no reason
@@ -246,6 +294,7 @@ describe("createAnalyzeRoute", () => {
       writeErrors: 0,
       notified: 1,
       notifyErrors: 0,
+      escalated: 0,
     });
     expect(dependencies.ownerRules).toHaveBeenCalledTimes(1);
     expect(readTagSource).toHaveBeenCalledTimes(1);
@@ -278,6 +327,7 @@ describe("createAnalyzeRoute", () => {
       writeErrors: 0,
       notified: 2,
       notifyErrors: 0,
+      escalated: 0,
     });
     expect(reads).toBe(1);
     expect(dependencies.updateRecord).toHaveBeenCalledTimes(2);
@@ -367,6 +417,7 @@ describe("createAnalyzeRoute", () => {
         writeErrors: 0,
         notified: 0,
         notifyErrors: 1,
+        escalated: 0,
       });
       // The state write already succeeded and must not be rolled back.
       expect(dependencies.updateRecord).toHaveBeenCalledTimes(1);
@@ -405,6 +456,7 @@ describe("createAnalyzeRoute", () => {
         writeErrors: 0,
         notified: 1,
         notifyErrors: 1,
+        escalated: 0,
       });
       expect(dependencies.updateRecord).toHaveBeenCalledTimes(2);
     });
@@ -488,6 +540,123 @@ describe("createAnalyzeRoute", () => {
       );
 
       expect(dependencies.notifyOwner).not.toHaveBeenCalled();
+    });
+  });
+
+  // Task 7: 严重度 高 tickets get an extra push — an escalation card asking
+  // the fallback approver whether the ticket warrants a war room. The three
+  // tests below are the brief's own, adapted to this file's deps(overrides)
+  // factory (the brief's "...deps" spread assumes deps is already a plain
+  // object; here it is a factory, so the equivalent call is deps({...})) and
+  // its request(headers) helper (cronRequest() is a thin wrapper over it).
+  describe("war room escalation", () => {
+    it("proposes a war room for a high-severity ticket and not for the others", async () => {
+      const escalated: string[] = [];
+      const route = createAnalyzeRoute(
+        deps({
+          listPending: async () => [highSeverityRecord, midSeverityRecord],
+          escalate: async ({ record }: { record: VocRecord }) => {
+            escalated.push(record.recordId);
+          },
+        }),
+      );
+
+      const body = await (await route(cronRequest())).json();
+
+      expect(escalated).toEqual([highSeverityRecord.recordId]);
+      expect(body.escalated).toBe(1);
+    });
+
+    it("does not propose a war room twice for the same ticket", async () => {
+      // The shard job re-runs daily and retries failures; a proposal per run
+      // would nag the approver about a ticket they already answered.
+      const escalate = vi.fn(async () => {});
+      const route = createAnalyzeRoute(
+        deps({
+          listPending: async () => [
+            { ...highSeverityRecord, warRoomChatId: "oc_existing" },
+          ],
+          escalate,
+        }),
+      );
+
+      await route(cronRequest());
+
+      expect(escalate).not.toHaveBeenCalled();
+    });
+
+    it("keeps processing the shard when escalation throws", async () => {
+      // Escalation is an enhancement. A ticket must still reach 待跟进 and its
+      // owner must still get the single-chat card when the proposal cannot be
+      // sent.
+      const route = createAnalyzeRoute(
+        deps({
+          listPending: async () => [highSeverityRecord],
+          escalate: async () => {
+            throw new Error("im down");
+          },
+        }),
+      );
+
+      const body = await (await route(cronRequest())).json();
+
+      expect(body.processed).toBe(1);
+      expect(body.escalated).toBe(0);
+    });
+
+    it("does not propose a war room for a ticket the approver already declined", async () => {
+      // warRoomDecision treats DECLINED_MARKER the same as an existing group:
+      // both mean "do not ask again". Not one of the brief's three, but the
+      // brief's own gate condition (warRoomDecision(...) === "create") is
+      // meaningless without covering its third outcome too.
+      const escalate = vi.fn(async () => {});
+      const route = createAnalyzeRoute(
+        deps({
+          listPending: async () => [
+            { ...highSeverityRecord, warRoomChatId: "declined" },
+          ],
+          escalate,
+        }),
+      );
+
+      await route(cronRequest());
+
+      expect(escalate).not.toHaveBeenCalled();
+    });
+
+    it("does not propose a war room when no escalate dependency is injected", async () => {
+      // Every other test in this file omits escalate entirely (deps() does
+      // not set it). This pins that an escalation-less run behaves exactly
+      // as it did before this task existed, even for a ticket that would
+      // otherwise qualify.
+      const dependencies = deps({
+        listPending: async () => [highSeverityRecord],
+      });
+
+      const body = await (
+        await createAnalyzeRoute(dependencies)(cronRequest())
+      ).json();
+
+      expect(body.escalated).toBe(0);
+    });
+
+    it("does not propose a war room for a ticket that never reaches 待跟进", async () => {
+      // The escalate check sits after the `if (!delivery) continue` guard —
+      // a record with no resolvable owner never reaches it, so a
+      // high-severity ticket that fails to route must not be proposed
+      // either.
+      const escalate = vi.fn(async () => {});
+      const route = createAnalyzeRoute(
+        deps({
+          listPending: async () => [highSeverityRecord],
+          ownerRules: async () => [],
+          escalate,
+        }),
+      );
+
+      await route(cronRequest());
+
+      expect(escalate).not.toHaveBeenCalled();
     });
   });
 
@@ -838,6 +1007,12 @@ function pendingRecord(overrides: Record<string, unknown> = {}) {
     rating: 2,
     state: "分析失败" as const,
     retryCount: 0,
+    // Defaults added for Task 7's escalation gate — none of buildPendingShard's
+    // own tests care about either column, so they get the values that mean
+    // "not high severity" / "no group yet" and every existing call site below
+    // keeps working unchanged.
+    severity: null,
+    warRoomChatId: "",
     ...overrides,
   };
 }
@@ -883,6 +1058,85 @@ describe("buildPendingShard", () => {
 
     expect(shard).toHaveLength(1);
     expect(shard[0]).toMatchObject({ recordId: "f1", state: "待分析" });
+  });
+});
+
+// A complete VocRecord, used only to satisfy escalateToWarRoom's parameter
+// type below — the one test here never reads any of its fields, because an
+// empty fallbackOpenIds list returns before the function does anything with
+// `record` at all.
+const fullVocRecord: VocRecord = {
+  recordId: "rec1",
+  recordNumber: "VOC-0001",
+  channel: "电商评价",
+  category: "冰箱",
+  model: "",
+  content: "内容",
+  rating: null,
+  feedbackAt: null,
+  state: "待跟进",
+  polarity: "差评",
+  dimensions: ["维修时间"],
+  summary: "摘要",
+  replies: [],
+  severity: "高",
+  ownerOpenIds: ["ou_owner"],
+  ownerNames: ["张三"],
+  retryCount: 0,
+  ticketOpenedAt: null,
+  closedAt: null,
+  warRoomChatId: "",
+};
+
+describe("escalateToWarRoom", () => {
+  // The one branch that is safe to exercise without a fake fetcher: spec
+  // §3.1's "no fallback resolves" case must return before ever calling
+  // readBotEnv() or sendFeishuMessage, so this cannot fail on missing bot
+  // credentials in this test environment — it never reaches that code at all.
+  it("resolves without sending or throwing when no fallback approver resolves", async () => {
+    await expect(
+      escalateToWarRoom({ record: fullVocRecord, fallbackOpenIds: [] }),
+    ).resolves.toBeUndefined();
+  });
+});
+
+// fallbackOwnerOpenIds is Task 7's one real piece of logic in the escalation
+// path — "no fallback resolves" (spec §3.1's silent no-op) depends entirely
+// on this returning an empty array, so it gets the same isolated coverage
+// parseOwnerRules below already has.
+describe("fallbackOwnerOpenIds", () => {
+  it("keeps only rows with 兜底 checked", () => {
+    expect(
+      fallbackOwnerOpenIds([
+        { scope: "电商评价", openId: "ou_a", fallback: false },
+        { scope: "", openId: "ou_b", fallback: true },
+      ]),
+    ).toEqual(["ou_b"]);
+  });
+
+  it("deduplicates repeated open ids", () => {
+    expect(
+      fallbackOwnerOpenIds([
+        { scope: "电商评价", openId: "ou_b", fallback: true },
+        { scope: "社媒", openId: "ou_b", fallback: true },
+      ]),
+    ).toEqual(["ou_b"]);
+  });
+
+  it("drops a fallback row with a blank open id", () => {
+    // parseOwnerRules already defaults openId to "" when nobody is assigned;
+    // a blank fallback approver is a configuration gap, not a recipient.
+    expect(
+      fallbackOwnerOpenIds([{ scope: "", openId: "", fallback: true }]),
+    ).toEqual([]);
+  });
+
+  it("returns an empty array when nobody has 兜底 checked", () => {
+    expect(
+      fallbackOwnerOpenIds([
+        { scope: "电商评价", openId: "ou_a", fallback: false },
+      ]),
+    ).toEqual([]);
   });
 });
 
