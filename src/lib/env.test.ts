@@ -111,7 +111,47 @@ describe("readTaggingEnv", () => {
       provider: "aily",
       ailyAppId: "spring_demo__c",
       taggingSkillId: "skill_demo",
+      // Null means "sign the aily call with the main app", which is right for a
+      // tenant whose aily application lives under that app.
+      credential: null,
     });
+  });
+
+  it("reads a dedicated aily credential when the aily app is published under its own", () => {
+    // The skill-start API resolves the aily application from the calling
+    // credential, not from the app id in the path — verified against the live
+    // API, where this project's main app gets 2320008 for a real, published
+    // aily app id. So the aily call may have to be signed by the app aily
+    // created for it, while Bitable and messaging keep the main app.
+    expect(
+      readTaggingEnv({
+        TAGGING_PROVIDER: "aily",
+        FEISHU_AILY_APP_ID: "spring_demo__c",
+        FEISHU_AILY_SKILL_TAGGING: "skill_demo",
+        FEISHU_AILY_BOT_APP_ID: "cli_demo",
+        FEISHU_AILY_BOT_APP_SECRET: "secret_demo",
+      }),
+    ).toMatchObject({
+      credential: { appId: "cli_demo", appSecret: "secret_demo" },
+    });
+  });
+
+  it("rejects half a credential pair rather than silently using the main app", () => {
+    // Falling back on a half-configured override would resurface as 2320008
+    // from a caller who had every reason to think the override was in place.
+    for (const half of [
+      { FEISHU_AILY_BOT_APP_ID: "cli_demo" },
+      { FEISHU_AILY_BOT_APP_SECRET: "secret_demo" },
+    ]) {
+      expect(() =>
+        readTaggingEnv({
+          TAGGING_PROVIDER: "aily",
+          FEISHU_AILY_APP_ID: "spring_demo__c",
+          FEISHU_AILY_SKILL_TAGGING: "skill_demo",
+          ...half,
+        }),
+      ).toThrow(/must be set together/);
+    }
   });
 
   it("rejects an unknown provider name", () => {

@@ -1207,7 +1207,12 @@ describe("resolveTagSource", () => {
   it("formats aily:<skill_id>@<batch> for the A track", () => {
     expect(
       resolveTagSource(
-        { provider: "aily", ailyAppId: "spring_x", taggingSkillId: "skill_x" },
+        {
+          provider: "aily",
+          ailyAppId: "spring_x",
+          taggingSkillId: "skill_x",
+          credential: null,
+        },
         () => 1700000000000,
       ),
     ).toBe("aily:skill_x@1700000000000");

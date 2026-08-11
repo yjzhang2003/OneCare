@@ -722,7 +722,19 @@ function getTaggingProvider(): TaggingProvider {
         return createAilyTaggingProvider({
           ailyAppId: env.ailyAppId,
           skillId: env.taggingSkillId,
-          tenantAccessToken: getTokenProvider(),
+          // The aily skill-start API resolves the aily application from the
+          // calling credential rather than from the app id in the path, so
+          // when the aily application is published under an app of its own,
+          // that app has to sign the call. Verified against the live API: the
+          // main app's token returns 2320008 for a real, published aily app id.
+          // Bitable reads and outbound messages keep using the main app either
+          // way — only this one call changes identity.
+          tenantAccessToken: env.credential
+            ? createTenantTokenProvider(
+                env.credential.appId,
+                env.credential.appSecret,
+              )
+            : getTokenProvider(),
         });
       },
       createFieldShortcut: () =>

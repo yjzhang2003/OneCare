@@ -18,9 +18,24 @@ export type BitableEnv = {
   ownerTableId: string;
 };
 
+// The aily skill-start API resolves which aily application a call belongs to
+// from the calling credential, not from the app id in the path: this project's
+// main app returns "未找到应用凭证对应的应用信息" (2320008) for a real, published
+// aily app id, while the app that aily itself creates when the application is
+// published to the Feishu bot channel is the one bound to it. So the aily track
+// can need its own credential pair, separate from the app that reads Bitable and
+// sends messages. Absent, the main app's credential is used — which is correct
+// for any tenant where the aily application is published under it.
+export type AilyCredential = Readonly<{ appId: string; appSecret: string }>;
+
 export type TaggingEnv =
   | { provider: "field-shortcut" }
-  | { provider: "aily"; ailyAppId: string; taggingSkillId: string };
+  | {
+      provider: "aily";
+      ailyAppId: string;
+      taggingSkillId: string;
+      credential: AilyCredential | null;
+    };
 
 type ServerEnvironmentName =
   | "FEISHU_APP_ID"
@@ -33,7 +48,9 @@ type ServerEnvironmentName =
   | "FEISHU_BITABLE_TABLE_VOC"
   | "FEISHU_BITABLE_TABLE_OWNER"
   | "FEISHU_AILY_APP_ID"
-  | "FEISHU_AILY_SKILL_TAGGING";
+  | "FEISHU_AILY_SKILL_TAGGING"
+  | "FEISHU_AILY_BOT_APP_ID"
+  | "FEISHU_AILY_BOT_APP_SECRET";
 
 function readRequired(
   source: Readonly<Record<string, string | undefined>>,
@@ -97,10 +114,26 @@ export function readTaggingEnv(
   }
 
   if (provider === "aily") {
+    const botAppId = source.FEISHU_AILY_BOT_APP_ID?.trim();
+    const botAppSecret = source.FEISHU_AILY_BOT_APP_SECRET?.trim();
+
+    // Both or neither. Half a credential pair would fall back to the main app
+    // silently and reappear as 2320008 from a caller who had every reason to
+    // think they had configured the override.
+    if (Boolean(botAppId) !== Boolean(botAppSecret)) {
+      throw new Error(
+        "FEISHU_AILY_BOT_APP_ID and FEISHU_AILY_BOT_APP_SECRET must be set together",
+      );
+    }
+
     return {
       provider: "aily",
       ailyAppId: readRequired(source, "FEISHU_AILY_APP_ID"),
       taggingSkillId: readRequired(source, "FEISHU_AILY_SKILL_TAGGING"),
+      credential:
+        botAppId && botAppSecret
+          ? { appId: botAppId, appSecret: botAppSecret }
+          : null,
     };
   }
 
