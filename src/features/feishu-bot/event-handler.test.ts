@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import type { BotEnv } from "../../lib/env";
-import { VOC_CARD_ACTIONS } from "./card-types";
+import { VOC_CARD_ACTIONS, VOC_NOTE_FIELD_NAME } from "./card-types";
 import { parseFeishuEvent } from "./event-handler";
 
 const env: BotEnv = {
@@ -95,6 +95,7 @@ function cardActionBody(overrides?: {
   chatId?: string;
   messageId?: string;
   operatorId?: string;
+  formValue?: Record<string, unknown>;
 }) {
   return {
     schema: "2.0",
@@ -120,6 +121,12 @@ function cardActionBody(overrides?: {
             ? { record_id: overrides.recordId }
             : {}),
         },
+        // Card 2.0 returns form-container values here, keyed by each
+        // component's `name`, and only for cards that actually contain a form
+        // — hence the conditional spread rather than an always-present {}.
+        ...(overrides?.formValue !== undefined
+          ? { form_value: overrides.formValue }
+          : {}),
       },
       context: {
         open_chat_id: overrides?.chatId ?? "oc_onecare_chat",
@@ -133,6 +140,7 @@ function vocCardActionOutcome(overrides: {
   action?: string;
   recordId?: string;
   operatorId?: string;
+  formValue?: Record<string, unknown>;
 }) {
   const rawBody = JSON.stringify(
     cardActionBody({
@@ -219,6 +227,8 @@ describe("parseFeishuEvent", () => {
       // so a demo action carries no record id or operator identity.
       recordId: "",
       operatorOpenId: "",
+      // No demo card carries a form, so there is never a note to read.
+      note: "",
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });
@@ -332,6 +342,7 @@ describe("parseFeishuEvent VOC card actions", () => {
       action: "voc_start_follow_up",
       recordId: "rec12345",
       operatorOpenId: "ou_owner",
+      note: "",
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });
@@ -362,5 +373,76 @@ describe("parseFeishuEvent VOC card actions", () => {
     await expect(vocCardActionOutcome(overrides)).resolves.toEqual({
       kind: "invalid_card_action",
     });
+  });
+});
+
+// @larksuiteoapi/node-sdk 1.71.1's normalizeCardAction keeps only value/tag/
+// name/option off the action — `form_value` appears nowhere in the package
+// (grep of types/index.d.ts, lib/index.js, es/index.js: zero hits) — so this
+// value has to be read off the raw payload. These tests lock that read, since
+// the alternative failure mode is silent: every submission would look like the
+// owner typed nothing.
+describe("parseFeishuEvent VOC form values", () => {
+  it("carries the note the owner typed in the card's form", async () => {
+    await expect(
+      vocCardActionOutcome({
+        action: "voc_submit_follow_up",
+        formValue: { [VOC_NOTE_FIELD_NAME]: "已联系用户，约定明天上门" },
+      }),
+    ).resolves.toMatchObject({
+      kind: "card_action",
+      action: "voc_submit_follow_up",
+      note: "已联系用户，约定明天上门",
+    });
+  });
+
+  it("keeps newlines inside a multi-line note", async () => {
+    await expect(
+      vocCardActionOutcome({
+        action: "voc_confirm_closure",
+        formValue: { [VOC_NOTE_FIELD_NAME]: "第一步：已上门\n第二步：已换件" },
+      }),
+    ).resolves.toMatchObject({ note: "第一步：已上门\n第二步：已换件" });
+  });
+
+  it.each([
+    ["no form_value at all", undefined],
+    ["an unrelated field only", { other_field: "x" }],
+    ["an empty string", { [VOC_NOTE_FIELD_NAME]: "" }],
+    ["whitespace only", { [VOC_NOTE_FIELD_NAME]: "  \n\t " }],
+    ["a non-string value", { [VOC_NOTE_FIELD_NAME]: 42 }],
+    ["a null value", { [VOC_NOTE_FIELD_NAME]: null }],
+    ["an array value", { [VOC_NOTE_FIELD_NAME]: ["a"] }],
+  ])("reports an empty note for %s", async (_label, formValue) => {
+    await expect(
+      vocCardActionOutcome({
+        action: "voc_submit_follow_up",
+        ...(formValue === undefined ? {} : { formValue }),
+      }),
+    ).resolves.toMatchObject({ kind: "card_action", note: "" });
+  });
+
+  it("reports an empty note when form_value is not an object", async () => {
+    const rawBody = JSON.stringify(
+      cardActionBody({
+        action: "voc_submit_follow_up",
+        recordId: "rec12345",
+        operatorId: "ou_owner",
+        formValue: "not-an-object" as never,
+      }),
+    );
+
+    await expect(
+      parseFeishuEvent({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toMatchObject({ kind: "card_action", note: "" });
+  });
+
+  it("trims a note that is padded with whitespace", async () => {
+    await expect(
+      vocCardActionOutcome({
+        action: "voc_submit_follow_up",
+        formValue: { [VOC_NOTE_FIELD_NAME]: "  已回访  " },
+      }),
+    ).resolves.toMatchObject({ note: "已回访" });
   });
 });

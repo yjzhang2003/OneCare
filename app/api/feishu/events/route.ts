@@ -13,6 +13,7 @@ import {
   resolveCardAction,
   resolveVocCardAction,
   type CardActionResult,
+  type VocActionBitable,
 } from "../../../../src/features/feishu-bot/card-actions";
 import {
   VOC_CARD_ACTIONS,
@@ -61,14 +62,22 @@ type FeishuEventRouteDependencies = {
     chatId: string;
     message: FeishuOutboundMessage;
   }) => Promise<void>;
-  resolveAction: (input: {
-    action: OneCareCardAction | VocCardAction;
-    recordId: string;
-    operatorOpenId: string;
-  }) => Promise<CardActionResult>;
+  resolveAction: (input: CardActionRequest) => Promise<CardActionResult>;
   schedule: Scheduler;
   reportFailure: () => void;
 };
+
+// Every field the dispatcher needs, all required. `note` is not optional here
+// on purpose: the previous shape omitted it entirely, so this route called
+// resolveVocCardAction without 跟进记录/闭环结论, TypeScript was satisfied
+// because they were optional parameters, and both actions were rejected by
+// their own guards in production while every test on both sides passed.
+type CardActionRequest = Readonly<{
+  action: OneCareCardAction | VocCardAction;
+  recordId: string;
+  operatorOpenId: string;
+  note: string;
+}>;
 
 function isVocCardAction(
   action: OneCareCardAction | VocCardAction,
@@ -100,20 +109,27 @@ function getBitableClient(): BitableClient {
 // carries a real record id and operator identity and goes through the triple
 // check (Task 12); the nine demo actions keep using the untouched, synchronous
 // demo resolver.
-async function resolveAction(input: {
-  action: OneCareCardAction | VocCardAction;
-  recordId: string;
-  operatorOpenId: string;
-}): Promise<CardActionResult> {
-  if (isVocCardAction(input.action)) {
-    return resolveVocCardAction({
-      action: input.action,
-      recordId: input.recordId,
-      operatorOpenId: input.operatorOpenId,
-      bitable: getBitableClient(),
-    });
-  }
-  return resolveCardAction(input.action);
+//
+// The Bitable client arrives as a parameter so this dispatcher — the exact
+// code production runs — can be driven end to end over a fake Bitable
+// boundary. Replacing this function with a stub in tests is what let the
+// missing note reach production: the route's own tests never saw the call it
+// actually makes.
+export function createResolveAction(
+  bitable: () => VocActionBitable,
+): (input: CardActionRequest) => Promise<CardActionResult> {
+  return async function resolveAction(input) {
+    if (isVocCardAction(input.action)) {
+      return resolveVocCardAction({
+        action: input.action,
+        recordId: input.recordId,
+        operatorOpenId: input.operatorOpenId,
+        note: input.note,
+        bitable: bitable(),
+      });
+    }
+    return resolveCardAction(input.action);
+  };
 }
 
 const defaultDependencies: FeishuEventRouteDependencies = {
@@ -123,7 +139,7 @@ const defaultDependencies: FeishuEventRouteDependencies = {
   createWelcome: createWelcomeMessage,
   replyMessage: replyToFeishuMessage,
   sendMessage: sendFeishuMessage,
-  resolveAction,
+  resolveAction: createResolveAction(getBitableClient),
   schedule: (task) => after(task),
   reportFailure: () => console.error("[onecare-bot] reply_failed"),
 };
@@ -182,6 +198,7 @@ export function createFeishuEventRoute(
             action: outcome.action,
             recordId: outcome.recordId,
             operatorOpenId: outcome.operatorOpenId,
+            note: outcome.note,
           });
         } catch {
           return json({

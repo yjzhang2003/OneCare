@@ -5,12 +5,17 @@ import type { TagResult } from "../tagging/contracts";
 import {
   ONECARE_CARD_ACTIONS,
   ONECARE_CASE_ID,
+  VOC_NOTE_FIELD_NAME,
+  VOC_NOTE_FORM_NAME,
+  VOC_NOTE_MAX_LENGTH,
+  VOC_NOTE_SUBMIT_NAME,
   type OneCareCardView,
   type VocCardAction,
 } from "./card-types";
 import {
   createCardMessage,
   createVocTicketCard,
+  createVocTicketMessage,
   createWelcomeMessage,
   VOC_TICKET_CONTENT_LIMIT,
 } from "./cards";
@@ -171,6 +176,8 @@ function vocRecord(overrides: Partial<VocRecord> = {}): VocRecord {
     state: "待跟进",
     polarity: "差评",
     dimensions: ["维修时间"],
+    summary: "用户反馈冷藏室温度持续偏高，等待维修三天未解决",
+    replies: [{ tone: "安抚", text: "非常抱歉给您带来不便" }],
     severity: "中",
     ownerOpenIds: ["ou_owner"],
     retryCount: 0,
@@ -355,5 +362,88 @@ describe("createVocTicketCard", () => {
     const json = JSON.stringify(card);
 
     expect(json).not.toContain("AI 回复话术建议");
+  });
+});
+
+// Before this, the two actions the state machine guards on non-empty text were
+// offered as bare buttons: the owner had no control to type into, so
+// 提交跟进结果 and 确认闭环 were rejected 100% of the time by a guard the card
+// gave them no way to satisfy.
+describe("createVocTicketCard note form", () => {
+  function form(card: Record<string, unknown>): Record<string, unknown> | null {
+    const body = card.body as Record<string, unknown>;
+    const elements = body.elements as Array<Record<string, unknown>>;
+    return elements.find((element) => element.tag === "form") ?? null;
+  }
+
+  it.each([
+    ["跟进中", "voc_submit_follow_up", "提交跟进结果", "跟进记录"],
+    ["待闭环", "voc_confirm_closure", "确认闭环", "闭环结论"],
+  ] satisfies ReadonlyArray<
+    readonly [VocRecord["state"], VocCardAction, string, string]
+  >)(
+    "gives the %s card a form whose input feeds %s",
+    (state, action, submitLabel, noteLabel) => {
+      const card = createVocTicketCard(vocRecord({ state }), tagResult());
+      const container = form(card);
+
+      // A form container "不可被内嵌在其它组件内，只可放在卡片根节点下" — nesting
+      // it inside a column_set would stop it rendering at all.
+      expect(container).not.toBeNull();
+      expect(container?.name).toBe(VOC_NOTE_FORM_NAME);
+
+      const elements = container?.elements as Array<Record<string, unknown>>;
+      const input = elements.find((element) => element.tag === "input");
+      const button = elements.find((element) => element.tag === "button");
+
+      // Feishu keys action.form_value by each component's `name`, so this is
+      // the one string the event parser has to agree on.
+      expect(input?.name).toBe(VOC_NOTE_FIELD_NAME);
+      expect(input?.input_type).toBe("multiline_text");
+      expect(input?.required).toBe(true);
+      expect(input?.max_length).toBe(VOC_NOTE_MAX_LENGTH);
+      expect((input?.label as Record<string, unknown>).content).toBe(noteLabel);
+
+      // Both `name` and `form_action_type` are required on a button inside a
+      // form container; without form_action_type the click never submits the
+      // input's value.
+      expect(button?.name).toBe(VOC_NOTE_SUBMIT_NAME);
+      expect(button?.form_action_type).toBe("submit");
+      expect((button?.text as Record<string, unknown>).content).toBe(
+        submitLabel,
+      );
+      expect(button?.behaviors).toEqual([
+        { type: "callback", value: { action, record_id: "rec1" } },
+      ]);
+    },
+  );
+
+  it("keeps 开始跟进 a plain button, since it carries no text", () => {
+    const card = createVocTicketCard(vocRecord({ state: "待跟进" }), tagResult());
+
+    expect(form(card)).toBeNull();
+    expect(JSON.stringify(card)).toContain("voc_start_follow_up");
+  });
+
+  it("offers no form once the ticket is closed", () => {
+    const card = createVocTicketCard(vocRecord({ state: "已闭环" }), tagResult());
+
+    expect(form(card)).toBeNull();
+  });
+
+  it("never exceeds the platform's 1000 character input ceiling", () => {
+    expect(VOC_NOTE_MAX_LENGTH).toBeLessThanOrEqual(1000);
+    expect(VOC_NOTE_MAX_LENGTH).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("createVocTicketMessage", () => {
+  it("wraps the ticket card as an interactive outbound message", () => {
+    const message = createVocTicketMessage(vocRecord(), tagResult());
+
+    expect(message.msgType).toBe("interactive");
+    expect(JSON.parse(message.content)).toEqual(
+      createVocTicketCard(vocRecord(), tagResult()),
+    );
   });
 });

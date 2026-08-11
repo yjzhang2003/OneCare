@@ -8,7 +8,11 @@ import type {
   OneCareCardView,
   VocCardAction,
 } from "./card-types";
-import { createCard, createCardMessage } from "./cards";
+import {
+  createCard,
+  createCardMessage,
+  createVocTicketCard,
+} from "./cards";
 
 export type CardActionResult =
   | Readonly<{
@@ -94,14 +98,33 @@ const ACTION_TO_TRANSITION: Readonly<Record<VocCardAction, VocAction>> = {
 // state/owner/retryCount, one updateRecord to write the outcome. The real
 // BitableClient (Task 9) has more methods (listRecords, listFieldNames) but
 // satisfies this structurally, so production wiring just passes it through.
-type VocActionBitable = Pick<BitableClient, "getRecord" | "updateRecord">;
+// Exported so an end-to-end test can drive the production resolver over a fake
+// Bitable boundary instead of replacing the resolver itself with a stub —
+// stubbing it is how the missing-note defect stayed invisible.
+export type VocActionBitable = Pick<BitableClient, "getRecord" | "updateRecord">;
+
+// Which Base column an action's note belongs in. Absent means the action
+// carries no text at all, which is a different thing from "carries empty
+// text": 开始跟进 has no note to write, whereas 提交跟进结果 with an empty note
+// is a submission the state machine must refuse.
+const NOTE_COLUMN: Readonly<
+  Partial<Record<VocCardAction, "followUpNote" | "closingNote">>
+> = {
+  voc_submit_follow_up: "followUpNote",
+  voc_confirm_closure: "closingNote",
+};
 
 export type ResolveVocCardActionInput = Readonly<{
   action: VocCardAction;
   recordId: string;
   operatorOpenId: string;
-  followUpNote?: string;
-  closingNote?: string;
+  // One required field instead of two optional ones. The previous shape
+  // (`followUpNote?`/`closingNote?`) let the only production caller omit both
+  // and still compile, so every 提交跟进结果 and 确认闭环 click was rejected by
+  // its own guard while both sides' unit tests passed. Required means a caller
+  // that forgets it does not build; which column it lands in is derived from
+  // the action rather than chosen by the caller.
+  note: string;
   bitable: VocActionBitable;
 }>;
 
@@ -135,11 +158,12 @@ export async function resolveVocCardAction(
     return errorToast("只有该记录的负责人可以操作");
   }
 
+  const noteColumn = NOTE_COLUMN[input.action];
   const outcome = transition(record.state, ACTION_TO_TRANSITION[input.action], {
     retryCount: record.retryCount,
     hasOwner: record.ownerOpenIds.length > 0,
-    followUpNote: input.followUpNote,
-    closingNote: input.closingNote,
+    ...(noteColumn === "followUpNote" ? { followUpNote: input.note } : {}),
+    ...(noteColumn === "closingNote" ? { closingNote: input.note } : {}),
   });
 
   if (outcome.kind === "rejected") {
@@ -158,11 +182,14 @@ export async function resolveVocCardAction(
   const fields: Record<string, unknown> = {
     [VOC_FIELD_NAMES.state]: outcome.next,
   };
-  if (input.followUpNote) {
-    fields[VOC_FIELD_NAMES.followUpNote] = input.followUpNote;
+  // Unconditional on the column, not on truthiness: the state machine has
+  // already refused an empty note for the two actions that carry one, so
+  // reaching here with a note column means there is real text to write.
+  if (noteColumn === "followUpNote") {
+    fields[VOC_FIELD_NAMES.followUpNote] = input.note;
   }
-  if (input.closingNote) {
-    fields[VOC_FIELD_NAMES.closingNote] = input.closingNote;
+  if (noteColumn === "closingNote") {
+    fields[VOC_FIELD_NAMES.closingNote] = input.note;
   }
   if (outcome.next === "已闭环") {
     // Calibrated against the live Base (field-map.ts): a Bitable DateTime
@@ -179,10 +206,29 @@ export async function resolveVocCardAction(
     return errorToast("状态写回失败，请稍后重试");
   }
 
+  // One card, in this one synchronous response. Without it the owner got a
+  // green toast on a card still showing the old status tag and the button they
+  // just used — in an unedited screen recording the card looks frozen while
+  // the Base changes behind it. The re-render is built from the record already
+  // read above (no second getRecord) and from outcome.next rather than a
+  // re-read state, and it is returned exactly once: the callback token allows
+  // at most two card updates, so one click must not spend more than one.
   return {
     kind: "update",
     response: {
       toast: { type: "success", content: `已更新为${outcome.next}` },
+      card: {
+        type: "raw",
+        data: createVocTicketCard(
+          { ...record, state: outcome.next },
+          {
+            summary: record.summary,
+            polarity: record.polarity ?? "—",
+            dimensions: record.dimensions,
+            replies: record.replies,
+          },
+        ),
+      },
     },
   };
 }

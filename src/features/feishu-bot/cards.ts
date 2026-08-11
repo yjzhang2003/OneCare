@@ -1,8 +1,12 @@
 import type { VocRecord } from "../bitable/field-map";
-import type { TagResult, VocReply } from "../tagging/contracts";
+import type { VocReply } from "../tagging/contracts";
 import type { VocState } from "../voc/service-event";
 import {
   ONECARE_CASE_ID,
+  VOC_NOTE_FIELD_NAME,
+  VOC_NOTE_FORM_NAME,
+  VOC_NOTE_MAX_LENGTH,
+  VOC_NOTE_SUBMIT_NAME,
   type FeishuCard,
   type FeishuOutboundMessage,
   type OneCareCardAction,
@@ -430,16 +434,94 @@ function vocActionButton(
   };
 }
 
+// A Card 2.0 form container: the only way an owner's typed text reaches this
+// server. Feishu is explicit that "要结合使用输入框组件与按钮组件，你需将输入框
+// 组件与按钮组件内嵌于表单容器中" — a standalone input only submits via the
+// small icon drawn inside the input itself, so a separate button can never read
+// it. The submit button therefore carries `form_action_type: "submit"` (not a
+// behaviors type) alongside the callback behavior that routes the click, and
+// both components carry the `name` Feishu keys `action.form_value` by.
+// Docs: open.feishu.cn/document/feishu-cards/card-json-v2-components/containers/form-container
+//       open.feishu.cn/document/feishu-cards/card-json-v2-components/interactive-components/input
+function noteForm(
+  label: string,
+  placeholder: string,
+  submitLabel: string,
+  action: VocCardAction,
+  recordId: string,
+): CardElement {
+  return {
+    tag: "form",
+    name: VOC_NOTE_FORM_NAME,
+    elements: [
+      {
+        tag: "input",
+        name: VOC_NOTE_FIELD_NAME,
+        // Not a separate tag: a multi-line box is `tag: "input"` plus
+        // input_type. Newlines come back in the callback as "\n".
+        input_type: "multiline_text",
+        rows: 3,
+        max_length: VOC_NOTE_MAX_LENGTH,
+        // Client-side only, and deliberately duplicated by the server-side
+        // guard in service-event.ts: a required flag stops an honest slip, it
+        // does not stop a forged callback with no form_value at all.
+        required: true,
+        width: "fill",
+        label: { tag: "plain_text", content: label },
+        placeholder: { tag: "plain_text", content: placeholder },
+      },
+      {
+        tag: "button",
+        name: VOC_NOTE_SUBMIT_NAME,
+        form_action_type: "submit",
+        text: { tag: "plain_text", content: submitLabel },
+        type: "primary_filled",
+        size: "medium",
+        width: "fill",
+        behaviors: [
+          {
+            type: "callback",
+            value: { action, record_id: recordId },
+          },
+        ],
+      },
+    ],
+  };
+}
+
 // Only the action that is actually legal from the record's current state is
 // offered — the state machine (Task 2) is the single source of truth for
 // what happens next, so the card must not invite a click that resolveVocCardAction
 // (Task 12) is only going to reject.
+//
+// `note` names the column the action's text lands in, and its presence is what
+// decides between a bare callback button and a form. The two transitions the
+// state machine guards on non-empty text are exactly the two that get an input
+// box, so the card can no longer offer a button whose guard it gives the owner
+// no way to satisfy.
 const NEXT_VOC_ACTION: Readonly<
-  Partial<Record<VocState, Readonly<{ label: string; action: VocCardAction }>>>
+  Partial<
+    Record<
+      VocState,
+      Readonly<{
+        label: string;
+        action: VocCardAction;
+        note?: Readonly<{ label: string; placeholder: string }>;
+      }>
+    >
+  >
 > = {
   待跟进: { label: "开始跟进", action: "voc_start_follow_up" },
-  跟进中: { label: "提交跟进结果", action: "voc_submit_follow_up" },
-  待闭环: { label: "确认闭环", action: "voc_confirm_closure" },
+  跟进中: {
+    label: "提交跟进结果",
+    action: "voc_submit_follow_up",
+    note: { label: "跟进记录", placeholder: "请填写与用户沟通的过程与结果" },
+  },
+  待闭环: {
+    label: "确认闭环",
+    action: "voc_confirm_closure",
+    note: { label: "闭环结论", placeholder: "请填写问题的最终处理结论" },
+  },
 };
 
 const STATUS_COLOR_BY_STATE: Readonly<Record<VocState, string>> = {
@@ -484,9 +566,38 @@ function repliesText(replies: readonly VocReply[]): string {
   return replies.map((reply) => `【${reply.tone}】${reply.text}`).join("\n\n");
 }
 
+// Exactly the eight record fields this card puts on screen, named as a type
+// so both producers can build one without inventing the other seven. The
+// analyze route holds a freshly-tagged pending row (no polarity or owner
+// decoded yet) and the callback path holds the row it just read; a full
+// VocRecord satisfies this structurally, so nothing that already passes one
+// has to change.
+export type VocTicketCardRecord = Pick<
+  VocRecord,
+  | "recordId"
+  | "recordNumber"
+  | "channel"
+  | "category"
+  | "content"
+  | "feedbackAt"
+  | "state"
+  | "severity"
+>;
+
+// The four AI-derived values the card renders, widened from TagResult's own
+// literal unions so the callback path can reconstruct them from a Base row
+// (where a hand-edited 情绪极性 is just a string) instead of having to hold a
+// real TagResult it never received. A TagResult is assignable to this.
+export type VocTicketCardTag = Readonly<{
+  summary: string;
+  polarity: string;
+  dimensions: readonly string[];
+  replies: readonly VocReply[];
+}>;
+
 export function createVocTicketCard(
-  record: VocRecord,
-  tag: TagResult,
+  record: VocTicketCardRecord,
+  tag: VocTicketCardTag,
 ): FeishuCard {
   const completed = record.state === "已闭环";
   const next = NEXT_VOC_ACTION[record.state];
@@ -517,9 +628,36 @@ export function createVocTicketCard(
       ...(tag.replies.length > 0
         ? [field("AI 回复话术建议", repliesText(tag.replies))]
         : []),
+      // A form container "不可被内嵌在其它组件内，只可放在卡片根节点下", so the
+      // note form goes straight into body.elements while the note-free action
+      // keeps its column_set wrapper.
       ...(next
-        ? [columns(vocActionButton(next.label, next.action, record.recordId))]
+        ? next.note
+          ? [
+              noteForm(
+                next.note.label,
+                next.note.placeholder,
+                next.label,
+                next.action,
+                record.recordId,
+              ),
+            ]
+          : [columns(vocActionButton(next.label, next.action, record.recordId))]
         : [note("当前状态无需操作。")]),
     ],
   });
+}
+
+// The outbound-message wrapper for the ticket card, mirroring
+// createCardMessage's role for the demo views. It exists so the shard job can
+// hand a ready-to-send message to whatever delivers it, keeping the card's
+// JSON shape a concern of this file alone.
+export function createVocTicketMessage(
+  record: VocTicketCardRecord,
+  tag: VocTicketCardTag,
+): FeishuOutboundMessage {
+  return {
+    msgType: "interactive",
+    content: JSON.stringify(createVocTicketCard(record, tag)),
+  };
 }

@@ -6,7 +6,7 @@ import {
   type VocPolarity,
   type VocSeverity,
 } from "../voc/triage";
-import type { TagResult } from "../tagging/contracts";
+import type { TagResult, VocReply } from "../tagging/contracts";
 
 // Operations staff can rename Base columns at will, so every field name lives
 // here and nowhere else. Renaming one column then means editing one file.
@@ -50,6 +50,14 @@ export type VocRecord = Readonly<{
   state: VocState;
   polarity: VocPolarity | null;
   dimensions: readonly VocDimension[];
+  // The two AI columns a card action has to re-render from. A card callback
+  // gets exactly one getRecord (a three second budget, and a token that may
+  // update the card at most twice), so anything the re-rendered card shows has
+  // to come out of that single read. Without these, clicking a button would
+  // silently strip the AI summary and the reply suggestions off the owner's
+  // card — the very text they need in order to write the follow-up note.
+  summary: string;
+  replies: readonly VocReply[];
   severity: VocSeverity | null;
   ownerOpenIds: readonly string[];
   retryCount: number;
@@ -131,6 +139,23 @@ export function openIds(value: unknown): readonly string[] {
   );
 }
 
+// Reverses the "【语气】正文" \n\n-joined format toTagFieldUpdate writes into
+// AI 回复话术, so whatever is in that cell — written by the aily track, by
+// Bitable's own field shortcut, or by hand — reads back as replies. A segment
+// that doesn't match the shape is dropped rather than thrown on: a
+// hand-edited cell must degrade like every other malformed-input path in this
+// file, not crash the caller. Lives here, next to the writer whose format it
+// inverts, so the analyze route and toVocRecord share one implementation
+// instead of drifting apart.
+export function parseReplyText(raw: string): readonly VocReply[] {
+  if (raw.trim().length === 0) return [];
+  const segmentPattern = /^【([^】]*)】([\s\S]*)$/;
+  return raw.split("\n\n").flatMap((segment) => {
+    const match = segmentPattern.exec(segment);
+    return match ? [{ tone: match[1], text: match[2] }] : [];
+  });
+}
+
 export function toVocRecord(
   fields: BitableFields,
   recordId: string,
@@ -168,6 +193,8 @@ export function toVocRecord(
     state,
     polarity,
     dimensions,
+    summary: text(safeFields[VOC_FIELD_NAMES.summary]),
+    replies: parseReplyText(text(safeFields[VOC_FIELD_NAMES.replies])),
     severity,
     ownerOpenIds: openIds(safeFields[VOC_FIELD_NAMES.owner]),
     retryCount: numberish(safeFields[VOC_FIELD_NAMES.retryCount]) ?? 0,

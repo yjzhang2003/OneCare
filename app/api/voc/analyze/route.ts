@@ -8,17 +8,20 @@ import {
 import {
   VOC_FIELD_NAMES,
   openIds,
+  parseReplyText,
   stringArray,
   text,
   toTagFieldUpdate,
   type BitableFields,
   type VocRecord,
 } from "../../../../src/features/bitable/field-map";
+import type { FeishuOutboundMessage } from "../../../../src/features/feishu-bot/card-types";
+import { createVocTicketMessage } from "../../../../src/features/feishu-bot/cards";
+import { sendFeishuMessage } from "../../../../src/features/feishu-bot/client";
 import { createAilyTaggingProvider } from "../../../../src/features/tagging/aily-provider";
 import type {
   TagOutcome,
   TagResult,
-  VocReply,
 } from "../../../../src/features/tagging/contracts";
 import {
   createFieldShortcutTaggingProvider,
@@ -59,15 +62,34 @@ export const maxDuration = 60;
 const SHARD_SIZE = 5;
 
 // Only the fields this route actually reads off a pending record. Deliberately
-// narrower than the full VocRecord (which also carries recordNumber/
-// feedbackAt/severity/ownerOpenIds/ticketOpenedAt/closedAt for card display
-// and metrics elsewhere) so a caller injecting a fake listPending only has to
-// supply what this route uses. The real listPending returns full VocRecord
-// values, which trivially satisfy this narrower shape.
+// narrower than the full VocRecord (which also carries polarity/ownerOpenIds/
+// closedAt for metrics elsewhere) so a caller injecting a fake listPending
+// only has to supply what this route uses. The real listPending returns full
+// VocRecord values, which trivially satisfy this narrower shape.
+// recordNumber and feedbackAt are here because the ticket card this route now
+// delivers puts both on screen (spec §6.1) — reading them off the row already
+// listed costs nothing, and omitting them would render the owner's card with
+// two placeholder dashes.
 type PendingRecord = Pick<
   VocRecord,
-  "recordId" | "channel" | "category" | "content" | "rating" | "state" | "retryCount"
+  | "recordId"
+  | "recordNumber"
+  | "feedbackAt"
+  | "channel"
+  | "category"
+  | "content"
+  | "rating"
+  | "state"
+  | "retryCount"
 >;
+
+// Announcing a ticket to its owner, resolved as one value so the write path
+// and the delivery path cannot disagree about who owns the row or what the
+// card says.
+type TicketDelivery = Readonly<{
+  openId: string;
+  message: FeishuOutboundMessage;
+}>;
 
 type AnalyzeRouteDependencies = Readonly<{
   cronSecret: string;
@@ -78,6 +100,12 @@ type AnalyzeRouteDependencies = Readonly<{
   ) => Promise<readonly TagOutcome[]>;
   ownerRules: () => Promise<readonly OwnerRule[]>;
   updateRecord: (recordId: string, fields: BitableFields) => Promise<void>;
+  // The step that makes 待跟进 reachable by a human. Kept as its own
+  // dependency (rather than folded into updateRecord) because it is an
+  // announcement, not persistence: it happens strictly after the state is
+  // committed, and its failure means "the row is correct but nobody was
+  // told" — a different fact from "the row was not written".
+  notifyOwner: (delivery: TicketDelivery) => Promise<void>;
   // Spec §3.2: 打标来源 records "aily:<skill_id>@<批次号>" or "field-shortcut"
   // so a tagged/failed row is explainable and traceable. A plain string
   // (not a thunk) so the whole shard call — potentially several records —
@@ -87,11 +115,18 @@ type AnalyzeRouteDependencies = Readonly<{
   tagSource: string;
 }>;
 
+// notified/notifyErrors are separate keys, not folded into writeErrors:
+// writeErrors means "could not write back to the Base" and a run that wrote
+// every row correctly but told nobody is a different, equally urgent failure.
+// Collapsing the two would make "0 writeErrors" read as a clean run while no
+// owner ever saw a card.
 type AnalyzeResponseBody = Readonly<{
   processed: number;
   tagged: number;
   failed: number;
   writeErrors: number;
+  notified: number;
+  notifyErrors: number;
 }>;
 
 function json(data: object, status = 200): Response {
@@ -133,18 +168,27 @@ function buildFailedFields(
   };
 }
 
+// The fields for the one `updateRecord` write, plus — only when this record
+// actually became a routable ticket — the card to hand its owner. Both come
+// out of the same decision so the card can never claim a state the write did
+// not set, or address someone the write did not record as the owner.
+type TaggedWrite = Readonly<{
+  fields: BitableFields;
+  delivery: TicketDelivery | null;
+}>;
+
 // Computes the whole 待分析 -> 已分析 -> {待跟进|无需跟进} chain in memory and
 // returns the single set of fields for the one `updateRecord` write the brief
 // calls for — Bitable has no transaction, so a two-write version could leave
 // a record stuck at 已分析 if the process died between them. Synchronous: the
 // caller resolves ownerRules once, upfront, before any record is tagged (see
 // createAnalyzeRoute), rather than this function lazily awaiting it per call.
-function buildTaggedFields(
+function buildTaggedWrite(
   record: PendingRecord,
   result: TagResult,
   ownerRules: readonly OwnerRule[],
   tagSource: string,
-): BitableFields {
+): TaggedWrite {
   const { createTicket, severity } = triage({
     polarity: result.polarity,
     dimensions: result.dimensions,
@@ -169,9 +213,14 @@ function buildTaggedFields(
   if (!createTicket) {
     const noTicket = transition(afterTagging, "无需建单", context);
     return {
-      ...tagFields,
-      [VOC_FIELD_NAMES.state]:
-        noTicket.kind === "ok" ? noTicket.next : afterTagging,
+      fields: {
+        ...tagFields,
+        [VOC_FIELD_NAMES.state]:
+          noTicket.kind === "ok" ? noTicket.next : afterTagging,
+      },
+      // 无需跟进 is a terminal state nobody has to act on, so there is no
+      // ticket to announce and no owner to announce it to.
+      delivery: null,
     };
   }
 
@@ -186,17 +235,42 @@ function buildTaggedFields(
 
   if (withTicket.kind === "ok" && assignment) {
     return {
-      ...tagFields,
-      [VOC_FIELD_NAMES.state]: withTicket.next,
-      [VOC_FIELD_NAMES.owner]: [{ id: assignment.openId }],
-      [VOC_FIELD_NAMES.ticketOpenedAt]: Date.now(),
+      fields: {
+        ...tagFields,
+        [VOC_FIELD_NAMES.state]: withTicket.next,
+        [VOC_FIELD_NAMES.owner]: [{ id: assignment.openId }],
+        [VOC_FIELD_NAMES.ticketOpenedAt]: Date.now(),
+      },
+      delivery: {
+        openId: assignment.openId,
+        // Rendered from withTicket.next rather than the literal 待跟进 for the
+        // same reason the write above is: the state machine decides what the
+        // record's state is, and the card must show whatever it decided.
+        message: createVocTicketMessage(
+          {
+            recordId: record.recordId,
+            recordNumber: record.recordNumber,
+            channel: record.channel,
+            category: record.category,
+            content: record.content,
+            feedbackAt: record.feedbackAt,
+            state: withTicket.next,
+            severity,
+          },
+          result,
+        ),
+      },
     };
   }
 
   // No usable owner or fallback (violates the "兜底是必需项" business rule
   // in spec §3.4) — never write a transition the state machine itself
-  // rejected. The tagging work is still saved at the last legal state.
-  return { ...tagFields, [VOC_FIELD_NAMES.state]: afterTagging };
+  // rejected. The tagging work is still saved at the last legal state, and
+  // with nobody to route it to there is nobody to push a card to either.
+  return {
+    fields: { ...tagFields, [VOC_FIELD_NAMES.state]: afterTagging },
+    delivery: null,
+  };
 }
 
 // "listPending"/"ownerRules" name the two reads whose failure is expected and
@@ -251,6 +325,8 @@ async function runShard(
       tagged: 0,
       failed: 0,
       writeErrors: 0,
+      notified: 0,
+      notifyErrors: 0,
     };
     return json(empty);
   }
@@ -292,6 +368,8 @@ async function runShard(
   let tagged = 0;
   let failed = 0;
   let writeErrors = 0;
+  let notified = 0;
+  let notifyErrors = 0;
 
   for (const record of records) {
     const outcome =
@@ -303,9 +381,17 @@ async function runShard(
       } as const);
 
     let fields: BitableFields;
+    let delivery: TicketDelivery | null = null;
     if (outcome.kind === "tagged") {
       tagged += 1;
-      fields = buildTaggedFields(record, outcome.result, ownerRules, tagSource);
+      const write = buildTaggedWrite(
+        record,
+        outcome.result,
+        ownerRules,
+        tagSource,
+      );
+      fields = write.fields;
+      delivery = write.delivery;
     } else {
       failed += 1;
       fields = buildFailedFields(outcome, record.retryCount, tagSource);
@@ -318,6 +404,23 @@ async function runShard(
       await dependencies.updateRecord(record.recordId, fields);
     } catch {
       writeErrors += 1;
+      // Nothing was persisted, so there is no 待跟进 ticket to announce. A
+      // card sent here would point its owner at a button the state machine is
+      // about to reject, because the row is still sitting at 待分析.
+      continue;
+    }
+
+    if (!delivery) continue;
+
+    // Strictly after the write, and with its own counter. A failed push must
+    // not roll back a state that is already committed, must not be charged to
+    // writeErrors (whose meaning is "the Base write failed"), and must not
+    // cost the remaining records in this shard their writes.
+    try {
+      await dependencies.notifyOwner(delivery);
+      notified += 1;
+    } catch {
+      notifyErrors += 1;
     }
   }
 
@@ -326,6 +429,8 @@ async function runShard(
     tagged,
     failed,
     writeErrors,
+    notified,
+    notifyErrors,
   };
   return json(body);
 }
@@ -531,21 +636,6 @@ export async function listOwnerRules(
   return parseOwnerRules(items);
 }
 
-// Reverses the "【语气】正文" \n\n-joined format toTagFieldUpdate/cards.ts's
-// repliesText write into the Base, so the field-shortcut track can read back
-// what it (or a human) put in AI 回复话术. A segment that doesn't match the
-// shape is dropped rather than thrown on — a hand-edited cell here must
-// degrade like every other malformed-input path in this codebase, not crash
-// the shard.
-function parseReplyText(raw: string): readonly VocReply[] {
-  if (raw.trim().length === 0) return [];
-  const segmentPattern = /^【([^】]*)】([\s\S]*)$/;
-  return raw.split("\n\n").flatMap((segment) => {
-    const match = segmentPattern.exec(segment);
-    return match ? [{ tone: match[1], text: match[2] }] : [];
-  });
-}
-
 // B-track source: re-reads the AI columns Bitable's own field shortcut
 // already filled on each row. This is a second, independent read per record
 // (not reused from listPending's VocRecord, which doesn't decode these AI
@@ -630,6 +720,17 @@ const defaultDependencies: AnalyzeRouteDependencies = {
   ownerRules: () => listOwnerRules(readBitableEnv(), getTokenProvider()),
   updateRecord: (recordId, fields) =>
     getBitableClient().updateRecord(recordId, fields),
+  // readBotEnv() is called here, not hoisted: this module is imported at build
+  // time and must never touch process.env on import (the same discipline the
+  // rest of this wiring follows). A missing bot credential therefore surfaces
+  // as one record's notifyErrors, inside runShard's per-record try, rather
+  // than as a failed build or a dead shard.
+  notifyOwner: (delivery) =>
+    sendFeishuMessage({
+      env: readBotEnv(),
+      openId: delivery.openId,
+      message: delivery.message,
+    }),
   // A getter (like cronSecret) so each Cron tick — not each import — gets a
   // fresh aily batch number; createAnalyzeRoute reads this once per request
   // and reuses it for every record in the shard.

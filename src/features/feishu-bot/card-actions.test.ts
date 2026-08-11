@@ -79,6 +79,8 @@ const record: VocRecord = {
   state: "待跟进",
   polarity: "差评",
   dimensions: ["维修时间"],
+  summary: "用户反馈上门维修延迟三天",
+  replies: [{ tone: "致歉安抚", text: "非常抱歉给您带来不便" }],
   severity: "中",
   ownerOpenIds: ["ou_owner"],
   retryCount: 0,
@@ -106,6 +108,7 @@ describe("resolveVocCardAction", () => {
       action: "voc_start_follow_up",
       recordId: "rec1",
       operatorOpenId: "ou_owner",
+      note: "",
       bitable,
     });
 
@@ -122,6 +125,7 @@ describe("resolveVocCardAction", () => {
       action: "voc_start_follow_up",
       recordId: "rec1",
       operatorOpenId: "ou_stranger",
+      note: "",
       bitable,
     });
 
@@ -140,6 +144,7 @@ describe("resolveVocCardAction", () => {
       action: "voc_start_follow_up",
       recordId: "recGone",
       operatorOpenId: "ou_owner",
+      note: "",
       bitable,
     });
 
@@ -155,7 +160,7 @@ describe("resolveVocCardAction", () => {
       action: "voc_confirm_closure",
       recordId: "rec1",
       operatorOpenId: "ou_owner",
-      closingNote: "已处理",
+      note: "已处理",
       bitable,
     });
 
@@ -172,6 +177,7 @@ describe("resolveVocCardAction", () => {
       action: "voc_start_follow_up",
       recordId: "rec1",
       operatorOpenId: "ou_owner",
+      note: "",
       bitable,
     });
 
@@ -190,6 +196,7 @@ describe("resolveVocCardAction", () => {
       action: "voc_start_follow_up",
       recordId: "rec1",
       operatorOpenId: "ou_owner",
+      note: "",
       bitable,
     });
 
@@ -211,7 +218,7 @@ describe("resolveVocCardAction", () => {
       action: "voc_confirm_closure",
       recordId: "rec1",
       operatorOpenId: "ou_owner",
-      closingNote: "已处理",
+      note: "已处理",
       bitable,
     });
 
@@ -222,5 +229,191 @@ describe("resolveVocCardAction", () => {
     expect(typeof fields.闭环时间).toBe("number");
     expect(fields.闭环时间 as number).toBeGreaterThanOrEqual(before);
     expect(fields.闭环时间 as number).toBeLessThanOrEqual(after);
+  });
+});
+
+// `note` replaced an optional followUpNote/closingNote pair. These lock the
+// action → column derivation, so a caller can no longer land follow-up text in
+// the closure column (or write neither and still compile).
+describe("resolveVocCardAction note handling", () => {
+  it("writes 提交跟进结果's note into 跟进记录 only", async () => {
+    const bitable = client();
+    bitable.getRecord = vi.fn(async () => ({ ...record, state: "跟进中" as const }));
+
+    await resolveVocCardAction({
+      action: "voc_submit_follow_up",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "已联系用户，约定明天上门",
+      bitable,
+    });
+
+    expect(bitable.updateRecord).toHaveBeenCalledWith("rec1", {
+      流程状态: "待闭环",
+      跟进记录: "已联系用户，约定明天上门",
+    });
+  });
+
+  it("writes 确认闭环's note into 闭环结论 only", async () => {
+    const bitable = client();
+    bitable.getRecord = vi.fn(async () => ({ ...record, state: "待闭环" as const }));
+
+    await resolveVocCardAction({
+      action: "voc_confirm_closure",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "已完成维修并完成回访",
+      bitable,
+    });
+
+    const [, fields] = bitable.updateRecord.mock.calls[0];
+    expect(fields.闭环结论).toBe("已完成维修并完成回访");
+    expect(fields.跟进记录).toBeUndefined();
+  });
+
+  it("never writes a note column for an action that carries no note", async () => {
+    const bitable = client();
+
+    await resolveVocCardAction({
+      action: "voc_start_follow_up",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      // A stray note on a note-free action must not leak into the Base: the
+      // column is chosen by the action, not by whatever the caller passed.
+      note: "无关文本",
+      bitable,
+    });
+
+    expect(bitable.updateRecord).toHaveBeenCalledWith("rec1", {
+      流程状态: "跟进中",
+    });
+  });
+
+  it.each([
+    ["voc_submit_follow_up", "跟进中", "跟进记录不能为空"],
+    ["voc_confirm_closure", "待闭环", "闭环结论不能为空"],
+  ] as const)(
+    "refuses %s with a blank note and writes nothing",
+    async (action, state, reason) => {
+      for (const note of ["", "   ", "\n\t"]) {
+        const bitable = client();
+        bitable.getRecord = vi.fn(async () => ({ ...record, state }));
+
+        const result = await resolveVocCardAction({
+          action,
+          recordId: "rec1",
+          operatorOpenId: "ou_owner",
+          note,
+          bitable,
+        });
+
+        if (result.kind !== "update") throw new Error("expected update");
+        expect(result.response.toast?.content).toBe(reason);
+        expect(result.response.card).toBeUndefined();
+        expect(bitable.updateRecord).not.toHaveBeenCalled();
+      }
+    },
+  );
+});
+
+// I4: a green toast on a card still showing the previous status tag and the
+// button that was just used reads, in an unedited screen recording, as a frozen
+// card next to a Base that moved.
+describe("resolveVocCardAction card refresh", () => {
+  it.each([
+    ["voc_start_follow_up", "待跟进", "跟进中", "voc_submit_follow_up"],
+    ["voc_submit_follow_up", "跟进中", "待闭环", "voc_confirm_closure"],
+  ] as const)(
+    "returns a card at the new state after %s",
+    async (action, from, to, nextAction) => {
+      const bitable = client();
+      bitable.getRecord = vi.fn(async () => ({ ...record, state: from }));
+
+      const result = await resolveVocCardAction({
+        action,
+        recordId: "rec1",
+        operatorOpenId: "ou_owner",
+        note: "已联系用户",
+        bitable,
+      });
+
+      if (result.kind !== "update") throw new Error("expected update");
+      expect(result.response.toast).toEqual({
+        type: "success",
+        content: `已更新为${to}`,
+      });
+      expect(result.response.card?.type).toBe("raw");
+
+      const card = JSON.stringify(result.response.card?.data);
+      expect(card).toContain(to);
+      expect(card).not.toContain(from);
+      // The card must offer whatever is legal next, so the loop can continue
+      // from the card the owner is already looking at.
+      expect(card).toContain(nextAction);
+    },
+  );
+
+  it("returns a closed card with no further action after 确认闭环", async () => {
+    const bitable = client();
+    bitable.getRecord = vi.fn(async () => ({ ...record, state: "待闭环" as const }));
+
+    const result = await resolveVocCardAction({
+      action: "voc_confirm_closure",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "已完成维修",
+      bitable,
+    });
+
+    if (result.kind !== "update") throw new Error("expected update");
+    const data = result.response.card?.data ?? {};
+    expect((data.header as Record<string, unknown>).template).toBe("green");
+    expect(JSON.stringify(data)).toContain("当前状态无需操作");
+    expect(JSON.stringify(data)).not.toContain("voc_");
+  });
+
+  it("re-renders from the record already read, without a second getRecord", async () => {
+    const bitable = client();
+
+    const result = await resolveVocCardAction({
+      action: "voc_start_follow_up",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "",
+      bitable,
+    });
+
+    expect(bitable.getRecord).toHaveBeenCalledTimes(1);
+    if (result.kind !== "update") throw new Error("expected update");
+    // The AI summary and reply suggestions survive the refresh: they are what
+    // the owner writes the follow-up note from, and they only exist on the
+    // record that single read returned.
+    const card = JSON.stringify(result.response.card?.data);
+    expect(card).toContain("用户反馈上门维修延迟三天");
+    expect(card).toContain("【致歉安抚】非常抱歉给您带来不便");
+  });
+
+  it("renders a placeholder rather than crashing when the record has no polarity", async () => {
+    const bitable = client();
+    bitable.getRecord = vi.fn(async () => ({
+      ...record,
+      polarity: null,
+      summary: "",
+      replies: [],
+    }));
+
+    const result = await resolveVocCardAction({
+      action: "voc_start_follow_up",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "",
+      bitable,
+    });
+
+    if (result.kind !== "update") throw new Error("expected update");
+    expect(result.response.card?.type).toBe("raw");
+    expect(JSON.stringify(result.response.card?.data)).not.toContain(
+      "AI 回复话术建议",
+    );
   });
 });

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { VOC_FIELD_NAMES, toTagFieldUpdate, toVocRecord } from "./field-map";
+import {
+  VOC_FIELD_NAMES,
+  parseReplyText,
+  toTagFieldUpdate,
+  toVocRecord,
+} from "./field-map";
 
 describe("toVocRecord", () => {
   it("unpacks single select, multi select and person fields", () => {
@@ -138,6 +143,61 @@ describe("toVocRecord", () => {
     expect(toVocRecord({}, "rec1").retryCount).toBe(0);
   });
 
+  // A card callback gets exactly one getRecord, so the re-rendered card can
+  // only show what this decode returns. Without these two columns, clicking a
+  // button silently stripped the AI summary and the reply suggestions — the
+  // text the owner writes their follow-up note from — off the card.
+  it("decodes the AI summary and reply suggestions for card re-rendering", () => {
+    const record = toVocRecord(
+      {
+        [VOC_FIELD_NAMES.summary]: "等待三天未上门",
+        [VOC_FIELD_NAMES.replies]:
+          "【致歉安抚】非常抱歉\n\n【解决方案】明天安排上门",
+      },
+      "rec1",
+    );
+
+    expect(record.summary).toBe("等待三天未上门");
+    expect(record.replies).toEqual([
+      { tone: "致歉安抚", text: "非常抱歉" },
+      { tone: "解决方案", text: "明天安排上门" },
+    ]);
+  });
+
+  it("defaults the AI summary and replies to empty when the columns are unset", () => {
+    const record = toVocRecord({}, "rec1");
+
+    expect(record.summary).toBe("");
+    expect(record.replies).toEqual([]);
+  });
+
+  // Round trip: whatever toTagFieldUpdate writes must read back unchanged, or
+  // the card the owner sees after a click differs from the one the shard sent.
+  it("round-trips the replies toTagFieldUpdate writes", () => {
+    const replies = [
+      { tone: "致歉安抚", text: "非常抱歉给您带来不便" },
+      { tone: "解决方案", text: "我们将在 24 小时内安排工程师上门" },
+    ];
+    const written = toTagFieldUpdate(
+      {
+        recordId: "rec1",
+        sentiment: ["失望"],
+        polarity: "差评",
+        dimensions: ["维修时间"],
+        summary: "等待三天",
+        replies,
+      },
+      "中",
+    );
+
+    expect(
+      toVocRecord(
+        { [VOC_FIELD_NAMES.replies]: written[VOC_FIELD_NAMES.replies] },
+        "rec1",
+      ).replies,
+    ).toEqual(replies);
+  });
+
   // A malformed payload (deleted record, empty webhook retry body, a bad cast
   // upstream) must decode like an empty object instead of throwing — every
   // other branch in this file already answers "can't read this" with a
@@ -194,5 +254,39 @@ describe("toTagFieldUpdate", () => {
     expect(update[VOC_FIELD_NAMES.summary]).toBe("等待三天");
     expect(update[VOC_FIELD_NAMES.severity]).toBe("高");
     expect(update[VOC_FIELD_NAMES.replies]).toContain("致歉安抚");
+  });
+});
+
+// Moved here from app/api/voc/analyze/route.ts, where it was private and only
+// exercised by the live Base round trip. It now has two callers — the
+// field-shortcut track's re-read and toVocRecord — so one implementation and
+// one set of tests replace what would otherwise be two drifting copies.
+describe("parseReplyText", () => {
+  it("splits the \\n\\n-joined 【语气】正文 format the writer produces", () => {
+    expect(parseReplyText("【安抚】抱歉\n\n【方案】明天上门")).toEqual([
+      { tone: "安抚", text: "抱歉" },
+      { tone: "方案", text: "明天上门" },
+    ]);
+  });
+
+  it("returns nothing for an empty or whitespace-only cell", () => {
+    expect(parseReplyText("")).toEqual([]);
+    expect(parseReplyText("   \n  ")).toEqual([]);
+  });
+
+  it("drops a hand-edited segment that does not match the shape", () => {
+    expect(parseReplyText("随手写的一行\n\n【安抚】抱歉")).toEqual([
+      { tone: "安抚", text: "抱歉" },
+    ]);
+  });
+
+  it("keeps a multi-line body inside one segment", () => {
+    expect(parseReplyText("【方案】第一步\n第二步")).toEqual([
+      { tone: "方案", text: "第一步\n第二步" },
+    ]);
+  });
+
+  it("tolerates an empty tone label rather than dropping the reply", () => {
+    expect(parseReplyText("【】抱歉")).toEqual([{ tone: "", text: "抱歉" }]);
   });
 });

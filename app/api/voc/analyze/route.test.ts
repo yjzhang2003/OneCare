@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { FeishuOutboundMessage } from "../../../../src/features/feishu-bot/card-types";
 import {
   buildPendingShard,
   createAnalyzeRoute,
@@ -10,14 +11,30 @@ import {
   resolveTagSource,
 } from "./route";
 
+// Declared as a typed fake (not `vi.fn(async () => undefined)`) so
+// `.mock.calls[0]` is already the real argument tuple. A zero-arg inference
+// would force a tuple cast at every assertion site, which vitest never
+// type-checks but `tsc --noEmit` rejects.
+function notifyOwnerSpy() {
+  return vi.fn(
+    async (_input: {
+      openId: string;
+      message: FeishuOutboundMessage;
+    }): Promise<void> => undefined,
+  );
+}
+
 function deps(overrides: Record<string, unknown> = {}) {
   return {
     cronSecret: "s3cret",
     shardSize: 2,
     tagSource: "field-shortcut",
+    notifyOwner: notifyOwnerSpy(),
     listPending: vi.fn(async () => [
       {
         recordId: "rec1",
+        recordNumber: "VOC-0001",
+        feedbackAt: "2026-01-20T00:00:00.000Z",
         channel: "电商评价",
         category: "冰箱",
         content: "等了三天",
@@ -194,13 +211,15 @@ describe("createAnalyzeRoute", () => {
     );
 
     expect(response.status).toBe(200);
-    // Exactly the four contracted keys — the fail-closed work must not have
+    // Exactly the six contracted keys — the fail-closed work must not have
     // leaked a diagnostic field into the success body.
     expect(await response.json()).toEqual({
       processed: 0,
       tagged: 0,
       failed: 0,
       writeErrors: 0,
+      notified: 0,
+      notifyErrors: 0,
     });
     expect(dependencies.tag).toHaveBeenCalledTimes(0);
     // Nothing to route means no reason to read the owner table, and no reason
@@ -224,6 +243,8 @@ describe("createAnalyzeRoute", () => {
       tagged: 1,
       failed: 0,
       writeErrors: 0,
+      notified: 1,
+      notifyErrors: 0,
     });
     expect(dependencies.ownerRules).toHaveBeenCalledTimes(1);
     expect(readTagSource).toHaveBeenCalledTimes(1);
@@ -254,6 +275,8 @@ describe("createAnalyzeRoute", () => {
       tagged: 2,
       failed: 0,
       writeErrors: 0,
+      notified: 2,
+      notifyErrors: 0,
     });
     expect(reads).toBe(1);
     expect(dependencies.updateRecord).toHaveBeenCalledTimes(2);
@@ -276,6 +299,195 @@ describe("createAnalyzeRoute", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ writeErrors: 1 });
+  });
+
+  // Before this, createVocTicketCard had no caller outside its own unit test:
+  // the shard wrote 待跟进 into the Base and told nobody, so 待跟进 → 跟进中 →
+  // 待闭环 → 已闭环 could never be entered by the person responsible for it.
+  // These tests assert the seam itself — that a ticket-worthy record produces
+  // one addressed push carrying a real, clickable Card 2.0 payload.
+  describe("ticket card delivery", () => {
+    it("pushes the ticket card to the resolved owner exactly once", async () => {
+      const dependencies = deps();
+
+      const response = await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(dependencies.notifyOwner).toHaveBeenCalledTimes(1);
+
+      const [delivery] = dependencies.notifyOwner.mock.calls[0];
+      // Addressed to the person the owner table resolved, not to a chat.
+      expect(delivery.openId).toBe("ou_backstop");
+      expect(delivery.message.msgType).toBe("interactive");
+
+      const card = JSON.parse(delivery.message.content) as Record<
+        string,
+        unknown
+      >;
+      expect(card.schema).toBe("2.0");
+      // The card must carry the freshly written state and a button addressing
+      // this specific row — that button is the only entrance to the closure
+      // flow, so a card without it delivers nothing.
+      expect(delivery.message.content).toContain("待跟进");
+      expect(delivery.message.content).toContain("voc_start_follow_up");
+      expect(delivery.message.content).toContain("rec1");
+      expect(delivery.message.content).toContain("VOC-0001");
+      // The AI work the shard just paid for has to be on the card the owner
+      // reads, or the push is a bare notification.
+      expect(delivery.message.content).toContain("等待三天");
+    });
+
+    it("keeps the written state and does not count a push failure as a write error", async () => {
+      const dependencies = deps({
+        notifyOwner: vi.fn(
+          async (_input: {
+            openId: string;
+            message: FeishuOutboundMessage;
+          }): Promise<void> => {
+            throw new Error("feishu im rate limited");
+          },
+        ),
+      });
+
+      const response = await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      expect(response.status).toBe(200);
+      // writeErrors means "failed to write back to the Base" and nothing
+      // else; a failed push must be visible on its own key instead of
+      // borrowing that meaning.
+      expect(await response.json()).toEqual({
+        processed: 1,
+        tagged: 1,
+        failed: 0,
+        writeErrors: 0,
+        notified: 0,
+        notifyErrors: 1,
+      });
+      // The state write already succeeded and must not be rolled back.
+      expect(dependencies.updateRecord).toHaveBeenCalledTimes(1);
+      const [, fields] = dependencies.updateRecord.mock.calls[0];
+      expect(fields["流程状态"]).toBe("待跟进");
+    });
+
+    it("keeps processing the rest of the shard after a push throws", async () => {
+      const dependencies = deps({
+        listPending: vi.fn(async () => [
+          pendingRecord({ recordId: "rec1", state: "待分析" }),
+          pendingRecord({ recordId: "rec2", state: "待分析" }),
+        ]),
+        tag: vi.fn(async () => [taggedOutcome("rec1"), taggedOutcome("rec2")]),
+        notifyOwner: vi.fn(
+          async (input: {
+            openId: string;
+            message: FeishuOutboundMessage;
+          }): Promise<void> => {
+            if (input.message.content.includes("rec1")) {
+              throw new Error("feishu im rate limited");
+            }
+          },
+        ),
+      });
+
+      const response = await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        processed: 2,
+        tagged: 2,
+        failed: 0,
+        writeErrors: 0,
+        notified: 1,
+        notifyErrors: 1,
+      });
+      expect(dependencies.updateRecord).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not push when the record needs no ticket", async () => {
+      const dependencies = deps({
+        tag: vi.fn(async () => [
+          {
+            kind: "tagged" as const,
+            result: {
+              recordId: "rec1",
+              sentiment: ["满意"],
+              polarity: "好评" as const,
+              dimensions: [] as const,
+              summary: "上门很快",
+              replies: [],
+            },
+          },
+        ]),
+      });
+
+      const response = await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      expect(await response.json()).toMatchObject({
+        notified: 0,
+        notifyErrors: 0,
+      });
+      const [, fields] = dependencies.updateRecord.mock.calls[0];
+      expect(fields["流程状态"]).toBe("无需跟进");
+      expect(dependencies.notifyOwner).not.toHaveBeenCalled();
+    });
+
+    it("does not push when no owner or backstop resolves", async () => {
+      const dependencies = deps({ ownerRules: vi.fn(async () => []) });
+
+      await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      // The record stayed at 已分析, so there is no 待跟进 ticket to announce
+      // and nobody to announce it to.
+      expect(dependencies.notifyOwner).not.toHaveBeenCalled();
+    });
+
+    it("does not push a card for a state that failed to write", async () => {
+      const dependencies = deps({
+        updateRecord: vi.fn(async () => {
+          throw new Error("bitable down");
+        }),
+      });
+
+      const response = await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      expect(await response.json()).toMatchObject({
+        writeErrors: 1,
+        notified: 0,
+        notifyErrors: 0,
+      });
+      // A card claiming 待跟进 for a row still sitting at 待分析 would send the
+      // owner to a button the state machine is going to reject.
+      expect(dependencies.notifyOwner).not.toHaveBeenCalled();
+    });
+
+    it("does not push for a failed tagging outcome", async () => {
+      const dependencies = deps({
+        tag: vi.fn(async () => [
+          {
+            kind: "failed" as const,
+            recordId: "rec1",
+            reason: "模型未返回该 id",
+          },
+        ]),
+      });
+
+      await createAnalyzeRoute(dependencies)(
+        request({ authorization: "Bearer s3cret" }),
+      );
+
+      expect(dependencies.notifyOwner).not.toHaveBeenCalled();
+    });
   });
 
   // Read-before-acting: listPending and ownerRules are both read-and-decide
@@ -519,6 +731,8 @@ describe("route exports", () => {
 function pendingRecord(overrides: Record<string, unknown> = {}) {
   return {
     recordId: "rec1",
+    recordNumber: "VOC-0001",
+    feedbackAt: "2026-01-20T00:00:00.000Z",
     channel: "电商评价",
     category: "冰箱",
     content: "内容",

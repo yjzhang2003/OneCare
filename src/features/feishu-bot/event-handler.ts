@@ -12,6 +12,7 @@ import {
   ONECARE_CARD_ACTIONS,
   ONECARE_CASE_ID,
   VOC_CARD_ACTIONS,
+  VOC_NOTE_FIELD_NAME,
   type OneCareCardAction,
   type VocCardAction,
 } from "./card-types";
@@ -25,6 +26,12 @@ export type FeishuEventOutcome =
       action: OneCareCardAction | VocCardAction;
       recordId: string;
       operatorOpenId: string;
+      // The text the owner typed into the card's form, already trimmed, or ""
+      // when the action carries no form at all. Required — never optional —
+      // because an optional note is precisely how 跟进记录/闭环结论 reached the
+      // state machine as `undefined` from a route that compiled cleanly and
+      // rejected every real click.
+      note: string;
       chatId: string;
       messageId: string;
     }>
@@ -143,6 +150,33 @@ function readOperatorOpenId(payload: JsonObject): string {
   return typeof operator.open_id === "string" ? operator.open_id.trim() : "";
 }
 
+// Read straight off the raw payload, not off the normalized action, because
+// @larksuiteoapi/node-sdk 1.71.1's normalizeCardAction whitelists exactly four
+// action fields — value, tag, name, option — and neither `form_value` nor
+// `input_value` appears anywhere in the package. Verified by grepping
+// types/index.d.ts, lib/index.js and es/index.js for both names: zero hits.
+// Its own `RawCardActionEvent` input type does not declare them either, so
+// there is nothing to widen; the value only exists on the payload we already
+// hold. This mirrors readOperatorOpenId, which reaches back into `payload` for
+// the same reason.
+//
+// Feishu keys form data by each component's `name`
+// (open.feishu.cn/document/feishu-cards/card-callback-communication:
+// `"form_value": { "Input_lf4fmxwfrd9": "1234", ... }`). Trimmed here so what
+// lands in the Base is what the owner meant to write, and so a whitespace-only
+// submission arrives at the state machine's guard as the empty string it
+// actually is rather than as text that passes a length check.
+function readFormNote(payload: JsonObject): string {
+  if (!isJsonObject(payload.event)) return "";
+  const action = payload.event.action;
+  if (!isJsonObject(action)) return "";
+  const formValue = action.form_value;
+  if (!isJsonObject(formValue)) return "";
+
+  const value = formValue[VOC_NOTE_FIELD_NAME];
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function parseCardAction(payload: JsonObject): FeishuEventOutcome {
   if (!isJsonObject(payload.header) || !isJsonObject(payload.event)) {
     return { kind: "invalid_card_action" };
@@ -179,6 +213,8 @@ function parseCardAction(payload: JsonObject): FeishuEventOutcome {
       action,
       recordId: "",
       operatorOpenId: "",
+      // No demo card carries a form; a note would have nowhere to be written.
+      note: "",
       chatId: normalized.chatId,
       messageId: normalized.messageId,
     };
@@ -203,6 +239,7 @@ function parseCardAction(payload: JsonObject): FeishuEventOutcome {
       action,
       recordId,
       operatorOpenId: openId,
+      note: readFormNote(payload),
       chatId: normalized.chatId,
       messageId: normalized.messageId,
     };
