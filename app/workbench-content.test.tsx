@@ -205,6 +205,24 @@ describe("WorkbenchContent", () => {
     expect(screen.getByText(/共 3 条/)).toBeInTheDocument();
   });
 
+  it("drops the channel/category separator when the category is blank", () => {
+    render(
+      <WorkbenchContent
+        data={{
+          metrics: { status: "ok", metrics: emptyMetrics() },
+          tickets: [{ ...ticket, category: "" }],
+        }}
+        user={user}
+      />,
+    );
+
+    // The source file mixes product lines with org units in one column, so a
+    // record from 集团 or 中国区 has no product category at all. Rendering
+    // "电商评价 / " with nothing after it reads as a bug in the page.
+    expect(screen.getByText("电商评价")).toBeInTheDocument();
+    expect(screen.queryByText("电商评价 /")).not.toBeInTheDocument();
+  });
+
   it("windows a long list but keeps the counts over every record", () => {
     const many = Array.from({ length: 250 }, (_, index) => ({
       ...ticket,

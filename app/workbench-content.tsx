@@ -359,8 +359,13 @@ function TicketTable({ tickets }: Readonly<{ tickets: readonly WorkbenchTicket[]
           {tickets.map((ticket) => (
             <tr key={ticket.recordNumber}>
               <td>{text(shanghaiTime(ticket.feedbackAt))}</td>
+              {/* The separator only appears when both sides do. The source file
+                  mixes product lines and org units in one column, so a record
+                  from 集团 or 中国区 legitimately has no product category, and
+                  "电商评价 / " with nothing after it reads as a rendering bug. */}
               <td>
-                {ticket.channel} / {ticket.category}
+                {[ticket.channel, ticket.category].filter(Boolean).join(" / ") ||
+                  ABSENT}
               </td>
               <td className="workbench__content-cell">{ticket.content}</td>
               <td>{text(ticket.polarity)}</td>
