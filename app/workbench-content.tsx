@@ -65,13 +65,24 @@ function countByState(
     .sort((a, b) => VOC_STATE_SEQUENCE[a.state] - VOC_STATE_SEQUENCE[b.state]);
 }
 
+// Colours come from the palette in globals.css rather than literals. The first
+// version of this file hardcoded a dark text colour copied from the retired
+// aggregate page and set no background at all, so it rendered dark-on-dark
+// against the site's near-black body — invisible, and invisible in a way no
+// assertion in this repo can see, since jsdom computes no contrast. Tokens make
+// the surface and the text agree by construction. The outer element also reuses
+// the existing `.dashboard-shell` paper surface instead of inventing a second
+// one.
 const workbenchStyles = `
   .workbench {
+    color: var(--ink);
+    line-height: 1.6;
+    background: var(--paper);
+  }
+  .workbench__inner {
     max-width: 1180px;
     margin: 0 auto;
     padding: 40px 24px 96px;
-    color: #1a1d1f;
-    line-height: 1.6;
   }
   .workbench__masthead {
     display: flex;
@@ -79,7 +90,7 @@ const workbenchStyles = `
     align-items: baseline;
     justify-content: space-between;
     gap: 12px;
-    border-bottom: 1px solid #e2e5e8;
+    border-bottom: 1px solid var(--line);
     padding-bottom: 16px;
     margin-bottom: 24px;
   }
@@ -89,15 +100,15 @@ const workbenchStyles = `
   }
   .workbench__identity {
     font-size: 13px;
-    color: #55595e;
+    color: var(--muted);
     margin: 4px 0 0;
   }
   .workbench__showcase-link {
     font-size: 13px;
-    color: #55595e;
+    color: var(--ink);
   }
   .workbench section {
-    border: 1px solid #e2e5e8;
+    border: 1px solid var(--line);
     border-radius: 12px;
     padding: 20px 24px;
     margin-bottom: 20px;
@@ -117,7 +128,7 @@ const workbenchStyles = `
   .workbench__stat span {
     display: block;
     font-size: 13px;
-    color: #767b80;
+    color: var(--muted);
   }
   .workbench__stat strong {
     font-size: 22px;
@@ -136,8 +147,12 @@ const workbenchStyles = `
   .workbench td {
     text-align: left;
     padding: 6px 8px;
-    border-bottom: 1px solid #eef0f1;
+    border-bottom: 1px solid var(--line);
     vertical-align: top;
+  }
+  .workbench th {
+    color: var(--muted);
+    font-weight: 600;
   }
   .workbench__content-cell {
     min-width: 240px;
@@ -157,7 +172,7 @@ const workbenchStyles = `
   }
   .workbench__note {
     font-size: 12px;
-    color: #8a8f94;
+    color: var(--muted);
     margin-top: 8px;
   }
   .workbench__unavailable {
@@ -383,8 +398,9 @@ export function WorkbenchContent({ data, user }: WorkbenchContentProps) {
   const stateCounts = countByState(data.tickets);
 
   return (
-    <main className="workbench">
+    <main className="dashboard-shell workbench">
       <style>{workbenchStyles}</style>
+      <div className="workbench__inner">
       <div className="workbench__masthead">
         <div>
           <h1>万护 OneCare 服务运营工作台</h1>
@@ -437,6 +453,7 @@ export function WorkbenchContent({ data, user }: WorkbenchContentProps) {
           </>
         )}
       </section>
+      </div>
     </main>
   );
 }

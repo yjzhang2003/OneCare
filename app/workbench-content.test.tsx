@@ -140,6 +140,29 @@ describe("WorkbenchContent", () => {
     expect(screen.getAllByText("未填写").length).toBeGreaterThanOrEqual(4);
   });
 
+  it("paints its own surface instead of inheriting the site's dark ground", () => {
+    const { container } = render(
+      <WorkbenchContent
+        data={{ metrics: { status: "ok", metrics: emptyMetrics() }, tickets: [ticket] }}
+        user={user}
+      />,
+    );
+
+    // The first version of this component set a dark text colour and no
+    // background, so it rendered dark-on-dark against the near-black body in
+    // globals.css — every number present in the DOM and none of it legible.
+    // jsdom computes no contrast, so no assertion about the rendered tree can
+    // catch that. What can be checked is the invariant that produced it: a
+    // surface must declare both its ground and its text, from the shared
+    // palette rather than from literals that cannot know the theme.
+    const css = container.querySelector("style")?.textContent ?? "";
+    expect(css).toContain("background: var(--paper)");
+    expect(css).toContain("color: var(--ink)");
+    expect(container.querySelector("main")?.className).toContain(
+      "dashboard-shell",
+    );
+  });
+
   it("keeps a corner route back to the showcase", () => {
     render(
       <WorkbenchContent
