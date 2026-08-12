@@ -1,6 +1,7 @@
 import type { VocRecord } from "../bitable/field-map";
 import type { VocReply } from "../tagging/contracts";
 import type { VocState } from "../voc/service-event";
+import type { OperatorSummary } from "./operator-summary";
 import {
   ONECARE_CASE_ID,
   VOC_NOTE_FIELD_NAME,
@@ -121,13 +122,21 @@ function cardRoot(input: Readonly<{
   icon?: string;
   status: string;
   statusColor: string;
+  // Card 2.0's own collapsed/notification preview text. Every caller before
+  // Task 12 was a demo view or a demo-case-shaped production card and took
+  // the default below, which unconditionally appends "· 万护 OneCare 演示" —
+  // a phrase that does not belong on a card whose entire point is that the
+  // numbers on it are real (the operator summary card). This lets that one
+  // caller override it instead of rewriting the shared default every other
+  // card in this file still relies on.
+  summary?: string;
 }>): FeishuCard {
   return {
     schema: "2.0",
     config: {
       update_multi: true,
       width_mode: "default",
-      summary: { content: `${input.title} · 万护 OneCare 演示` },
+      summary: { content: input.summary ?? `${input.title} · 万护 OneCare 演示` },
     },
     header: {
       title: { tag: "plain_text", content: input.title },
@@ -417,6 +426,74 @@ export function createWelcomeMessage(): FeishuOutboundMessage {
 // to be read in the flow of the conversation.
 export function createTextMessage(text: string): FeishuOutboundMessage {
   return { msgType: "text", content: JSON.stringify({ text }) };
+}
+
+// Task 12: this is what a p2p text message from an operator gets back now,
+// in place of workbenchCard()'s demo command menu — no case id, no "演示"
+// wording, no disclaimer, because unlike every card above it this one
+// renders real numbers off the real Base (via computeOperatorSummary).
+const OPERATIONS_WORKBENCH_URL = "https://onecare.ohmyfeishu.top/enter";
+
+function operationsWorkbenchButton(): CardElement {
+  return {
+    tag: "button",
+    text: { tag: "plain_text", content: "打开运营工作台" },
+    type: "primary_filled",
+    size: "medium",
+    width: "fill",
+    behaviors: [{ type: "open_url", default_url: OPERATIONS_WORKBENCH_URL }],
+  };
+}
+
+function summaryField(label: string, value: number): CardElement {
+  return field(label, `${value} 条`);
+}
+
+export function createOperatorSummaryCard(
+  summary: OperatorSummary | null,
+): FeishuCard {
+  return cardRoot({
+    title: "万护 OneCare 服务运营",
+    subtitle: "我的工作台",
+    status: summary ? "实时数据" : "指标不可用",
+    statusColor: summary ? "blue" : "grey",
+    template: "blue",
+    icon: "chart_colorful",
+    summary: "万护 OneCare 服务运营",
+    elements: summary
+      ? [
+          columns(
+            summaryField("我的待跟进", summary.myPendingFollowUp),
+            summaryField("我的跟进中", summary.myInProgress),
+            summaryField("我的待闭环", summary.myPendingClosure),
+          ),
+          columns(
+            summaryField("我的超时风险", summary.myOverdue),
+            summaryField("今日新增反馈", summary.newToday),
+            summaryField("全部反馈总量", summary.total),
+          ),
+          operationsWorkbenchButton(),
+        ]
+      : [
+          // Deliberately zero digits anywhere in this branch (see the
+          // operator-summary.test.ts / cards.test.ts assertions that lock
+          // this): a failed read must never render as "0 条", which a reader
+          // has no way to tell apart from a real, if empty, measurement.
+          // readVocRecordsCached's own comment states the same rule on the
+          // read side — this is that rule applied to what the card shows.
+          note("指标暂不可用，请稍后重试。"),
+          operationsWorkbenchButton(),
+        ],
+  });
+}
+
+export function createOperatorSummaryMessage(
+  summary: OperatorSummary | null,
+): FeishuOutboundMessage {
+  return {
+    msgType: "interactive",
+    content: JSON.stringify(createOperatorSummaryCard(summary)),
+  };
 }
 
 // Unlike callbackButton (which always ships the fixed demo case id), a VOC

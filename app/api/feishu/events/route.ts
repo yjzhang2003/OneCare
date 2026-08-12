@@ -8,10 +8,6 @@ import {
   type TenantTokenProvider,
 } from "../../../../src/features/bitable/client";
 import {
-  createBotReply,
-  type BotReply,
-} from "../../../../src/features/feishu-bot/bot-script";
-import {
   resolveCardAction,
   resolveVocCardAction,
   type CardActionResult,
@@ -25,6 +21,7 @@ import {
   type VocCardAction,
 } from "../../../../src/features/feishu-bot/card-types";
 import {
+  createOperatorSummaryMessage,
   createTextMessage,
   createVocTicketCard,
   createWelcomeMessage,
@@ -42,6 +39,7 @@ import {
   parseFeishuEvent,
   type FeishuEventOutcome,
 } from "../../../../src/features/feishu-bot/event-handler";
+import { computeOperatorSummary } from "../../../../src/features/feishu-bot/operator-summary";
 import { resolveWarRoomAction } from "../../../../src/features/feishu-bot/war-room-actions";
 import {
   buildAnswerFacts,
@@ -66,6 +64,17 @@ import {
   fallbackOwnerOpenIds,
   listOwnerRules,
 } from "../../voc/analyze/route";
+// Task 12: the p2p reply now shows the operator their own real VOC workload
+// instead of the demo command menu (bot-script.ts's createBotReply, still
+// exported and still tested on its own, but no longer wired to any entry
+// point). readVocRecordsCached already backs the public dashboard and the
+// gated workbench route (task 14) with a `"use cache"` boundary tuned for a
+// public, unauthenticated surface; reusing it here — rather than a fresh
+// `getBitableClient().listRecords()` call — means a p2p reply and the
+// workbench page can never show different numbers inside the same cache
+// window, and it avoids adding a second full-table read path on top of the
+// eight-page cross-border scan listRecords() already is.
+import { readVocRecordsCached } from "../../voc/dashboard/route";
 
 // `runtime = "nodejs"` was dropped: it is the App Router default anyway, and
 // task 14 enables `cacheComponents` in next.config.ts (for the VOC
@@ -84,7 +93,12 @@ type FeishuEventRouteDependencies = {
     headers: Headers;
     env: BotEnv;
   }) => Promise<FeishuEventOutcome>;
-  createReply: (text: string) => BotReply;
+  // Task 12: what a p2p text message gets back — the sender's own real VOC
+  // workload, not the demo command menu. Takes the operator's open_id
+  // (event-handler.ts's readMessageSenderOpenId), not the text the operator
+  // typed: any text at all now produces the same real card, so there is
+  // nothing left in the message worth branching on.
+  operationsReply: (operatorOpenId: string) => Promise<FeishuOutboundMessage>;
   createWelcome: () => FeishuOutboundMessage;
   replyMessage: (input: {
     env: BotEnv;
@@ -498,10 +512,43 @@ export function createResolveAction(
   };
 }
 
+// The shape readVocRecordsCached actually resolves to (its own VocRecordsRead
+// type is private to that module) — declared structurally here, the same way
+// VocActionBitable/GroupAnswerBitable above narrow BitableClient down to
+// exactly what their caller touches, so a fake in a test can stand in for
+// this without importing anything from the dashboard route.
+type VocRecordsResult =
+  | Readonly<{ ok: true; records: readonly VocRecord[] }>
+  | Readonly<{ ok: false }>;
+
+// Exported and DI'd the same way createAnswerGroupQuestion above is: `now` is
+// injectable so a test can fix "today" instead of racing the real clock (see
+// operator-summary.test.ts's own NOW constant for why that matters — Beijing
+// "today" is computed relative to it), and `readRecords` is injectable so a
+// test never has to touch readVocRecordsCached's real Bitable/env boundary to
+// prove this wiring is correct.
+export function createOperationsReply(
+  readRecords: () => Promise<VocRecordsResult>,
+  now: () => Date = () => new Date(),
+): (operatorOpenId: string) => Promise<FeishuOutboundMessage> {
+  return async function operationsReply(operatorOpenId) {
+    const result = await readRecords();
+    // A failed read must produce no numbers at all, never a silent 0 a
+    // reader could mistake for a real measurement — the same rule
+    // readVocRecordsCached's own comment states, applied here to what this
+    // reply shows. createOperatorSummaryMessage(null) is the "指标暂不可用"
+    // card, not an all-zero one.
+    const summary = result.ok
+      ? computeOperatorSummary(result.records, operatorOpenId, now())
+      : null;
+    return createOperatorSummaryMessage(summary);
+  };
+}
+
 const defaultDependencies: FeishuEventRouteDependencies = {
   readEnv: () => readBotEnv(),
   parseEvent: (input) => parseFeishuEvent({ ...input, botOpenId: getBotOpenId }),
-  createReply: createBotReply,
+  operationsReply: createOperationsReply(readVocRecordsCached),
   createWelcome: createWelcomeMessage,
   replyMessage: replyToFeishuMessage,
   sendMessage: sendFeishuMessage,
@@ -612,13 +659,20 @@ export function createFeishuEventRoute(
         return json({});
       }
 
-      const reply = dependencies.createReply(outcome.text);
+      // Task 12: the fetch-and-build work moves inside the scheduled task,
+      // not before it — it is genuinely I/O now (readVocRecordsCached), unlike
+      // the old synchronous createBotReply(text) this replaces. The ack-first,
+      // reply-after `schedule` structure itself is unchanged: the response
+      // below still returns before any of this runs.
       dependencies.schedule(async () => {
         try {
+          const message = await dependencies.operationsReply(
+            outcome.operatorOpenId,
+          );
           await dependencies.replyMessage({
             env,
             messageId: outcome.messageId,
-            message: reply.message,
+            message,
           });
         } catch {
           dependencies.reportFailure();

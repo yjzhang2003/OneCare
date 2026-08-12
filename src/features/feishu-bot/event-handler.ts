@@ -19,16 +19,29 @@ import {
 
 export type FeishuEventOutcome =
   | Readonly<{ kind: "challenge"; challenge: string }>
-  | Readonly<{ kind: "message"; messageId: string; text: string }>
+  | Readonly<{
+      kind: "message";
+      messageId: string;
+      text: string;
+      // The sender's own open_id (event.sender.sender_id.open_id), trimmed.
+      // Task 12's production reply has to know *whose* VOC workload to show,
+      // and the only trustworthy source for that is the signed event payload
+      // itself — exactly the same rule readOperatorOpenId already applies to
+      // a card click's operator. A message Feishu sends with no sender at all
+      // is not expected in practice, but this degrades to "" rather than
+      // throwing; computeOperatorSummary then simply matches nobody's records
+      // instead of crashing the reply.
+      operatorOpenId: string;
+    }>
   // A group message reaches the bot only via an @-mention (this app has no
   // "read every group message" grant), and the answer always goes back to
   // the group itself rather than as a threaded reply to one message — so
   // this outcome carries `chatId`, never `messageId`. Kept as its own kind
   // instead of a `p2p | group` flag on "message": the war room's fact-only
-  // answering (Task 8) and the p2p command menu (createBotReply) read their
-  // text for entirely different purposes, and a shared shape is exactly the
-  // kind of same-name-two-meanings mixup that has bitten this codebase
-  // before.
+  // answering (Task 8) and the p2p operator summary reply (Task 12) read
+  // their text for entirely different purposes, and a shared shape is
+  // exactly the kind of same-name-two-meanings mixup that has bitten this
+  // codebase before.
   | Readonly<{ kind: "group_question"; chatId: string; text: string }>
   | Readonly<{ kind: "entered"; chatId: string }>
   | Readonly<{
@@ -72,6 +85,7 @@ type MessageMention = {
 };
 
 type ReceiveMessageEvent = {
+  sender?: { sender_id?: { open_id?: string } };
   message?: {
     message_id?: string;
     chat_id?: string;
@@ -80,10 +94,6 @@ type ReceiveMessageEvent = {
     content?: string;
     mentions?: readonly MessageMention[];
   };
-};
-
-type BotP2pEnteredEvent = {
-  chat_id?: string;
 };
 
 function isJsonObject(value: unknown): value is JsonObject {
@@ -174,6 +184,16 @@ function readOperatorOpenId(payload: JsonObject): string {
   const operator = payload.event.operator;
   if (!isJsonObject(operator)) return "";
   return typeof operator.open_id === "string" ? operator.open_id.trim() : "";
+}
+
+// Same rule as readOperatorOpenId above, applied to a plain message instead
+// of a card click: Task 12's production reply for a p2p text message shows
+// whoever sent it their own VOC workload, so this reads the sender identity
+// off the typed event the dispatcher already handed the "message" branch
+// rather than trusting anything the message content itself could claim.
+function readMessageSenderOpenId(event: ReceiveMessageEvent): string {
+  const openId = event.sender?.sender_id?.open_id;
+  return typeof openId === "string" ? openId.trim() : "";
 }
 
 // Read straight off the raw payload, not off the normalized action, because
@@ -375,7 +395,12 @@ export async function parseFeishuEvent({
       if (!text) return { kind: "ignored" } as const;
 
       if (message.chat_type === "p2p") {
-        return { kind: "message", messageId: message.message_id, text } as const;
+        return {
+          kind: "message",
+          messageId: message.message_id,
+          text,
+          operatorOpenId: readMessageSenderOpenId(event),
+        } as const;
       }
 
       if (message.chat_type === "group" && typeof message.chat_id === "string") {
@@ -390,13 +415,19 @@ export async function parseFeishuEvent({
 
       return { kind: "ignored" } as const;
     },
-    "im.chat.access_event.bot_p2p_chat_entered_v1": (
-      event: BotP2pEnteredEvent,
-    ) => {
-      const chatId = event.chat_id?.trim();
-      return chatId
-        ? ({ kind: "entered", chatId } as const)
-        : ({ kind: "ignored" } as const);
+    // Fires every time a user opens this p2p chat with the bot — Feishu has
+    // no "first ever entry" variant of this event — so treating it as a
+    // trigger to send anything at all is exactly what caused the welcome
+    // card to resend on every visit. The fix here is deliberately not an
+    // in-memory dedup cache keyed by chat id: a Vercel function instance
+    // recycles independently of any chat's own history, so "have I already
+    // greeted this chat" tracked in memory is not the reliable guard it
+    // looks like — it only changes the resend interval to match the
+    // instance's recycle cadence, which is exactly the "every few dozen
+    // minutes" behaviour reported in production. Zero state means never
+    // responding to this event at all, full stop.
+    "im.chat.access_event.bot_p2p_chat_entered_v1": () => {
+      return { kind: "ignored" } as const;
     },
   });
   const requestData = Object.assign(Object.create({ headers }), body);

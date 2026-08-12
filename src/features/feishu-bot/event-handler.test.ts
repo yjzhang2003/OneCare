@@ -56,6 +56,16 @@ function messageBody(overrides?: {
   // test (written before mention-gating existed) keeps exercising "a
   // legitimate group question" unless a test deliberately asks otherwise.
   mentions?: readonly unknown[];
+  // Task 12: the p2p operator summary reply needs to know who sent the
+  // message. Defaults to the same fixed sender every other test in this file
+  // already assumes, so only the tests that care about identity threading
+  // need to override it.
+  senderOpenId?: string;
+  // Omits event.sender entirely rather than setting senderOpenId to a falsy
+  // value — a real Feishu payload without a sender is a different shape than
+  // one with an empty open_id, and the "degrades to an empty operator id"
+  // guarantee has to hold for the former, not just the latter.
+  omitSender?: boolean;
 }) {
   return {
     schema: "2.0",
@@ -68,11 +78,15 @@ function messageBody(overrides?: {
       tenant_key: "tenant_onecare",
     },
     event: {
-      sender: {
-        sender_id: { open_id: "ou_onecare" },
-        sender_type: "user",
-        tenant_key: "tenant_onecare",
-      },
+      ...(overrides?.omitSender
+        ? {}
+        : {
+            sender: {
+              sender_id: { open_id: overrides?.senderOpenId ?? "ou_onecare" },
+              sender_type: "user",
+              tenant_key: "tenant_onecare",
+            },
+          }),
       message: {
         message_id: "om_onecare_message",
         chat_id: "oc_onecare_chat",
@@ -233,7 +247,7 @@ describe("parseFeishuEvent", () => {
     ).resolves.toEqual({ kind: "unauthorized" });
   });
 
-  it("accepts an authenticated p2p text event", async () => {
+  it("accepts an authenticated p2p text event, carrying the sender's own open id", async () => {
     const rawBody = JSON.stringify(messageBody({ text: "转人工" }));
 
     await expect(
@@ -242,18 +256,42 @@ describe("parseFeishuEvent", () => {
       kind: "message",
       messageId: "om_onecare_message",
       text: "转人工",
+      operatorOpenId: "ou_onecare",
     });
   });
 
-  it("accepts an authenticated bot p2p chat entry event", async () => {
+  it("trims a whitespace-padded sender open id on a p2p text event", async () => {
+    const rawBody = JSON.stringify(
+      messageBody({ text: "转人工", senderOpenId: "  ou_padded  " }),
+    );
+
+    await expect(
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toMatchObject({ operatorOpenId: "ou_padded" });
+  });
+
+  it("degrades to an empty operator id, rather than throwing, when a p2p message carries no sender at all", async () => {
+    const rawBody = JSON.stringify(
+      messageBody({ text: "转人工", omitSender: true }),
+    );
+
+    await expect(
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toMatchObject({ kind: "message", operatorOpenId: "" });
+  });
+
+  // Task 12: Feishu has no "first ever entry" flavour of this event — it
+  // fires on every visit to the p2p chat — so responding to it at all is
+  // what caused the welcome card to resend on every reopen. The fix lives
+  // here, in the parser itself, rather than in a dedup cache: every entry
+  // event, real chat id or not, now comes back exactly like an event this
+  // app was never asked to handle.
+  it("ignores an authenticated bot p2p chat entry event, even one naming a real chat", async () => {
     const rawBody = JSON.stringify(enteredBody("oc_onecare_chat"));
 
     await expect(
       parse({ rawBody, headers: signedHeaders(rawBody), env }),
-    ).resolves.toEqual({
-      kind: "entered",
-      chatId: "oc_onecare_chat",
-    });
+    ).resolves.toEqual({ kind: "ignored" });
   });
 
   it("accepts an authenticated allowlisted Card 2.0 button action", async () => {
@@ -310,7 +348,7 @@ describe("parseFeishuEvent", () => {
     ).resolves.toEqual({ kind: "unauthorized" });
   });
 
-  it("ignores a chat entry event without a usable chat id", async () => {
+  it("also ignores a chat entry event with no usable chat id at all", async () => {
     for (const chatId of [undefined, "", "   "]) {
       const rawBody = JSON.stringify(enteredBody(chatId));
 

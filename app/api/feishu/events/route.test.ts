@@ -23,6 +23,7 @@ import {
 import {
   createAnswerGroupQuestion,
   createFeishuEventRoute,
+  createOperationsReply,
   createResolveAction,
   type WarRoomActionDependencies,
 } from "./route";
@@ -49,12 +50,9 @@ function dependencies(outcome: FeishuEventOutcome) {
     dependencies: {
       readEnv: vi.fn(() => env),
       parseEvent: vi.fn(async () => outcome),
-      createReply: vi.fn((text: string) => ({
-        kind: "help" as const,
-        message: {
-          msgType: "interactive" as const,
-          content: JSON.stringify({ schema: "2.0", reply: text }),
-        },
+      operationsReply: vi.fn(async (_operatorOpenId: string) => ({
+        msgType: "interactive" as const,
+        content: JSON.stringify({ schema: "2.0", card: "operations" }),
       })),
       createWelcome: vi.fn(() => ({
         msgType: "interactive" as const,
@@ -124,11 +122,12 @@ describe("POST /api/feishu/events", () => {
     await expect(response.json()).resolves.toEqual({});
   });
 
-  it("acknowledges a message before the scheduled reply runs", async () => {
+  it("acknowledges a message before the scheduled operations reply runs", async () => {
     const setup = dependencies({
       kind: "message",
       messageId: "om_message",
       text: "开始体验",
+      operatorOpenId: "ou_onecare",
     });
 
     const response = await createFeishuEventRoute(setup.dependencies)(request());
@@ -139,13 +138,16 @@ describe("POST /api/feishu/events", () => {
 
     await setup.scheduled[0]();
 
-    expect(setup.dependencies.createReply).toHaveBeenCalledWith("开始体验");
+    // Task 12: any text produces the same real card now, so it is the
+    // sender's own open_id — not what they typed — that this reply is built
+    // from.
+    expect(setup.dependencies.operationsReply).toHaveBeenCalledWith("ou_onecare");
     expect(setup.dependencies.replyMessage).toHaveBeenCalledWith({
       env,
       messageId: "om_message",
       message: {
         msgType: "interactive",
-        content: JSON.stringify({ schema: "2.0", reply: "开始体验" }),
+        content: JSON.stringify({ schema: "2.0", card: "operations" }),
       },
     });
     expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
@@ -183,6 +185,7 @@ describe("POST /api/feishu/events", () => {
       kind: "message",
       messageId: "om_message",
       text: "开始体验",
+      operatorOpenId: "ou_onecare",
     });
     setup.dependencies.replyMessage.mockRejectedValueOnce(
       new Error("private upstream response"),
@@ -192,6 +195,28 @@ describe("POST /api/feishu/events", () => {
     await setup.scheduled[0]();
 
     expect(setup.dependencies.reportFailure).toHaveBeenCalledWith();
+  });
+
+  // Task 12: unlike the old synchronous createBotReply(text), operationsReply
+  // does real I/O (readVocRecordsCached) and can itself reject — this must
+  // report the same way a replyMessage failure does, never leak upstream, and
+  // never attempt to reply with nothing.
+  it("reports failure without leaking the exception when the operations reply itself fails", async () => {
+    const setup = dependencies({
+      kind: "message",
+      messageId: "om_message",
+      text: "开始体验",
+      operatorOpenId: "ou_onecare",
+    });
+    setup.dependencies.operationsReply.mockRejectedValueOnce(
+      new Error("private upstream response"),
+    );
+
+    await createFeishuEventRoute(setup.dependencies)(request());
+    await setup.scheduled[0]();
+
+    expect(setup.dependencies.reportFailure).toHaveBeenCalledWith();
+    expect(setup.dependencies.replyMessage).not.toHaveBeenCalled();
   });
 
   it("reports scheduled welcome failures without leaking the exception", async () => {
@@ -538,12 +563,12 @@ function liveDependencies(
         headers: Headers;
         env: BotEnv;
       }) => parseFeishuEvent({ ...input, botOpenId: async () => "ou_bot_unused" }),
-      createReply: vi.fn((text: string) => ({
-        kind: "help" as const,
-        message: {
-          msgType: "interactive" as const,
-          content: JSON.stringify({ reply: text }),
-        },
+      // None of the tests this factory serves send a p2p text message, so
+      // this is never exercised — present only to satisfy
+      // FeishuEventRouteDependencies.
+      operationsReply: vi.fn(async (_operatorOpenId: string) => ({
+        msgType: "interactive" as const,
+        content: JSON.stringify({ card: "operations" }),
       })),
       createWelcome: vi.fn(() => ({
         msgType: "interactive" as const,
@@ -1282,12 +1307,13 @@ function liveGroupDependencies(
       readEnv: () => env,
       parseEvent: (input: { rawBody: string; headers: Headers; env: BotEnv }) =>
         parseFeishuEvent({ ...input, botOpenId: async () => GROUP_BOT_OPEN_ID }),
-      createReply: vi.fn((text: string) => ({
-        kind: "help" as const,
-        message: {
-          msgType: "interactive" as const,
-          content: JSON.stringify({ reply: text }),
-        },
+      // Exercised by "leaves the single-chat p2p command path untouched"
+      // below — that test only checks replyMessage was called once, not this
+      // reply's content, which cards.test.ts / operator-summary.test.ts
+      // already cover directly.
+      operationsReply: vi.fn(async (_operatorOpenId: string) => ({
+        msgType: "interactive" as const,
+        content: JSON.stringify({ card: "operations" }),
       })),
       createWelcome: vi.fn(() => ({
         msgType: "interactive" as const,
@@ -1585,5 +1611,231 @@ describe("POST /api/feishu/events — group @ Q&A end to end", () => {
     expect(answer).not.toHaveBeenCalled();
     expect(setup.dependencies.replyMessage).toHaveBeenCalledTimes(1);
     expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createOperationsReply, Task 12: the wiring behind a p2p text message's
+// reply (event-handler.ts's operatorOpenId -> computeOperatorSummary ->
+// createOperatorSummaryMessage), tested over a fake `readRecords` — this
+// project's readVocRecordsCached (the real production reader) is never
+// touched by any test, in this file or elsewhere, per the project rule
+// against calling real Feishu/Bitable APIs from a test.
+// ---------------------------------------------------------------------------
+
+describe("createOperationsReply", () => {
+  const NOW = new Date("2026-08-12T01:00:00.000Z");
+
+  it("builds a card carrying only the requesting operator's own counts", async () => {
+    const records: readonly VocRecord[] = [
+      vocRecord({ recordId: "rec1", ownerOpenIds: ["ou_a"], state: "待跟进" }),
+      vocRecord({ recordId: "rec2", ownerOpenIds: ["ou_b"], state: "跟进中" }),
+    ];
+    const reply = createOperationsReply(
+      async () => ({ ok: true, records }),
+      () => NOW,
+    );
+
+    const message = await reply("ou_a");
+
+    expect(message.content).toContain("我的待跟进");
+    expect(message.content).toContain("1 条");
+  });
+
+  it("produces the unavailable card, with no numbers anywhere, when the read fails", async () => {
+    const reply = createOperationsReply(async () => ({ ok: false }), () => NOW);
+
+    const message = await reply("ou_a");
+    const card = JSON.parse(message.content) as Record<string, unknown>;
+    const elementsJson = JSON.stringify(
+      (card.body as Record<string, unknown>).elements,
+    );
+
+    expect(elementsJson).not.toMatch(/[0-9]/);
+    expect(elementsJson).toContain("暂不可用");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chat entry, end to end: real parseFeishuEvent, not a mocked outcome — this
+// is where "the fix lives in the parser, not a dedup cache" is actually
+// exercised. A test that fed parseEvent a hand-picked return value would
+// happily replay whatever kind it was told to and prove nothing about
+// whether the real event handler still treats this event type as a trigger
+// for anything.
+// ---------------------------------------------------------------------------
+
+function enteredEventBody(chatId = "oc_onecare_chat") {
+  return {
+    schema: "2.0",
+    header: {
+      event_id: "evt_entered_route",
+      event_type: "im.chat.access_event.bot_p2p_chat_entered_v1",
+      create_time: "1784371200000",
+      token: env.verificationToken,
+      app_id: env.appId,
+      tenant_key: "tenant_onecare",
+    },
+    event: {
+      chat_id: chatId,
+      operator_id: { open_id: "ou_onecare" },
+      last_message_id: "om_previous",
+      last_message_create_time: "1784371100000",
+    },
+  };
+}
+
+describe("POST /api/feishu/events — chat entry sends nothing, end to end", () => {
+  it("acknowledges the event and calls no outbound dependency at all", async () => {
+    const bitable = groupBitable(groupTicket());
+    const answer = vi.fn(async (_q: string, _f: string) => "should never be seen");
+    const setup = liveGroupDependencies(bitable, answer);
+
+    const response = await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(enteredEventBody()),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({});
+    expect(setup.scheduled).toHaveLength(0);
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+    expect(setup.dependencies.replyMessage).not.toHaveBeenCalled();
+    expect(setup.dependencies.createWelcome).not.toHaveBeenCalled();
+    expect(setup.dependencies.operationsReply).not.toHaveBeenCalled();
+    expect(bitable.findByWarRoomChatId).not.toHaveBeenCalled();
+  });
+
+  it("still ignores the event, and still sends nothing, no matter which chat id it names", async () => {
+    for (const chatId of ["oc_another_chat", "   ", ""]) {
+      const setup = liveGroupDependencies(groupBitable(null), async () => null);
+
+      const response = await createFeishuEventRoute(setup.dependencies)(
+        signedRequest(enteredEventBody(chatId)),
+      );
+
+      expect(response.status).toBe(200);
+      expect(setup.scheduled).toHaveLength(0);
+      expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The p2p operations reply, end to end: a real signed message body through
+// the real parseFeishuEvent and the real createOperationsReply, over a fake
+// records list — proving the sender's own open_id actually threads from the
+// raw event payload through to which records get counted, not just that each
+// layer works in isolation against a hand-built value.
+// ---------------------------------------------------------------------------
+
+function p2pOperationsMessageBody(text: string, senderOpenId: string) {
+  return {
+    schema: "2.0",
+    header: {
+      event_id: "evt_p2p_ops",
+      event_type: "im.message.receive_v1",
+      create_time: "1784371200000",
+      token: env.verificationToken,
+      app_id: env.appId,
+      tenant_key: "tenant_onecare",
+    },
+    event: {
+      sender: {
+        sender_id: { open_id: senderOpenId },
+        sender_type: "user",
+        tenant_key: "tenant_onecare",
+      },
+      message: {
+        message_id: "om_p2p_ops",
+        chat_id: "oc_onecare_chat",
+        chat_type: "p2p",
+        message_type: "text",
+        content: JSON.stringify({ text }),
+      },
+    },
+  };
+}
+
+function liveOperationsDependencies(records: readonly VocRecord[]) {
+  const scheduled: Array<() => Promise<void>> = [];
+  return {
+    scheduled,
+    dependencies: {
+      readEnv: () => env,
+      parseEvent: (input: { rawBody: string; headers: Headers; env: BotEnv }) =>
+        parseFeishuEvent({ ...input, botOpenId: async () => "ou_bot_unused" }),
+      operationsReply: createOperationsReply(async () => ({ ok: true, records })),
+      createWelcome: vi.fn(() => ({
+        msgType: "interactive" as const,
+        content: JSON.stringify({ welcome: true }),
+      })),
+      // Explicitly typed (not a zero-arg `async () => undefined`) so
+      // `.mock.calls[0]` below is a real one-element tuple — the same trap
+      // this file's other live-dependency fakes already guard against.
+      replyMessage: vi.fn(
+        async (_input: {
+          env: BotEnv;
+          messageId: string;
+          message: FeishuOutboundMessage;
+        }) => undefined,
+      ),
+      sendMessage: vi.fn(async () => undefined),
+      resolveAction: vi.fn(async () => {
+        throw new Error("resolveAction should not be called for this test");
+      }),
+      answerGroupQuestion: vi.fn(async () => {
+        throw new Error("answerGroupQuestion should not be called for this test");
+      }),
+      schedule: (task: () => Promise<void>) => {
+        scheduled.push(task);
+      },
+      reportFailure: vi.fn(),
+    },
+  };
+}
+
+describe("POST /api/feishu/events — p2p operations reply, end to end", () => {
+  it("replies with a real card carrying no demo markers, for any text at all", async () => {
+    const records = [vocRecord({ ownerOpenIds: ["ou_alice"], state: "待跟进" })];
+    const setup = liveOperationsDependencies(records);
+
+    const response = await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(p2pOperationsMessageBody("随便说点什么", "ou_alice")),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({});
+    expect(setup.dependencies.replyMessage).not.toHaveBeenCalled();
+    expect(setup.scheduled).toHaveLength(1);
+
+    await setup.scheduled[0]();
+
+    expect(setup.dependencies.replyMessage).toHaveBeenCalledTimes(1);
+    const [call] = setup.dependencies.replyMessage.mock.calls;
+    const content = call[0].message.content;
+    expect(content).not.toContain("演示");
+    expect(content).not.toContain(ONECARE_CASE_ID);
+    expect(content).toContain("我的待跟进");
+  });
+
+  it("counts only the sender's own records, proven end to end from a real event body", async () => {
+    const records = [
+      vocRecord({ recordId: "rec_alice", ownerOpenIds: ["ou_alice"], state: "待跟进" }),
+      vocRecord({ recordId: "rec_bob_1", ownerOpenIds: ["ou_bob"], state: "待跟进" }),
+      vocRecord({ recordId: "rec_bob_2", ownerOpenIds: ["ou_bob"], state: "待跟进" }),
+    ];
+    const setup = liveOperationsDependencies(records);
+
+    await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(p2pOperationsMessageBody("hi", "ou_bob")),
+    );
+    await setup.scheduled[0]();
+
+    const [call] = setup.dependencies.replyMessage.mock.calls;
+    const content = call[0].message.content;
+    // ou_bob owns 2 of the 3 records; ou_alice's single record must not be
+    // folded into that count.
+    expect(content).toContain("我的待跟进");
+    expect(content).toContain("2 条");
   });
 });

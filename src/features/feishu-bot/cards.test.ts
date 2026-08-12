@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { VocRecord } from "../bitable/field-map";
 import type { TagResult } from "../tagging/contracts";
+import type { OperatorSummary } from "./operator-summary";
 import {
   ONECARE_CARD_ACTIONS,
   ONECARE_CASE_ID,
@@ -14,6 +15,8 @@ import {
 } from "./card-types";
 import {
   createCardMessage,
+  createOperatorSummaryCard,
+  createOperatorSummaryMessage,
   createTextMessage,
   createVocTicketCard,
   createVocTicketMessage,
@@ -505,5 +508,128 @@ describe("createTextMessage", () => {
     expect(JSON.parse(message.content)).toEqual({
       text: "这条投诉本周同维度还有 12 条。",
     });
+  });
+});
+
+function operatorSummary(overrides: Partial<OperatorSummary> = {}): OperatorSummary {
+  return {
+    myPendingFollowUp: 3,
+    myInProgress: 2,
+    myPendingClosure: 1,
+    myOverdue: 4,
+    newToday: 7,
+    total: 3628,
+    ...overrides,
+  };
+}
+
+// Task 12: replaces the demo command menu (createBotReply) as what a p2p
+// text message gets back. Unlike every demo view above, this card must never
+// carry the demo case id, the word "演示", or a "not real data" disclaimer —
+// the whole point of sending it is that the numbers on it are real.
+describe("createOperatorSummaryCard", () => {
+  it("is a real Card 2.0 payload with no demo markers at all", () => {
+    const card = createOperatorSummaryCard(operatorSummary());
+    const json = JSON.stringify(card);
+
+    expect(card.schema).toBe("2.0");
+    expect(json).not.toContain("演示");
+    expect(json).not.toContain(ONECARE_CASE_ID);
+    expect(json).toContain("万护 OneCare 服务运营");
+  });
+
+  it("renders each of the operator's own counts and the two shop-wide totals", () => {
+    const json = JSON.stringify(
+      createOperatorSummaryCard(
+        operatorSummary({
+          myPendingFollowUp: 11,
+          myInProgress: 22,
+          myPendingClosure: 33,
+          myOverdue: 44,
+          newToday: 55,
+          total: 3628,
+        }),
+      ),
+    );
+
+    expect(json).toContain("我的待跟进");
+    expect(json).toContain("11 条");
+    expect(json).toContain("我的跟进中");
+    expect(json).toContain("22 条");
+    expect(json).toContain("我的待闭环");
+    expect(json).toContain("33 条");
+    expect(json).toContain("我的超时风险");
+    expect(json).toContain("44 条");
+    expect(json).toContain("今日新增反馈");
+    expect(json).toContain("55 条");
+    expect(json).toContain("全部反馈总量");
+    expect(json).toContain("3628 条");
+  });
+
+  it("links the workbench button to the real operations site", () => {
+    const card = createOperatorSummaryCard(operatorSummary());
+    const buttons = collectTaggedValues(card, "button") as Array<
+      Record<string, unknown>
+    >;
+    const openUrlBehaviors = buttons.flatMap((button) =>
+      (button.behaviors as Array<Record<string, unknown>>).filter(
+        (behavior) => behavior.type === "open_url",
+      ),
+    );
+
+    expect(openUrlBehaviors).toEqual([
+      expect.objectContaining({
+        type: "open_url",
+        default_url: "https://onecare.ohmyfeishu.top/enter",
+      }),
+    ]);
+    expect(
+      buttons.some(
+        (button) =>
+          (button.text as Record<string, unknown>).content === "打开运营工作台",
+      ),
+    ).toBe(true);
+  });
+
+  // The project-wide rule readVocRecordsCached itself states: a failed read
+  // must never render as a number (0 or otherwise) a reader could mistake
+  // for a real measurement. This checks it at the strongest level available —
+  // not one label at a time, but that the card's entire content area (not its
+  // padding/spacing chrome, which is boilerplate on every card regardless of
+  // data) carries no digit character whatsoever.
+  it("shows no numbers at all when the read failed, only an unavailable notice", () => {
+    const card = createOperatorSummaryCard(null);
+    const elementsJson = JSON.stringify(
+      (card.body as Record<string, unknown>).elements,
+    );
+
+    expect(elementsJson).not.toMatch(/[0-9]/);
+    expect(elementsJson).toContain("暂不可用");
+    expect(JSON.stringify(card)).not.toContain("演示");
+  });
+
+  it("still offers the workbench button when the read failed", () => {
+    const card = createOperatorSummaryCard(null);
+    const buttons = collectTaggedValues(card, "button") as Array<
+      Record<string, unknown>
+    >;
+
+    expect(
+      buttons.some(
+        (button) =>
+          (button.text as Record<string, unknown>).content === "打开运营工作台",
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("createOperatorSummaryMessage", () => {
+  it("wraps the operator summary card as an interactive outbound message", () => {
+    const message = createOperatorSummaryMessage(operatorSummary());
+
+    expect(message.msgType).toBe("interactive");
+    expect(JSON.parse(message.content)).toEqual(
+      createOperatorSummaryCard(operatorSummary()),
+    );
   });
 });
