@@ -823,3 +823,19 @@ describe("createMenuHintMessage", () => {
     expect(text).toContain("@");
   });
 });
+
+describe("production cards carry no unverified icon token", () => {
+  // Feishu's icon library documents only tokens ending in "_outlined"; every
+  // "_colorful" token this file once used renders as a broken-image
+  // placeholder, which a user reported seeing on a real card. The demo cards
+  // are unreachable so their tokens are left alone, but the four cards an
+  // operator actually receives must not carry one — and must not acquire one
+  // later, which is what this test is for.
+  it.each([
+    ["war room escalation", () => createWarRoomEscalationCard(ticketRecord, ticketTag, ["张三"])],
+    ["in-group ticket", () => createVocTicketCard(ticketRecord, ticketTag, { fullContent: true })],
+    ["closed ticket", () => createVocTicketCard({ ...ticketRecord, state: "已闭环" }, ticketTag)],
+  ])("%s card", (_name, build) => {
+    expect(JSON.stringify(build())).not.toContain("_colorful");
+  });
+});

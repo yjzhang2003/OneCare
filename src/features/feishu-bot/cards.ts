@@ -141,7 +141,14 @@ function cardRoot(input: Readonly<{
   // createTodayOverviewCard. `icon` on the Card 2.0 header is genuinely
   // optional, so when neither `input.icon` nor `completed` supplies one, the
   // header renders with no icon field at all instead of a broken glyph.
-  const iconToken = input.completed ? "done_colorful" : input.icon;
+  // No implicit substitution. This used to force "done_colorful" whenever a card
+  // was complete, which overrode the caller and — since every `_colorful` token
+  // in this file turns out not to exist in Feishu's icon library, where every
+  // documented token ends in `_outlined` — rendered a broken-image placeholder on
+  // exactly the cards an operator sees at the end of a ticket. A caller that
+  // wants an icon passes a token it has verified; a caller that passes none gets
+  // a clean iconless header, which is what the two production cards now do.
+  const iconToken = input.icon;
 
   return {
     schema: "2.0",
@@ -791,7 +798,6 @@ export function createWarRoomEscalationCard(
     status: "待确认",
     statusColor: "red",
     template: "red",
-    icon: "todo_colorful",
     elements: [
       field("记录编号", record.recordNumber || "—"),
       field("严重度", record.severity ?? "—"),
@@ -837,7 +843,6 @@ export function createVocTicketCard(
     status: record.state,
     statusColor: STATUS_COLOR_BY_STATE[record.state],
     template: completed ? "green" : "orange",
-    icon: "todo_colorful",
     elements: [
       detailBlock(tag.summary || content, [
         ["记录编号", record.recordNumber || "—"],
