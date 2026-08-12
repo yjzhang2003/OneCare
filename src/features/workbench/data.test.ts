@@ -32,6 +32,9 @@ function record(over: Partial<VocRecord> = {}): VocRecord {
 describe("toWorkbenchTicket", () => {
   it("carries the columns the workbench renders", () => {
     expect(toWorkbenchTicket(record())).toEqual({
+      recordId: "rec1",
+      retryCount: 0,
+      hasOwner: true,
       recordNumber: "R-001",
       feedbackAt: "2026-01-23T02:00:00.000Z",
       channel: "电商评价",
@@ -78,11 +81,25 @@ describe("toWorkbenchTicket", () => {
     ]);
   });
 
-  it("never exposes the record id or owner open ids", () => {
+  // Narrowed from "neither the record id nor owner open ids": the write path
+  // has to address a row, so recordId is now carried deliberately. open_ids
+  // still are not — they name people, and nothing rendered needs them. The
+  // ownership question the panel would use them for is answered by the route
+  // handler instead, which is also the only place that can answer it correctly.
+  it("carries the record id but never owner open ids", () => {
     const ticket = toWorkbenchTicket(record());
 
-    expect(ticket).not.toHaveProperty("recordId");
+    expect(ticket.recordId).toBe("rec1");
     expect(ticket).not.toHaveProperty("ownerOpenIds");
+  });
+
+  // hasOwner is what replaces ownerOpenIds for the panel's purposes: enough to
+  // choose between offering a claim and reporting an owner, carrying no identity.
+  it("reduces ownership to a boolean", () => {
+    expect(toWorkbenchTicket(record({ ownerOpenIds: [] })).hasOwner).toBe(false);
+    expect(toWorkbenchTicket(record({ ownerOpenIds: ["ou_a"] })).hasOwner).toBe(
+      true,
+    );
   });
 });
 

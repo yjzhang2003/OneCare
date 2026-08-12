@@ -1,3 +1,5 @@
+import { revalidateTag } from "next/cache";
+
 import {
   createBitableClient,
   createTenantTokenProvider,
@@ -8,6 +10,7 @@ import type { VocRecord } from "../../../../../../src/features/bitable/field-map
 import { getCurrentSession } from "../../../../../../src/features/auth/current-session";
 import type { AuthUser } from "../../../../../../src/features/auth/types";
 import { readBitableEnv, readBotEnv } from "../../../../../../src/lib/env";
+import { VOC_RECORDS_CACHE_TAG } from "../../../../../../src/features/voc/cache-tags";
 import { VOC_STATES, type VocState } from "../../../../../../src/features/voc/service-event";
 import {
   resolveWorkbenchWrite,
@@ -27,6 +30,11 @@ export type TicketActionDependencies = Readonly<{
   session: () => Promise<AuthUser | null>;
   getRecord: (recordId: string) => Promise<VocRecord | null>;
   updateRecord: (recordId: string, fields: Record<string, unknown>) => Promise<void>;
+  // Injected rather than called directly so a test can assert it fires exactly
+  // when a write landed and never otherwise — a revalidation that quietly stops
+  // happening leaves a UI that reports success and shows stale data, which is
+  // the hardest kind of bug to notice from the outside.
+  revalidate: () => void;
   now: () => number;
 }>;
 
@@ -163,6 +171,17 @@ export function createTicketActionRoute(dependencies: TicketActionDependencies) 
         );
       }
 
+      // The write has landed, so every cached read of this table is now wrong.
+      // Both readVocRecordsCached and readWorkbenchCached carry this tag; they
+      // are otherwise time-based (cacheLife "minutes"), which was right while
+      // the page could only read and becomes a bug the moment it can write —
+      // the operator would get a success toast over a row still showing the old
+      // state and reasonably conclude the click did nothing.
+      //
+      // After the write, never before: revalidating first would drop a good
+      // cache entry on behalf of a write that then failed.
+      dependencies.revalidate();
+
       return Response.json({
         ok: true,
         message: outcome.message,
@@ -201,5 +220,24 @@ export const POST = createTicketActionRoute({
   getRecord: (recordId) => getBitableClient().getRecord(recordId),
   updateRecord: (recordId, fields) =>
     getBitableClient().updateRecord(recordId, fields),
+  // { expire: 0 } — immediate expiration — rather than a named profile, and the
+  // difference is the whole feature working or appearing not to. Read from
+  // Next's own source, not assumed:
+  //
+  // - updateTag is the read-your-own-writes primitive, and it throws outright in
+  //   a route handler ("updateTag can only be called from within a Server
+  //   Action"). Server Actions are ruled out here for the README reason above,
+  //   so it is not available to us.
+  // - It achieves immediacy by passing no profile at all
+  //   (server/web/spec-extension/revalidate.js: "updateTag uses immediate
+  //   expiration (no profile)").
+  // - The named profile these reads use, "minutes", is stale: 300
+  //   (server/config-shared.js). Passing it here would let the operator's own
+  //   refresh be served up to five minutes of stale data — a success toast over
+  //   a row still showing the old state, which reads as "the button did nothing".
+  //
+  // CacheLifeConfig is { expire?: number }, so this is the same immediate
+  // expiration updateTag gets, without the Server Action it demands.
+  revalidate: () => revalidateTag(VOC_RECORDS_CACHE_TAG, { expire: 0 }),
   now: () => Date.now(),
 });

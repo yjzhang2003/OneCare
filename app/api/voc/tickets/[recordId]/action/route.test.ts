@@ -42,6 +42,7 @@ function route(
   const updateRecord = vi.fn(
     overrides.updateRecord ?? (async () => undefined),
   );
+  const revalidate = vi.fn();
   const handler = createTicketActionRoute({
     session: async () =>
       overrides.user === undefined
@@ -50,9 +51,10 @@ function route(
     getRecord: async () =>
       overrides.found === undefined ? record() : overrides.found,
     updateRecord,
+    revalidate,
     now: () => NOW,
   });
-  return { handler, updateRecord };
+  return { handler, updateRecord, revalidate };
 }
 
 function post(body: unknown): Request {
@@ -73,6 +75,7 @@ describe("ticket action route — gating", () => {
       session: async () => null,
       getRecord,
       updateRecord: async () => undefined,
+      revalidate: () => {},
       now: () => NOW,
     });
 
@@ -175,6 +178,42 @@ describe("ticket action route — outcomes", () => {
     expect(updateRecord).toHaveBeenCalledWith("rec1", { 流程状态: "跟进中" });
   });
 
+  // The cached reads behind the workbench are otherwise time-based, so without
+  // this the operator gets a success toast over a row that still shows the old
+  // state for as long as the cache window lasts.
+  test("a landed write invalidates the cached reads", async () => {
+    const { handler, revalidate } = route();
+    await handler(
+      post({ kind: "transition", action: "开始跟进", seenState: "待跟进" }),
+      params,
+    );
+    expect(revalidate).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    ["a refusal", { kind: "transition", action: "开始跟进", seenState: "跟进中" }],
+    ["a noop", { kind: "claim", seenState: "待跟进" }],
+  ])("nothing is invalidated on %s", async (_label, body) => {
+    const { handler, revalidate } = route();
+    await handler(post(body), params);
+    expect(revalidate).not.toHaveBeenCalled();
+  });
+
+  // Dropping a good cache entry on behalf of a write that then failed would
+  // make an outage cost a cold read on every subsequent page view.
+  test("nothing is invalidated when the write fails", async () => {
+    const { handler, revalidate } = route({
+      updateRecord: async () => {
+        throw new Error("bitable down");
+      },
+    });
+    await handler(
+      post({ kind: "transition", action: "开始跟进", seenState: "待跟进" }),
+      params,
+    );
+    expect(revalidate).not.toHaveBeenCalled();
+  });
+
   test("200 and the owner column on a claim", async () => {
     const { handler, updateRecord } = route({
       user: { openId: "ou_newcomer", name: "新人" },
@@ -213,6 +252,7 @@ describe("ticket action route — outcomes", () => {
         throw new Error("bitable down");
       },
       updateRecord: async () => undefined,
+      revalidate: () => {},
       now: () => NOW,
     });
     const response = await handler(

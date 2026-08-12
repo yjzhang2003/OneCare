@@ -8,11 +8,18 @@ import {
 import type { VocDimension, VocPolarity, VocSeverity } from "../voc/triage";
 import type { VocState } from "../voc/service-event";
 
-// Deliberately omits recordId and ownerOpenIds. Both are identifiers rather
-// than information an operator reads, and the row objects are serialized into
-// the page payload — keeping them out means a stray console.log or a view-source
-// never turns into an identifier leak.
+// Still deliberately omits ownerOpenIds: an open_id names a person, the row
+// objects are serialized into the page payload, and nothing an operator reads
+// needs it — so a stray console.log or a view-source cannot turn into a roster
+// of colleagues' identifiers.
+//
+// recordId used to be excluded for the same reason and is now included, because
+// the write path has to address a row: it is the URL the workbench POSTs an
+// action to. It is a Bitable row handle, not a person, and every action on that
+// row is gated by the session and then by the owner check, so holding it grants
+// nothing that clicking the row did not already grant.
 export type WorkbenchTicket = Readonly<{
+  recordId: string;
   recordNumber: string;
   feedbackAt: string | null;
   channel: string;
@@ -35,6 +42,14 @@ export type WorkbenchTicket = Readonly<{
   severity: VocSeverity | null;
   state: VocState;
   ownerNames: readonly string[];
+  // Both exist so the detail panel can decide which actions to offer without
+  // seeing anyone's open_id: retryCount drives the 重试 ceiling, and hasOwner
+  // decides between "claim this" and "this is someone's". Booleans and counters
+  // are viewer-independent, so they stay safely inside the shared cache entry —
+  // unlike "is the viewer the owner", which must never be cached per-viewer and
+  // is therefore left to the route handler to answer.
+  retryCount: number;
+  hasOwner: boolean;
   ticketOpenedAt: string | null;
   closedAt: string | null;
   durationHours: number | null;
@@ -59,6 +74,7 @@ function hours(from: string | null, to: string | null): number | null {
 
 export function toWorkbenchTicket(record: VocRecord): WorkbenchTicket {
   return {
+    recordId: record.recordId,
     recordNumber: record.recordNumber,
     feedbackAt: record.feedbackAt,
     channel: record.channel,
@@ -72,6 +88,8 @@ export function toWorkbenchTicket(record: VocRecord): WorkbenchTicket {
     severity: record.severity,
     state: record.state,
     ownerNames: record.ownerNames,
+    retryCount: record.retryCount,
+    hasOwner: record.ownerOpenIds.length > 0,
     ticketOpenedAt: record.ticketOpenedAt,
     closedAt: record.closedAt,
     durationHours: hours(record.ticketOpenedAt, record.closedAt),

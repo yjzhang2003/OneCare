@@ -31,6 +31,9 @@ function emptyMetrics(): VocMetrics {
 }
 
 const ticket: WorkbenchTicket = {
+  recordId: "rec1",
+  retryCount: 0,
+  hasOwner: true,
   recordNumber: "R-001",
   feedbackAt: "2026-01-23T02:00:00.000Z",
   channel: "电商评价",

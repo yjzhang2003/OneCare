@@ -46,19 +46,42 @@ export type WorkbenchWriteOutcome =
   | Readonly<{ kind: "forbidden"; message: string }>
   | Readonly<{ kind: "rejected"; message: string }>;
 
+// Everything deciding which actions are legal, and nothing identifying a
+// person. WorkbenchTicket satisfies this structurally, which is the point: the
+// detail panel can render its buttons from the row it already has, without
+// ownerOpenIds ever reaching the browser.
+export type ActionSubject = Readonly<{
+  state: VocState;
+  retryCount: number;
+  hasOwner: boolean;
+}>;
+
+export function actionSubject(record: VocRecord): ActionSubject {
+  return {
+    state: record.state,
+    retryCount: record.retryCount,
+    hasOwner: record.ownerOpenIds.length > 0,
+  };
+}
+
 // Probe the real state machine rather than restate its rule table. A second
 // copy of "which action is legal from which state" would be a second thing to
 // keep in sync, and the failure mode is a button that exists only to produce an
 // error message. The note passed here is a placeholder purely to get past the
 // non-empty guard — the UI collects the real one, and resolveWorkbenchWrite
 // re-runs the same guard against it before anything is written.
+//
+// Ownership is deliberately NOT part of this: whether the viewer is the owner is
+// per-viewer, and this list is computed from a cache entry shared by every
+// viewer. The route handler is the authority on ownership, and the panel says so
+// rather than pretending to know.
 export function availableActions(
-  record: VocRecord,
+  subject: ActionSubject,
 ): readonly WorkbenchAction[] {
   return WORKBENCH_ACTIONS.filter((action) => {
-    const outcome = transition(record.state, action, {
-      retryCount: record.retryCount,
-      hasOwner: record.ownerOpenIds.length > 0,
+    const outcome = transition(subject.state, action, {
+      retryCount: subject.retryCount,
+      hasOwner: subject.hasOwner,
       followUpNote: "probe",
       closingNote: "probe",
     });

@@ -1,4 +1,4 @@
-import { cacheLife } from "next/cache";
+import { cacheLife, cacheTag } from "next/cache";
 
 import {
   createBitableClient,
@@ -9,6 +9,7 @@ import {
 import type { VocRecord } from "../../../../src/features/bitable/field-map";
 import { getCurrentSession } from "../../../../src/features/auth/current-session";
 import type { AuthUser } from "../../../../src/features/auth/types";
+import { VOC_RECORDS_CACHE_TAG } from "../../../../src/features/voc/cache-tags";
 import {
   aggregateVocMetrics,
   type VocMetricsInput,
@@ -178,6 +179,7 @@ type VocRecordsRead =
 export async function readVocRecordsCached(): Promise<VocRecordsRead> {
   "use cache";
   cacheLife("minutes");
+  cacheTag(VOC_RECORDS_CACHE_TAG);
   try {
     const records = await getBitableClient().listRecords();
     return { ok: true, records };
@@ -246,6 +248,7 @@ export const GET = createDashboardRoute(defaultDependencies);
 export async function readWorkbenchCached(): Promise<WorkbenchData> {
   "use cache";
   cacheLife("minutes");
+  cacheTag(VOC_RECORDS_CACHE_TAG);
   const result = await readVocRecordsCached();
   if (!result.ok) {
     // readVocRecordsCached's own catch already logged the Bitable failure

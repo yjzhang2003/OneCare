@@ -25,6 +25,8 @@ import {
   type WorkbenchPage,
   type WorkbenchQuery,
 } from "../src/features/workbench/query";
+import { availableActions } from "../src/features/workbench/write-actions";
+import { WorkbenchActions } from "./workbench-actions";
 
 // Percentages only ever come from ratios aggregateVocMetrics already computed,
 // never from a count divided ad hoc in the view, so every number here traces
@@ -455,6 +457,27 @@ const workbenchStyles = `
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+  .workbench__hint {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 8px 0 16px;
+  }
+  /* Arco ships one blue as its accent across every component. Reassigning the
+     six primary steps to this project's signal orange is the whole of the theme
+     reconciliation — the rest of Arco's neutrals sit close enough to the
+     paper/ink palette to leave alone, and a deeper retheme is not what three
+     days before the deadline should be spent on. Scoped to the workbench shell
+     so the showcase page, which is hand-built brand work rather than tooling,
+     is untouched. */
+  .dashboard-shell {
+    --primary-1: #fff4ec;
+    --primary-2: #ffd9be;
+    --primary-3: #ffb98c;
+    --primary-4: #ff9a5c;
+    --primary-5: #f97f31;
+    --primary-6: #e5670f;
+    --primary-7: #c15009;
   }
   .workbench__replies li {
     border: 1px solid var(--line);
@@ -912,6 +935,11 @@ function TicketDetail({
 }: Readonly<{ ticket: WorkbenchTicket; query: WorkbenchQuery; now: number }>) {
   const dwell = dwellHours(ticket, now);
   const overdue = isOverdue(ticket, now);
+  // Computed here, on the server, from the row this panel already holds — the
+  // browser is never asked to decide which transitions are legal, and never sees
+  // anyone's open_id in order to do it.
+  const actions = availableActions(ticket);
+  const canClaim = !ticket.hasOwner;
   return (
     <section aria-labelledby="workbench-detail">
       <div className="workbench__detail-header">
@@ -967,6 +995,31 @@ function TicketDetail({
           )}
         </dd>
       </dl>
+      <h3>可执行操作</h3>
+      {actions.length === 0 && !canClaim ? (
+        <p className="workbench__hint">
+          {ticket.state === "已闭环" || ticket.state === "无需跟进"
+            ? `${ticket.state}是终态，没有后续动作。`
+            : `${ticket.state}下没有可由人执行的动作，等打标流水线处理。`}
+        </p>
+      ) : (
+        <>
+          <WorkbenchActions
+            recordId={ticket.recordId}
+            seenState={ticket.state}
+            actions={actions}
+            canClaim={canClaim}
+          />
+          {/* Said plainly rather than implied. The panel cannot know whether the
+              viewer is the owner — that answer is per-viewer and this data comes
+              from a cache entry every viewer shares — so the buttons are offered
+              to everyone and the server decides. Better to warn than to render
+              a button that looks available and is not. */}
+          <p className="workbench__hint">
+            状态流转只有负责人本人能做，其他人点击会被服务端拒绝。改派负责人请在多维表格里操作。
+          </p>
+        </>
+      )}
       <h3>完整原文</h3>
       <p className="workbench__content-cell">{ticket.content}</p>
       <h3>AI 摘要</h3>

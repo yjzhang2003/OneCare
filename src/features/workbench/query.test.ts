@@ -15,6 +15,9 @@ const HOUR = 3_600_000;
 
 function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
   return {
+    recordId: "rec1",
+    retryCount: 0,
+    hasOwner: true,
     recordNumber: "R-001",
     feedbackAt: "2026-02-09T00:00:00.000Z",
     channel: "电商评价",

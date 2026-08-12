@@ -3,9 +3,11 @@ import { describe, expect, test } from "vitest";
 import type { VocRecord } from "../bitable/field-map";
 import type { VocState } from "../voc/service-event";
 import {
+  actionSubject,
   availableActions,
   resolveWorkbenchWrite,
   WORKBENCH_ACTIONS,
+  type ActionSubject,
 } from "./write-actions";
 
 const NOW = 1_770_000_000_000;
@@ -41,50 +43,67 @@ function record(overrides: Partial<VocRecord> = {}): VocRecord {
   };
 }
 
+// availableActions takes only what decides legality, so the fixture is that
+// shape directly rather than a VocRecord run through actionSubject — the whole
+// point of the narrow type is that a caller holding no VocRecord (the browser)
+// can still ask the question.
+function subject(overrides: Partial<ActionSubject> = {}): ActionSubject {
+  return { state: "待跟进", retryCount: 0, hasOwner: true, ...overrides };
+}
+
 describe("availableActions", () => {
   test("offers only what the state machine allows from the current state", () => {
-    expect(availableActions(record({ state: "待跟进" }))).toEqual(["开始跟进"]);
-    expect(availableActions(record({ state: "跟进中" }))).toEqual([
+    expect(availableActions(subject({ state: "待跟进" }))).toEqual(["开始跟进"]);
+    expect(availableActions(subject({ state: "跟进中" }))).toEqual([
       "提交跟进结果",
     ]);
-    expect(availableActions(record({ state: "已分析" }))).toEqual([
+    expect(availableActions(subject({ state: "已分析" }))).toEqual([
       "需建单",
       "无需建单",
     ]);
   });
 
   test("offers nothing from a terminal state", () => {
-    expect(availableActions(record({ state: "已闭环" }))).toEqual([]);
-    expect(availableActions(record({ state: "无需跟进" }))).toEqual([]);
+    expect(availableActions(subject({ state: "已闭环" }))).toEqual([]);
+    expect(availableActions(subject({ state: "无需跟进" }))).toEqual([]);
   });
 
   // The retry ceiling is a real guard, not advice: a button that is going to be
   // refused must not be offered.
   test("hides 重试 once the retry ceiling is reached", () => {
-    expect(availableActions(record({ state: "分析失败", retryCount: 2 }))).toEqual(
-      ["重试"],
-    );
-    expect(availableActions(record({ state: "分析失败", retryCount: 3 }))).toEqual(
-      [],
-    );
+    expect(
+      availableActions(subject({ state: "分析失败", retryCount: 2 })),
+    ).toEqual(["重试"]);
+    expect(
+      availableActions(subject({ state: "分析失败", retryCount: 3 })),
+    ).toEqual([]);
   });
 
   // 需建单 needs an owner. Offering it on an unassigned ticket would produce a
   // button whose only possible outcome is an error message.
   test("hides 需建单 while the ticket has no owner", () => {
     expect(
-      availableActions(record({ state: "已分析", ownerOpenIds: [] })),
+      availableActions(subject({ state: "已分析", hasOwner: false })),
     ).toEqual(["无需建单"]);
   });
 
   // The tagging pipeline's own transitions are never a person's to click.
   test("never offers the tagging pipeline's actions", () => {
     for (const state of ["待分析", "分析失败", "已分析"] as const) {
-      const offered = availableActions(record({ state, retryCount: 1 }));
+      const offered = availableActions(subject({ state, retryCount: 1 }));
       expect(offered).not.toContain("打标成功");
       expect(offered).not.toContain("打标失败");
     }
     expect(WORKBENCH_ACTIONS).not.toContain("打标成功");
+  });
+
+  // The adapter from a full record must agree with the narrow shape, or the
+  // server and the browser would disagree about which buttons are legal.
+  test("actionSubject narrows a record without changing the answer", () => {
+    const full = record({ state: "已分析", ownerOpenIds: [] });
+    expect(availableActions(actionSubject(full))).toEqual(
+      availableActions(subject({ state: "已分析", hasOwner: false })),
+    );
   });
 });
 
@@ -299,7 +318,7 @@ describe("resolveWorkbenchWrite — replays", () => {
     ];
     for (const action of WORKBENCH_ACTIONS) {
       const reachable = states.some((state) =>
-        availableActions(record({ state, retryCount: 1 })).includes(action),
+        availableActions(subject({ state, retryCount: 1 })).includes(action),
       );
       expect(reachable, `${action} is unreachable from every state`).toBe(true);
     }
