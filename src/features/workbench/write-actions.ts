@@ -56,14 +56,6 @@ export type ActionSubject = Readonly<{
   hasOwner: boolean;
 }>;
 
-export function actionSubject(record: VocRecord): ActionSubject {
-  return {
-    state: record.state,
-    retryCount: record.retryCount,
-    hasOwner: record.ownerOpenIds.length > 0,
-  };
-}
-
 // Probe the real state machine rather than restate its rule table. A second
 // copy of "which action is legal from which state" would be a second thing to
 // keep in sync, and the failure mode is a button that exists only to produce an

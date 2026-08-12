@@ -3,7 +3,6 @@ import { describe, expect, test } from "vitest";
 import type { VocRecord } from "../bitable/field-map";
 import type { VocState } from "../voc/service-event";
 import {
-  actionSubject,
   availableActions,
   resolveWorkbenchWrite,
   WORKBENCH_ACTIONS,
@@ -97,14 +96,6 @@ describe("availableActions", () => {
     expect(WORKBENCH_ACTIONS).not.toContain("打标成功");
   });
 
-  // The adapter from a full record must agree with the narrow shape, or the
-  // server and the browser would disagree about which buttons are legal.
-  test("actionSubject narrows a record without changing the answer", () => {
-    const full = record({ state: "已分析", ownerOpenIds: [] });
-    expect(availableActions(actionSubject(full))).toEqual(
-      availableActions(subject({ state: "已分析", hasOwner: false })),
-    );
-  });
 });
 
 describe("resolveWorkbenchWrite — stale views", () => {

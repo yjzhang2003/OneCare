@@ -14,8 +14,12 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh }),
 }));
 
+// The parameters are declared even though the body ignores them: without them
+// vi.fn infers a zero-argument mock, mock.calls[0] is typed [], and every
+// assertion about what was POSTed has to cast — which typechecks only because
+// `vitest run` does not typecheck at all.
 function respond(status: number, body: Record<string, unknown>) {
-  return vi.fn(async () =>
+  return vi.fn(async (_url: string, _init: RequestInit) =>
     new Response(JSON.stringify(body), {
       status,
       headers: { "Content-Type": "application/json" },
@@ -69,7 +73,7 @@ describe("WorkbenchActions", () => {
     fireEvent.click(confirmButton());
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("/api/voc/tickets/rec1/action");
     expect(JSON.parse(String(init.body))).toEqual({
       kind: "transition",
@@ -174,7 +178,7 @@ describe("WorkbenchActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "我来跟进" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [, init] = fetchMock.mock.calls[0]!;
     expect(JSON.parse(String(init.body))).toEqual({
       kind: "claim",
       seenState: "待跟进",
