@@ -121,6 +121,58 @@ function enteredBody(chatId?: string) {
   };
 }
 
+// Shaped exactly like Feishu's own schema 2.0 example body for
+// application.bot.menu_v6: the clicking operator's identity nests at
+// event.operator.operator_id.open_id — one level deeper than a card
+// callback's event.operator.open_id (cardActionBody below).
+function menuClickBody(overrides?: {
+  eventKey?: string;
+  operatorOpenId?: string;
+  // Omits event.operator.operator_id entirely — a shape Feishu's own docs
+  // never actually produce, but readMenuOperatorOpenId still has to degrade
+  // to "" rather than throw if it ever did.
+  omitOperatorId?: boolean;
+  // Omits event.operator entirely.
+  omitOperator?: boolean;
+  // The shallow, card-callback-shaped field (event.operator.open_id) a
+  // maintainer could mistakenly reach for instead of the real nested path.
+  // Present only when a test deliberately asks for it, to prove
+  // readMenuOperatorOpenId never reads it.
+  shallowOperatorOpenId?: string;
+  token?: string;
+  appId?: string;
+  tenantKey?: string;
+}) {
+  const operator: Record<string, unknown> = { operator_name: "张三" };
+  if (!overrides?.omitOperatorId) {
+    operator.operator_id = {
+      union_id: "on_operator",
+      user_id: "u_operator",
+      open_id: overrides?.operatorOpenId ?? "ou_operator",
+    };
+  }
+  if (overrides?.shallowOperatorOpenId !== undefined) {
+    operator.open_id = overrides.shallowOperatorOpenId;
+  }
+
+  return {
+    schema: "2.0",
+    header: {
+      event_id: "evt_menu_click",
+      event_type: "application.bot.menu_v6",
+      create_time: "1784371200000",
+      token: overrides?.token ?? env.verificationToken,
+      app_id: overrides?.appId ?? env.appId,
+      tenant_key: overrides?.tenantKey ?? "tenant_onecare",
+    },
+    event: {
+      ...(overrides?.omitOperator ? {} : { operator }),
+      event_key: overrides?.eventKey ?? "voc_my_tickets",
+      timestamp: "1784371200000",
+    },
+  };
+}
+
 function groupLifecycleBody() {
   return {
     schema: "2.0",
@@ -629,5 +681,120 @@ describe("parseFeishuEvent VOC form values", () => {
         formValue: { [VOC_NOTE_FIELD_NAME]: "  已回访  " },
       }),
     ).resolves.toMatchObject({ note: "已回访" });
+  });
+});
+
+// Task 13: the bot's custom menu (我的工单 / 今日概览 / 打开工作台) fires
+// application.bot.menu_v6 for its two server-side items — "打开工作台" is a
+// link-type item configured entirely in the Feishu console and never reaches
+// this server at all. The operator identity for this event type nests one
+// level deeper than a card callback's own event.operator.open_id
+// (readOperatorOpenId, exercised by the VOC card action tests above): Feishu's
+// own schema 2.0 example carries it at event.operator.operator_id.open_id.
+// Getting that extra nesting wrong does not throw — it silently resolves to
+// "", exactly like a genuinely missing operator — so this suite tests that
+// path in isolation, with the exact nested shape Feishu's docs show.
+describe("parseFeishuEvent menu clicks", () => {
+  it("accepts voc_my_tickets, reading the operator's open id from the nested operator_id.open_id path", async () => {
+    const rawBody = JSON.stringify(
+      menuClickBody({ eventKey: "voc_my_tickets", operatorOpenId: "ou_operator" }),
+    );
+
+    await expect(
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({
+      kind: "menu_click",
+      eventKey: "voc_my_tickets",
+      operatorOpenId: "ou_operator",
+    });
+  });
+
+  it("accepts voc_today_overview the same way", async () => {
+    const rawBody = JSON.stringify(
+      menuClickBody({ eventKey: "voc_today_overview", operatorOpenId: "ou_operator" }),
+    );
+
+    await expect(
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({
+      kind: "menu_click",
+      eventKey: "voc_today_overview",
+      operatorOpenId: "ou_operator",
+    });
+  });
+
+  // The bot's custom menu can grow new items from the Feishu console alone,
+  // with no deploy here — an event_key this file does not yet define must be
+  // silently harmless, never an error and never a card built from a key
+  // nothing here recognises.
+  it("ignores an event_key the menu does not yet define, with zero crash", async () => {
+    const rawBody = JSON.stringify(menuClickBody({ eventKey: "voc_future_item" }));
+
+    await expect(
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({ kind: "ignored" });
+  });
+
+  it("trims a whitespace-padded nested operator open id", async () => {
+    const rawBody = JSON.stringify(menuClickBody({ operatorOpenId: "  ou_padded  " }));
+
+    await expect(
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toMatchObject({ operatorOpenId: "ou_padded" });
+  });
+
+  it("degrades to an empty operator id, without crashing, when operator_id is missing entirely", async () => {
+    const rawBody = JSON.stringify(menuClickBody({ omitOperatorId: true }));
+
+    await expect(
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({
+      kind: "menu_click",
+      eventKey: "voc_my_tickets",
+      operatorOpenId: "",
+    });
+  });
+
+  it("degrades to an empty operator id, without crashing, when operator is missing entirely", async () => {
+    const rawBody = JSON.stringify(menuClickBody({ omitOperator: true }));
+
+    await expect(
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({
+      kind: "menu_click",
+      eventKey: "voc_my_tickets",
+      operatorOpenId: "",
+    });
+  });
+
+  // The load-bearing regression test the task calls for: a card callback's
+  // operator identity sits at event.operator.open_id — one level shallower
+  // than this event's own event.operator.operator_id.open_id. Getting the
+  // nesting wrong does not error, it just silently resolves to whatever sits
+  // at the wrong path (here, someone else's plausible-looking open_id) — so
+  // this proves the shallow path is never consulted, even when it is present.
+  it("never reads the shallow event.operator.open_id path a card callback would use", async () => {
+    const rawBody = JSON.stringify(
+      menuClickBody({
+        omitOperatorId: true,
+        shallowOperatorOpenId: "ou_wrong_shallow_path",
+      }),
+    );
+
+    await expect(
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({
+      kind: "menu_click",
+      eventKey: "voc_my_tickets",
+      operatorOpenId: "",
+    });
+  });
+
+  it("denies a menu click with the wrong app id", async () => {
+    const rawBody = JSON.stringify(menuClickBody({ appId: "cli_other" }));
+
+    await expect(
+      parse({ rawBody, headers: signedHeaders(rawBody), env }),
+    ).resolves.toEqual({ kind: "unauthorized" });
   });
 });

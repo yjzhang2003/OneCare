@@ -21,8 +21,10 @@ import {
   type VocCardAction,
 } from "../../../../src/features/feishu-bot/card-types";
 import {
+  createMenuHintMessage,
   createOperatorSummaryMessage,
   createTextMessage,
+  createTodayOverviewMessage,
   createVocTicketCard,
   createWelcomeMessage,
 } from "../../../../src/features/feishu-bot/cards";
@@ -74,7 +76,15 @@ import {
 // workbench page can never show different numbers inside the same cache
 // window, and it avoids adding a second full-table read path on top of the
 // eight-page cross-border scan listRecords() already is.
-import { readVocRecordsCached } from "../../voc/dashboard/route";
+import {
+  getVocDashboardMetrics,
+  readVocRecordsCached,
+} from "../../voc/dashboard/route";
+// Task 13: the 今日概览 menu reply's whole reason for existing — see
+// createTodayOverviewReply below for why this discriminated union rides all
+// the way to createTodayOverviewMessage untouched, rather than being
+// collapsed into a boolean or a bare VocMetrics here.
+import type { VocMetricsResult } from "../../../../src/features/voc/metrics";
 
 // `runtime = "nodejs"` was dropped: it is the App Router default anyway, and
 // task 14 enables `cacheComponents` in next.config.ts (for the VOC
@@ -93,12 +103,19 @@ type FeishuEventRouteDependencies = {
     headers: Headers;
     env: BotEnv;
   }) => Promise<FeishuEventOutcome>;
-  // Task 12: what a p2p text message gets back — the sender's own real VOC
-  // workload, not the demo command menu. Takes the operator's open_id
-  // (event-handler.ts's readMessageSenderOpenId), not the text the operator
-  // typed: any text at all now produces the same real card, so there is
-  // nothing left in the message worth branching on.
+  // Task 13: what the "我的工单" custom-menu item gets back — the clicking
+  // operator's own real VOC workload. Unchanged since Task 12 except for who
+  // calls it: a bare p2p text message no longer does (see createMenuHint
+  // below), only a menu_click outcome for eventKey "voc_my_tickets" does now.
   operationsReply: (operatorOpenId: string) => Promise<FeishuOutboundMessage>;
+  // Task 13: what the "今日概览" custom-menu item gets back — the whole-org
+  // view, no operator filtering. Takes no argument: unlike operationsReply,
+  // this reply is the same for whoever clicked.
+  todayOverviewReply: () => Promise<FeishuOutboundMessage>;
+  // Task 13: what a bare p2p text message gets back now — a short pointer to
+  // the custom menu (or to @-mentioning the bot in a war room), never a card.
+  // Sync, like createWelcome below: building it touches no I/O.
+  createMenuHint: () => FeishuOutboundMessage;
   createWelcome: () => FeishuOutboundMessage;
   replyMessage: (input: {
     env: BotEnv;
@@ -110,6 +127,16 @@ type FeishuEventRouteDependencies = {
     chatId: string;
     message: FeishuOutboundMessage;
   }) => Promise<void>;
+  // Task 13: a menu click carries no chat id at all, only the clicking
+  // operator's own open_id — its reply can only ever be a direct message, not
+  // sendMessage's chatId-shaped call above. Kept as its own dependency
+  // (rather than widening sendMessage's declared parameter to the
+  // {chatId}|{openId} union sendFeishuMessage already accepts) so every
+  // existing sendMessage fake in this file's tests — every one of them typed
+  // to the chatId shape alone — keeps compiling unchanged.
+  sendDirectMessage: (
+    input: Readonly<{ env: BotEnv; openId: string; message: FeishuOutboundMessage }>,
+  ) => Promise<void>;
   resolveAction: (input: CardActionRequest) => Promise<CardActionResult>;
   answerGroupQuestion: (
     input: Readonly<{ chatId: string; text: string }>,
@@ -545,13 +572,31 @@ export function createOperationsReply(
   };
 }
 
+// Task 13: the "今日概览" menu reply. `getMetrics` resolves getVocDashboardMetrics's
+// own VocMetricsResult and hands it straight to createTodayOverviewMessage —
+// no branching on `.status` here, no re-deriving a boolean or a bare
+// VocMetrics first. getVocDashboardMetrics already resolved "read failed vs
+// read ok" once (see its own comment on why a `"use cache"` boundary must
+// never throw); collapsing that discriminated union a second time here would
+// just be a second place this file could get "unavailable" wrong.
+export function createTodayOverviewReply(
+  getMetrics: () => Promise<VocMetricsResult> = getVocDashboardMetrics,
+): () => Promise<FeishuOutboundMessage> {
+  return async function todayOverviewReply() {
+    return createTodayOverviewMessage(await getMetrics());
+  };
+}
+
 const defaultDependencies: FeishuEventRouteDependencies = {
   readEnv: () => readBotEnv(),
   parseEvent: (input) => parseFeishuEvent({ ...input, botOpenId: getBotOpenId }),
   operationsReply: createOperationsReply(readVocRecordsCached),
+  todayOverviewReply: createTodayOverviewReply(getVocDashboardMetrics),
+  createMenuHint: createMenuHintMessage,
   createWelcome: createWelcomeMessage,
   replyMessage: replyToFeishuMessage,
   sendMessage: sendFeishuMessage,
+  sendDirectMessage: sendFeishuMessage,
   resolveAction: createResolveAction(getBitableClient),
   answerGroupQuestion: createAnswerGroupQuestion(getBitableClient, async (question, facts) => {
     const provider = getAnswerProvider();
@@ -659,20 +704,51 @@ export function createFeishuEventRoute(
         return json({});
       }
 
-      // Task 12: the fetch-and-build work moves inside the scheduled task,
-      // not before it — it is genuinely I/O now (readVocRecordsCached), unlike
-      // the old synchronous createBotReply(text) this replaces. The ack-first,
-      // reply-after `schedule` structure itself is unchanged: the response
-      // below still returns before any of this runs.
+      if (outcome.kind === "menu_click") {
+        const operatorOpenId = outcome.operatorOpenId;
+        // No usable recipient (see event-handler.ts's readMenuOperatorOpenId
+        // comment: a malformed or missing operator_id path degrades to "",
+        // silently, never a throw). There is nowhere to send a reply and no
+        // identity to build voc_my_tickets's personal counts from, so this
+        // takes the same "do nothing at all" outcome as an event this route
+        // never recognised in the first place — never a card whose numbers
+        // could be mistaken for someone else's.
+        if (operatorOpenId.length === 0) {
+          return json({});
+        }
+
+        const buildReply =
+          outcome.eventKey === "voc_my_tickets"
+            ? () => dependencies.operationsReply(operatorOpenId)
+            : dependencies.todayOverviewReply;
+
+        dependencies.schedule(async () => {
+          try {
+            const message = await buildReply();
+            await dependencies.sendDirectMessage({
+              env,
+              openId: operatorOpenId,
+              message,
+            });
+          } catch {
+            dependencies.reportFailure();
+          }
+        });
+        return json({});
+      }
+
+      // Task 13: a bare p2p text message no longer builds the operator's real
+      // card (that now happens only for the "我的工单" menu click above) — it
+      // gets a short, synchronous pointer to the custom menu instead. This is
+      // the fix for "any text at all reopens a card nobody asked for": the
+      // menu now exists as the deliberate way to ask for real numbers, so a
+      // stray typed message should not compete with it.
       dependencies.schedule(async () => {
         try {
-          const message = await dependencies.operationsReply(
-            outcome.operatorOpenId,
-          );
           await dependencies.replyMessage({
             env,
             messageId: outcome.messageId,
-            message,
+            message: dependencies.createMenuHint(),
           });
         } catch {
           dependencies.reportFailure();

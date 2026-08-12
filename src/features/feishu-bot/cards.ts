@@ -1,5 +1,6 @@
 import type { VocRecord } from "../bitable/field-map";
 import type { VocReply } from "../tagging/contracts";
+import type { VocMetrics, VocMetricsResult } from "../voc/metrics";
 import type { VocState } from "../voc/service-event";
 import type { OperatorSummary } from "./operator-summary";
 import {
@@ -494,6 +495,111 @@ export function createOperatorSummaryMessage(
     msgType: "interactive",
     content: JSON.stringify(createOperatorSummaryCard(summary)),
   };
+}
+
+// Task 13: the reply for the bot's custom-menu "今日概览" item. Unlike
+// createOperatorSummaryCard, this is a whole-org view with no per-operator
+// filtering at all, and it takes the full VocMetricsResult discriminated
+// union straight from getVocDashboardMetrics — never a value route.ts (or
+// this file) recomputed from raw records — so every number here traces back
+// to the one aggregateVocMetrics call the public dashboard and the gated
+// workbench already run through. "ok" vs "unavailable" is resolved here,
+// once, by this same switch every other consumer of a VocMetricsResult uses;
+// nothing upstream may collapse it into a boolean or a bare metrics object
+// first.
+const DIMENSION_TOP_LIMIT = 5;
+
+function percentField(label: string, ratio: number): CardElement {
+  return field(label, `${Math.round(ratio * 100)}%`);
+}
+
+function hoursField(label: string, value: number): CardElement {
+  return field(label, `${value.toFixed(1)} 小时`);
+}
+
+// Mirrors app/workbench-content.tsx's own MetricsSections exactly: 成功 /
+// (成功 + 失败) off the two counts aggregateVocMetrics already produced. That
+// page calls the same ratio 打标成功率; this card labels it 打标覆盖率, but it
+// is the identical arithmetic over the identical two fields, not a second,
+// independently-invented formula for what is supposed to be one number.
+function taggingCoverageRatio(metrics: VocMetrics): number {
+  const processed = metrics.taggingSucceeded + metrics.taggingFailed;
+  return processed === 0 ? 0 : metrics.taggingSucceeded / processed;
+}
+
+function dimensionTopMarkdown(dimensionTop: VocMetrics["dimensionTop"]): string {
+  if (dimensionTop.length === 0) {
+    return "**问题维度 Top**\n暂无维度数据";
+  }
+  const shown = dimensionTop.slice(0, DIMENSION_TOP_LIMIT);
+  const lines = shown
+    .map((row, index) => `${index + 1}. ${row.dimension} · ${row.count} 条`)
+    .join("\n");
+  return `**问题维度 Top ${shown.length}**\n${lines}`;
+}
+
+function todayOverviewElements(metrics: VocMetrics): CardElement[] {
+  return [
+    columns(
+      summaryField("反馈总量", metrics.total),
+      summaryField("已建单", metrics.ticketsOpened),
+      summaryField("已闭环", metrics.ticketsClosed),
+    ),
+    columns(
+      percentField("负向占比", metrics.negativeShare),
+      percentField("闭环率", metrics.closureRate),
+      hoursField("平均闭环时长", metrics.averageClosureHours),
+    ),
+    percentField("打标覆盖率", taggingCoverageRatio(metrics)),
+    markdown(dimensionTopMarkdown(metrics.dimensionTop)),
+    operationsWorkbenchButton(),
+  ];
+}
+
+function unavailableOverviewElements(): CardElement[] {
+  return [
+    // Same rule and the same wording as createOperatorSummaryCard's own
+    // unavailable branch: a failed read must never render as a 0 a reader
+    // could mistake for a real measurement.
+    note("指标暂不可用，请稍后重试。"),
+    operationsWorkbenchButton(),
+  ];
+}
+
+export function createTodayOverviewCard(result: VocMetricsResult): FeishuCard {
+  return cardRoot({
+    title: "万护 OneCare 服务运营",
+    subtitle: "今日概览",
+    status: result.status === "ok" ? "实时数据" : "指标不可用",
+    statusColor: result.status === "ok" ? "blue" : "grey",
+    template: "blue",
+    icon: "chart_colorful",
+    summary: "万护 OneCare 今日概览",
+    elements:
+      result.status === "ok"
+        ? todayOverviewElements(result.metrics)
+        : unavailableOverviewElements(),
+  });
+}
+
+export function createTodayOverviewMessage(
+  result: VocMetricsResult,
+): FeishuOutboundMessage {
+  return {
+    msgType: "interactive",
+    content: JSON.stringify(createTodayOverviewCard(result)),
+  };
+}
+
+// Task 13: what a bare p2p text message gets back now that the bot has a
+// real custom menu (我的工单 / 今日概览) to ask for actual numbers from — see
+// route.ts's dispatch on application.bot.menu_v6. Sending a card here is
+// exactly the unsolicited-card behaviour this task exists to stop, so this is
+// deliberately createTextMessage, never another card.
+export function createMenuHintMessage(): FeishuOutboundMessage {
+  return createTextMessage(
+    "请使用输入框上方的菜单查看「我的工单」或「今日概览」，或在协同群里 @ 我提问。",
+  );
 }
 
 // Unlike callbackButton (which always ships the fixed demo case id), a VOC

@@ -20,11 +20,13 @@ import {
   type OneCareCardAction,
   type VocCardAction,
 } from "../../../../src/features/feishu-bot/card-types";
+import type { VocMetricsResult } from "../../../../src/features/voc/metrics";
 import {
   createAnswerGroupQuestion,
   createFeishuEventRoute,
   createOperationsReply,
   createResolveAction,
+  createTodayOverviewReply,
   type WarRoomActionDependencies,
 } from "./route";
 
@@ -54,12 +56,31 @@ function dependencies(outcome: FeishuEventOutcome) {
         msgType: "interactive" as const,
         content: JSON.stringify({ schema: "2.0", card: "operations" }),
       })),
+      todayOverviewReply: vi.fn(async () => ({
+        msgType: "interactive" as const,
+        content: JSON.stringify({ schema: "2.0", card: "today-overview" }),
+      })),
+      createMenuHint: vi.fn(() => ({
+        msgType: "text" as const,
+        content: JSON.stringify({ text: "请使用菜单查看数据" }),
+      })),
       createWelcome: vi.fn(() => ({
         msgType: "interactive" as const,
         content: JSON.stringify({ welcome: true }),
       })),
       replyMessage: vi.fn(async () => undefined),
       sendMessage: vi.fn(async () => undefined),
+      // Explicitly typed (not a zero-arg `async () => undefined`) so
+      // `.mock.calls[0]` in the menu-click tests below is a real one-element
+      // tuple — the same trap this file's other live-dependency fakes already
+      // guard against.
+      sendDirectMessage: vi.fn(
+        async (_input: {
+          env: BotEnv;
+          openId: string;
+          message: FeishuOutboundMessage;
+        }) => undefined,
+      ),
       resolveAction: vi.fn(
         async (_input: {
           action: OneCareCardAction | VocCardAction;
@@ -122,11 +143,16 @@ describe("POST /api/feishu/events", () => {
     await expect(response.json()).resolves.toEqual({});
   });
 
-  it("acknowledges a message before the scheduled operations reply runs", async () => {
+  // Task 13: a bare p2p text message no longer builds the operator's real
+  // card — that only happens now for a "我的工单" menu click (see the "menu
+  // clicks" describe block below). Any text at all gets the same short menu
+  // hint instead, which is exactly the fix for "typing anything reopens an
+  // unsolicited card".
+  it("acknowledges a message before the scheduled menu hint reply runs", async () => {
     const setup = dependencies({
       kind: "message",
       messageId: "om_message",
-      text: "开始体验",
+      text: "随便问点什么",
       operatorOpenId: "ou_onecare",
     });
 
@@ -138,19 +164,19 @@ describe("POST /api/feishu/events", () => {
 
     await setup.scheduled[0]();
 
-    // Task 12: any text produces the same real card now, so it is the
-    // sender's own open_id — not what they typed — that this reply is built
-    // from.
-    expect(setup.dependencies.operationsReply).toHaveBeenCalledWith("ou_onecare");
+    expect(setup.dependencies.operationsReply).not.toHaveBeenCalled();
+    expect(setup.dependencies.todayOverviewReply).not.toHaveBeenCalled();
+    expect(setup.dependencies.createMenuHint).toHaveBeenCalledWith();
     expect(setup.dependencies.replyMessage).toHaveBeenCalledWith({
       env,
       messageId: "om_message",
       message: {
-        msgType: "interactive",
-        content: JSON.stringify({ schema: "2.0", card: "operations" }),
+        msgType: "text",
+        content: JSON.stringify({ text: "请使用菜单查看数据" }),
       },
     });
     expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+    expect(setup.dependencies.sendDirectMessage).not.toHaveBeenCalled();
   });
 
   it("acknowledges a chat entry before the welcome card is sent", async () => {
@@ -197,20 +223,21 @@ describe("POST /api/feishu/events", () => {
     expect(setup.dependencies.reportFailure).toHaveBeenCalledWith();
   });
 
-  // Task 12: unlike the old synchronous createBotReply(text), operationsReply
-  // does real I/O (readVocRecordsCached) and can itself reject — this must
-  // report the same way a replyMessage failure does, never leak upstream, and
-  // never attempt to reply with nothing.
-  it("reports failure without leaking the exception when the operations reply itself fails", async () => {
+  // Task 13: createMenuHint is synchronous (it touches no I/O at all), but
+  // the scheduled task's own try/catch has to guard a synchronous throw from
+  // it exactly as it would an async rejection — a hint that fails to build
+  // must report the same way a replyMessage failure does, never leak
+  // upstream.
+  it("reports failure without leaking the exception when building the menu hint itself fails", async () => {
     const setup = dependencies({
       kind: "message",
       messageId: "om_message",
-      text: "开始体验",
+      text: "随便问点什么",
       operatorOpenId: "ou_onecare",
     });
-    setup.dependencies.operationsReply.mockRejectedValueOnce(
-      new Error("private upstream response"),
-    );
+    setup.dependencies.createMenuHint.mockImplementationOnce(() => {
+      throw new Error("private upstream response");
+    });
 
     await createFeishuEventRoute(setup.dependencies)(request());
     await setup.scheduled[0]();
@@ -401,6 +428,132 @@ describe("POST /api/feishu/events", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Task 13: the bot's custom menu (application.bot.menu_v6, dispatched by
+// event.event_key). "打开工作台" is a link-type menu item configured entirely
+// on the Feishu side — it never produces an event here — so only the two
+// server-side items are exercised: "我的工单" (reuses the existing operator
+// card) and "今日概览" (the new global card). These tests drive
+// createFeishuEventRoute over a mocked `menu_click` outcome, the same way the
+// block above drives every other outcome kind; the real parseFeishuEvent
+// parsing of application.bot.menu_v6 — including the operator_id.open_id
+// nesting — is covered end to end further below and directly in
+// event-handler.test.ts.
+// ---------------------------------------------------------------------------
+
+describe("POST /api/feishu/events — menu clicks", () => {
+  it("replies to voc_my_tickets by DM with the existing personal operator card", async () => {
+    const setup = dependencies({
+      kind: "menu_click",
+      eventKey: "voc_my_tickets",
+      operatorOpenId: "ou_operator",
+    });
+
+    const response = await createFeishuEventRoute(setup.dependencies)(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({});
+    expect(setup.dependencies.sendDirectMessage).not.toHaveBeenCalled();
+    expect(setup.scheduled).toHaveLength(1);
+
+    await setup.scheduled[0]();
+
+    expect(setup.dependencies.operationsReply).toHaveBeenCalledWith("ou_operator");
+    expect(setup.dependencies.todayOverviewReply).not.toHaveBeenCalled();
+    expect(setup.dependencies.sendDirectMessage).toHaveBeenCalledWith({
+      env,
+      openId: "ou_operator",
+      message: {
+        msgType: "interactive",
+        content: JSON.stringify({ schema: "2.0", card: "operations" }),
+      },
+    });
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+    expect(setup.dependencies.replyMessage).not.toHaveBeenCalled();
+  });
+
+  it("replies to voc_today_overview by DM with the new global overview card", async () => {
+    const setup = dependencies({
+      kind: "menu_click",
+      eventKey: "voc_today_overview",
+      operatorOpenId: "ou_operator",
+    });
+
+    const response = await createFeishuEventRoute(setup.dependencies)(request());
+
+    expect(response.status).toBe(200);
+    expect(setup.scheduled).toHaveLength(1);
+
+    await setup.scheduled[0]();
+
+    expect(setup.dependencies.todayOverviewReply).toHaveBeenCalledWith();
+    expect(setup.dependencies.operationsReply).not.toHaveBeenCalled();
+    expect(setup.dependencies.sendDirectMessage).toHaveBeenCalledWith({
+      env,
+      openId: "ou_operator",
+      message: {
+        msgType: "interactive",
+        content: JSON.stringify({ schema: "2.0", card: "today-overview" }),
+      },
+    });
+  });
+
+  // The regression this test guards: a card whose numbers belong to nobody in
+  // particular must never be sent to whoever happened to be signed in as this
+  // server instance's "default" recipient. An operator id that resolved to ""
+  // (event-handler.ts's readMenuOperatorOpenId — a missing or malformed
+  // operator_id path degrades to this, silently, never a throw) has nowhere
+  // legitimate to go, so this must not crash and must not attempt to send
+  // anything to anyone.
+  it("skips sending anything for either menu item when the operator id is empty", async () => {
+    for (const eventKey of ["voc_my_tickets", "voc_today_overview"] as const) {
+      const setup = dependencies({ kind: "menu_click", eventKey, operatorOpenId: "" });
+
+      const response = await createFeishuEventRoute(setup.dependencies)(request());
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({});
+      expect(setup.scheduled).toHaveLength(0);
+      expect(setup.dependencies.operationsReply).not.toHaveBeenCalled();
+      expect(setup.dependencies.todayOverviewReply).not.toHaveBeenCalled();
+      expect(setup.dependencies.sendDirectMessage).not.toHaveBeenCalled();
+    }
+  });
+
+  it("reports failure without leaking the exception when the DM send fails", async () => {
+    const setup = dependencies({
+      kind: "menu_click",
+      eventKey: "voc_my_tickets",
+      operatorOpenId: "ou_operator",
+    });
+    setup.dependencies.sendDirectMessage.mockRejectedValueOnce(
+      new Error("private upstream response"),
+    );
+
+    await createFeishuEventRoute(setup.dependencies)(request());
+    await setup.scheduled[0]();
+
+    expect(setup.dependencies.reportFailure).toHaveBeenCalledWith();
+  });
+
+  it("reports failure without leaking the exception when the today-overview reply itself fails", async () => {
+    const setup = dependencies({
+      kind: "menu_click",
+      eventKey: "voc_today_overview",
+      operatorOpenId: "ou_operator",
+    });
+    setup.dependencies.todayOverviewReply.mockRejectedValueOnce(
+      new Error("private upstream response"),
+    );
+
+    await createFeishuEventRoute(setup.dependencies)(request());
+    await setup.scheduled[0]();
+
+    expect(setup.dependencies.reportFailure).toHaveBeenCalledWith();
+    expect(setup.dependencies.sendDirectMessage).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // End-to-end, through the seam
 //
 // Everything above replaces `parseEvent` and `resolveAction` with vi.fn(), and
@@ -563,12 +716,20 @@ function liveDependencies(
         headers: Headers;
         env: BotEnv;
       }) => parseFeishuEvent({ ...input, botOpenId: async () => "ou_bot_unused" }),
-      // None of the tests this factory serves send a p2p text message, so
-      // this is never exercised — present only to satisfy
-      // FeishuEventRouteDependencies.
+      // None of the tests this factory serves send a p2p text message or a
+      // menu click, so none of these three are ever exercised — present only
+      // to satisfy FeishuEventRouteDependencies.
       operationsReply: vi.fn(async (_operatorOpenId: string) => ({
         msgType: "interactive" as const,
         content: JSON.stringify({ card: "operations" }),
+      })),
+      todayOverviewReply: vi.fn(async () => ({
+        msgType: "interactive" as const,
+        content: JSON.stringify({ card: "today-overview" }),
+      })),
+      createMenuHint: vi.fn(() => ({
+        msgType: "text" as const,
+        content: JSON.stringify({ text: "menu hint" }),
       })),
       createWelcome: vi.fn(() => ({
         msgType: "interactive" as const,
@@ -576,6 +737,7 @@ function liveDependencies(
       })),
       replyMessage: vi.fn(async () => undefined),
       sendMessage: vi.fn(async () => undefined),
+      sendDirectMessage: vi.fn(async () => undefined),
       resolveAction: createResolveAction(() => client, warRoom, schedule),
       // None of the card-action tests this factory serves ever produce a
       // group_question outcome, so this is never exercised — present only to
@@ -1307,13 +1469,25 @@ function liveGroupDependencies(
       readEnv: () => env,
       parseEvent: (input: { rawBody: string; headers: Headers; env: BotEnv }) =>
         parseFeishuEvent({ ...input, botOpenId: async () => GROUP_BOT_OPEN_ID }),
-      // Exercised by "leaves the single-chat p2p command path untouched"
-      // below — that test only checks replyMessage was called once, not this
-      // reply's content, which cards.test.ts / operator-summary.test.ts
-      // already cover directly.
+      // None of these three are exercised by this describe block: a p2p text
+      // message here gets the menu hint (createMenuHint), not this card, and
+      // no test in this file drives a menu_click through the real
+      // parseFeishuEvent. Present only to satisfy FeishuEventRouteDependencies.
       operationsReply: vi.fn(async (_operatorOpenId: string) => ({
         msgType: "interactive" as const,
         content: JSON.stringify({ card: "operations" }),
+      })),
+      todayOverviewReply: vi.fn(async () => ({
+        msgType: "interactive" as const,
+        content: JSON.stringify({ card: "today-overview" }),
+      })),
+      // Exercised by "leaves the single-chat p2p command path untouched"
+      // below — that test checks replyMessage was called once with exactly
+      // this hint, proving a p2p text message never reaches the group
+      // Q&A pipeline this describe block otherwise exists to test.
+      createMenuHint: vi.fn(() => ({
+        msgType: "text" as const,
+        content: JSON.stringify({ text: "请使用菜单查看数据" }),
       })),
       createWelcome: vi.fn(() => ({
         msgType: "interactive" as const,
@@ -1330,6 +1504,7 @@ function liveGroupDependencies(
           message: FeishuOutboundMessage;
         }) => undefined,
       ),
+      sendDirectMessage: vi.fn(async () => undefined),
       // No card action test in this describe block ever fires, so this stub
       // is never invoked.
       resolveAction: vi.fn(
@@ -1610,17 +1785,27 @@ describe("POST /api/feishu/events — group @ Q&A end to end", () => {
     expect(bitable.findByWarRoomChatId).not.toHaveBeenCalled();
     expect(answer).not.toHaveBeenCalled();
     expect(setup.dependencies.replyMessage).toHaveBeenCalledTimes(1);
+    expect(setup.dependencies.replyMessage).toHaveBeenCalledWith({
+      env,
+      messageId: "om_p2p_message",
+      message: {
+        msgType: "text",
+        content: JSON.stringify({ text: "请使用菜单查看数据" }),
+      },
+    });
     expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+    expect(setup.dependencies.sendDirectMessage).not.toHaveBeenCalled();
   });
 });
 
 // ---------------------------------------------------------------------------
-// createOperationsReply, Task 12: the wiring behind a p2p text message's
-// reply (event-handler.ts's operatorOpenId -> computeOperatorSummary ->
-// createOperatorSummaryMessage), tested over a fake `readRecords` — this
-// project's readVocRecordsCached (the real production reader) is never
-// touched by any test, in this file or elsewhere, per the project rule
-// against calling real Feishu/Bitable APIs from a test.
+// createOperationsReply, Task 12 (now wired to the "我的工单" menu click
+// instead of a bare p2p text message — Task 13): event-handler.ts's
+// operatorOpenId -> computeOperatorSummary -> createOperatorSummaryMessage,
+// tested over a fake `readRecords` — this project's readVocRecordsCached (the
+// real production reader) is never touched by any test, in this file or
+// elsewhere, per the project rule against calling real Feishu/Bitable APIs
+// from a test.
 // ---------------------------------------------------------------------------
 
 describe("createOperationsReply", () => {
@@ -1646,6 +1831,58 @@ describe("createOperationsReply", () => {
     const reply = createOperationsReply(async () => ({ ok: false }), () => NOW);
 
     const message = await reply("ou_a");
+    const card = JSON.parse(message.content) as Record<string, unknown>;
+    const elementsJson = JSON.stringify(
+      (card.body as Record<string, unknown>).elements,
+    );
+
+    expect(elementsJson).not.toMatch(/[0-9]/);
+    expect(elementsJson).toContain("暂不可用");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createTodayOverviewReply, Task 13: the wiring behind the "今日概览" menu
+// click. Unlike createOperationsReply, `getMetrics` here resolves the whole
+// VocMetricsResult discriminated union getVocDashboardMetrics itself would
+// produce — this locks that the factory forwards it to
+// createTodayOverviewMessage untouched, for both the "ok" and the
+// "unavailable" branch, rather than collapsing it into something narrower
+// first.
+// ---------------------------------------------------------------------------
+
+describe("createTodayOverviewReply", () => {
+  it("carries the read metrics straight through to the card, with no per-operator filtering", async () => {
+    const metricsResult: VocMetricsResult = {
+      status: "ok",
+      metrics: {
+        total: 42,
+        byPolarity: { 好评: 10, 中评: 12, 差评: 20 },
+        dimensionTop: [{ dimension: "维修价格", count: 9 }],
+        byChannel: [{ channel: "客服热线", count: 42 }],
+        negativeShare: 0.5,
+        ticketsOpened: 30,
+        ticketsClosed: 18,
+        closureRate: 0.6,
+        averageClosureHours: 8,
+        taggingAttempted: 42,
+        taggingSucceeded: 36,
+        taggingFailed: 2,
+        taggingPending: 4,
+      },
+    };
+    const reply = createTodayOverviewReply(async () => metricsResult);
+
+    const message = await reply();
+
+    expect(message.content).toContain("反馈总量");
+    expect(message.content).toContain("42");
+  });
+
+  it("produces the unavailable card, with no numbers anywhere, when the read is unavailable", async () => {
+    const reply = createTodayOverviewReply(async () => ({ status: "unavailable" }));
+
+    const message = await reply();
     const card = JSON.parse(message.content) as Record<string, unknown>;
     const elementsJson = JSON.stringify(
       (card.body as Record<string, unknown>).elements,
@@ -1728,35 +1965,44 @@ describe("POST /api/feishu/events — chat entry sends nothing, end to end", () 
 // layer works in isolation against a hand-built value.
 // ---------------------------------------------------------------------------
 
-function p2pOperationsMessageBody(text: string, senderOpenId: string) {
+// Task 13: a real application.bot.menu_v6 body, shaped exactly like Feishu's
+// own schema 2.0 example for this event type — nesting the clicking
+// operator's identity at event.operator.operator_id.open_id, one level
+// deeper than a card callback's event.operator.open_id. This is what proves
+// the operator id actually threads from the raw, signed event payload all the
+// way to which records voc_my_tickets counts, not just that each layer works
+// in isolation against a hand-built value — the same end-to-end standard the
+// p2p operator-summary tests this replaces already held themselves to.
+function menuClickEventBody(eventKey: string, operatorOpenId = "ou_operator") {
   return {
     schema: "2.0",
     header: {
-      event_id: "evt_p2p_ops",
-      event_type: "im.message.receive_v1",
+      event_id: "evt_menu_click_route",
+      event_type: "application.bot.menu_v6",
       create_time: "1784371200000",
       token: env.verificationToken,
       app_id: env.appId,
       tenant_key: "tenant_onecare",
     },
     event: {
-      sender: {
-        sender_id: { open_id: senderOpenId },
-        sender_type: "user",
-        tenant_key: "tenant_onecare",
+      operator: {
+        operator_name: "张三",
+        operator_id: {
+          union_id: "on_operator",
+          user_id: "u_operator",
+          open_id: operatorOpenId,
+        },
       },
-      message: {
-        message_id: "om_p2p_ops",
-        chat_id: "oc_onecare_chat",
-        chat_type: "p2p",
-        message_type: "text",
-        content: JSON.stringify({ text }),
-      },
+      event_key: eventKey,
+      timestamp: "1784371200000",
     },
   };
 }
 
-function liveOperationsDependencies(records: readonly VocRecord[]) {
+function liveMenuDependencies(
+  records: readonly VocRecord[],
+  metricsResult: VocMetricsResult,
+) {
   const scheduled: Array<() => Promise<void>> = [];
   return {
     scheduled,
@@ -1765,21 +2011,27 @@ function liveOperationsDependencies(records: readonly VocRecord[]) {
       parseEvent: (input: { rawBody: string; headers: Headers; env: BotEnv }) =>
         parseFeishuEvent({ ...input, botOpenId: async () => "ou_bot_unused" }),
       operationsReply: createOperationsReply(async () => ({ ok: true, records })),
+      todayOverviewReply: createTodayOverviewReply(async () => metricsResult),
+      createMenuHint: vi.fn(() => ({
+        msgType: "text" as const,
+        content: JSON.stringify({ text: "请使用菜单查看数据" }),
+      })),
       createWelcome: vi.fn(() => ({
         msgType: "interactive" as const,
         content: JSON.stringify({ welcome: true }),
       })),
+      replyMessage: vi.fn(async () => undefined),
+      sendMessage: vi.fn(async () => undefined),
       // Explicitly typed (not a zero-arg `async () => undefined`) so
       // `.mock.calls[0]` below is a real one-element tuple — the same trap
       // this file's other live-dependency fakes already guard against.
-      replyMessage: vi.fn(
+      sendDirectMessage: vi.fn(
         async (_input: {
           env: BotEnv;
-          messageId: string;
+          openId: string;
           message: FeishuOutboundMessage;
         }) => undefined,
       ),
-      sendMessage: vi.fn(async () => undefined),
       resolveAction: vi.fn(async () => {
         throw new Error("resolveAction should not be called for this test");
       }),
@@ -1794,48 +2046,101 @@ function liveOperationsDependencies(records: readonly VocRecord[]) {
   };
 }
 
-describe("POST /api/feishu/events — p2p operations reply, end to end", () => {
-  it("replies with a real card carrying no demo markers, for any text at all", async () => {
-    const records = [vocRecord({ ownerOpenIds: ["ou_alice"], state: "待跟进" })];
-    const setup = liveOperationsDependencies(records);
+describe("POST /api/feishu/events — menu clicks, end to end", () => {
+  it("replies to voc_my_tickets with a real card carrying no demo markers, DMed to the real event body's operator", async () => {
+    const records = [vocRecord({ ownerOpenIds: ["ou_operator"], state: "待跟进" })];
+    const setup = liveMenuDependencies(records, { status: "unavailable" });
 
     const response = await createFeishuEventRoute(setup.dependencies)(
-      signedRequest(p2pOperationsMessageBody("随便说点什么", "ou_alice")),
+      signedRequest(menuClickEventBody("voc_my_tickets", "ou_operator")),
     );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({});
-    expect(setup.dependencies.replyMessage).not.toHaveBeenCalled();
+    expect(setup.dependencies.sendDirectMessage).not.toHaveBeenCalled();
     expect(setup.scheduled).toHaveLength(1);
 
     await setup.scheduled[0]();
 
-    expect(setup.dependencies.replyMessage).toHaveBeenCalledTimes(1);
-    const [call] = setup.dependencies.replyMessage.mock.calls;
+    expect(setup.dependencies.sendDirectMessage).toHaveBeenCalledTimes(1);
+    const [call] = setup.dependencies.sendDirectMessage.mock.calls;
+    expect(call[0].openId).toBe("ou_operator");
     const content = call[0].message.content;
     expect(content).not.toContain("演示");
     expect(content).not.toContain(ONECARE_CASE_ID);
     expect(content).toContain("我的待跟进");
   });
 
-  it("counts only the sender's own records, proven end to end from a real event body", async () => {
+  it("counts only the clicking operator's own records for voc_my_tickets, proven end to end from a real event body", async () => {
     const records = [
       vocRecord({ recordId: "rec_alice", ownerOpenIds: ["ou_alice"], state: "待跟进" }),
       vocRecord({ recordId: "rec_bob_1", ownerOpenIds: ["ou_bob"], state: "待跟进" }),
       vocRecord({ recordId: "rec_bob_2", ownerOpenIds: ["ou_bob"], state: "待跟进" }),
     ];
-    const setup = liveOperationsDependencies(records);
+    const setup = liveMenuDependencies(records, { status: "unavailable" });
 
     await createFeishuEventRoute(setup.dependencies)(
-      signedRequest(p2pOperationsMessageBody("hi", "ou_bob")),
+      signedRequest(menuClickEventBody("voc_my_tickets", "ou_bob")),
     );
     await setup.scheduled[0]();
 
-    const [call] = setup.dependencies.replyMessage.mock.calls;
+    const [call] = setup.dependencies.sendDirectMessage.mock.calls;
+    expect(call[0].openId).toBe("ou_bob");
     const content = call[0].message.content;
     // ou_bob owns 2 of the 3 records; ou_alice's single record must not be
     // folded into that count.
     expect(content).toContain("我的待跟进");
     expect(content).toContain("2 条");
+  });
+
+  it("replies to voc_today_overview with the shared, un-recomputed VocMetricsResult, DMed to the clicking operator", async () => {
+    const metricsResult: VocMetricsResult = {
+      status: "ok",
+      metrics: {
+        total: 120,
+        byPolarity: { 好评: 40, 中评: 30, 差评: 50 },
+        dimensionTop: [{ dimension: "维修时间", count: 12 }],
+        byChannel: [{ channel: "电商评价", count: 120 }],
+        negativeShare: 0.4,
+        ticketsOpened: 80,
+        ticketsClosed: 60,
+        closureRate: 0.75,
+        averageClosureHours: 12.5,
+        taggingAttempted: 120,
+        taggingSucceeded: 100,
+        taggingFailed: 5,
+        taggingPending: 15,
+      },
+    };
+    const setup = liveMenuDependencies([], metricsResult);
+
+    await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(menuClickEventBody("voc_today_overview", "ou_operator")),
+    );
+    await setup.scheduled[0]();
+
+    const [call] = setup.dependencies.sendDirectMessage.mock.calls;
+    expect(call[0].openId).toBe("ou_operator");
+    const content = call[0].message.content;
+    expect(content).toContain("反馈总量");
+    expect(content).toContain("120");
+    expect(content).toContain("打标覆盖率");
+  });
+
+  // The menu can grow new items from the Feishu console alone; this deploy
+  // must treat one it does not recognise as a complete no-op, never a card.
+  it("sends zero outbound calls for a menu item this deploy does not recognise", async () => {
+    const setup = liveMenuDependencies([], { status: "unavailable" });
+
+    const response = await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(menuClickEventBody("voc_future_item", "ou_operator")),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({});
+    expect(setup.scheduled).toHaveLength(0);
+    expect(setup.dependencies.sendDirectMessage).not.toHaveBeenCalled();
+    expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
+    expect(setup.dependencies.replyMessage).not.toHaveBeenCalled();
   });
 });

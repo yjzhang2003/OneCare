@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { VocRecord } from "../bitable/field-map";
 import type { TagResult } from "../tagging/contracts";
+import type { VocMetrics, VocMetricsResult } from "../voc/metrics";
 import type { OperatorSummary } from "./operator-summary";
 import {
   ONECARE_CARD_ACTIONS,
@@ -15,9 +16,12 @@ import {
 } from "./card-types";
 import {
   createCardMessage,
+  createMenuHintMessage,
   createOperatorSummaryCard,
   createOperatorSummaryMessage,
   createTextMessage,
+  createTodayOverviewCard,
+  createTodayOverviewMessage,
   createVocTicketCard,
   createVocTicketMessage,
   createWarRoomEscalationCard,
@@ -631,5 +635,170 @@ describe("createOperatorSummaryMessage", () => {
     expect(JSON.parse(message.content)).toEqual(
       createOperatorSummaryCard(operatorSummary()),
     );
+  });
+});
+
+// Task 13: the "今日概览" custom-menu reply. Unlike createOperatorSummaryCard,
+// this is a whole-org view with no per-operator filtering, and it takes the
+// full VocMetricsResult discriminated union directly — these tests exercise
+// both branches of that union the same way createOperatorSummaryCard's own
+// tests exercise `summary | null`.
+function vocMetrics(overrides: Partial<VocMetrics> = {}): VocMetrics {
+  return {
+    total: 120,
+    byPolarity: { 好评: 40, 中评: 30, 差评: 50 },
+    dimensionTop: [
+      { dimension: "维修时间", count: 12 },
+      { dimension: "维修价格", count: 9 },
+    ],
+    byChannel: [{ channel: "电商评价", count: 120 }],
+    negativeShare: 0.4,
+    ticketsOpened: 80,
+    ticketsClosed: 60,
+    closureRate: 0.75,
+    averageClosureHours: 12.5,
+    taggingAttempted: 120,
+    taggingSucceeded: 100,
+    taggingFailed: 5,
+    taggingPending: 15,
+    ...overrides,
+  };
+}
+
+describe("createTodayOverviewCard", () => {
+  it("is a real Card 2.0 payload with no demo markers at all", () => {
+    const card = createTodayOverviewCard({ status: "ok", metrics: vocMetrics() });
+    const json = JSON.stringify(card);
+
+    expect(card.schema).toBe("2.0");
+    expect(json).not.toContain("演示");
+    expect(json).not.toContain(ONECARE_CASE_ID);
+    expect(json).toContain("今日概览");
+  });
+
+  it("renders every metric the brief calls for, each traceable to the given VocMetrics field", () => {
+    const json = JSON.stringify(
+      createTodayOverviewCard({
+        status: "ok",
+        metrics: vocMetrics({
+          total: 3628,
+          negativeShare: 0.42,
+          ticketsOpened: 900,
+          ticketsClosed: 540,
+          closureRate: 0.6,
+          averageClosureHours: 26.5,
+          taggingSucceeded: 100,
+          taggingFailed: 0,
+        }),
+      }),
+    );
+
+    expect(json).toContain("反馈总量");
+    expect(json).toContain("3628");
+    expect(json).toContain("负向占比");
+    expect(json).toContain("42%");
+    expect(json).toContain("已建单");
+    expect(json).toContain("900");
+    expect(json).toContain("已闭环");
+    expect(json).toContain("540");
+    expect(json).toContain("闭环率");
+    expect(json).toContain("60%");
+    expect(json).toContain("平均闭环时长");
+    expect(json).toContain("26.5 小时");
+    expect(json).toContain("打标覆盖率");
+    // taggingSucceeded 100 / (100 + taggingFailed 0) = 100%, the same
+    // 成功/(成功+失败) formula app/workbench-content.tsx already computes for
+    // 打标成功率 — this only proves this card reuses that exact arithmetic.
+    expect(json).toContain("100%");
+    expect(json).toContain("问题维度 Top");
+    expect(json).toContain("维修时间");
+    expect(json).toContain("维修价格");
+  });
+
+  it("shows no dimensions and says so when dimensionTop is empty", () => {
+    const json = JSON.stringify(
+      createTodayOverviewCard({
+        status: "ok",
+        metrics: vocMetrics({ dimensionTop: [] }),
+      }),
+    );
+
+    expect(json).toContain("暂无维度数据");
+  });
+
+  it("links the workbench button to the real operations site", () => {
+    const card = createTodayOverviewCard({ status: "ok", metrics: vocMetrics() });
+    const buttons = collectTaggedValues(card, "button") as Array<
+      Record<string, unknown>
+    >;
+    const openUrlBehaviors = buttons.flatMap((button) =>
+      (button.behaviors as Array<Record<string, unknown>>).filter(
+        (behavior) => behavior.type === "open_url",
+      ),
+    );
+
+    expect(openUrlBehaviors).toEqual([
+      expect.objectContaining({
+        type: "open_url",
+        default_url: "https://onecare.ohmyfeishu.top/enter",
+      }),
+    ]);
+  });
+
+  // The project-wide rule stated on readVocRecordsCached itself: a failed
+  // read must never render as a number (0 or otherwise) a reader could
+  // mistake for a real measurement. Checked at the strongest level available,
+  // exactly like createOperatorSummaryCard's own equivalent test — the
+  // card's entire content area carries no digit character whatsoever.
+  it("shows no numbers at all when the metrics are unavailable, only an unavailable notice", () => {
+    const card = createTodayOverviewCard({ status: "unavailable" });
+    const elementsJson = JSON.stringify(
+      (card.body as Record<string, unknown>).elements,
+    );
+
+    expect(elementsJson).not.toMatch(/[0-9]/);
+    expect(elementsJson).toContain("指标暂不可用");
+    expect(JSON.stringify(card)).not.toContain("演示");
+  });
+
+  it("still offers the workbench button when the metrics are unavailable", () => {
+    const card = createTodayOverviewCard({ status: "unavailable" });
+    const buttons = collectTaggedValues(card, "button") as Array<
+      Record<string, unknown>
+    >;
+
+    expect(
+      buttons.some(
+        (button) =>
+          (button.text as Record<string, unknown>).content === "打开运营工作台",
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("createTodayOverviewMessage", () => {
+  it("wraps the today-overview card as an interactive outbound message", () => {
+    const result: VocMetricsResult = { status: "ok", metrics: vocMetrics() };
+    const message = createTodayOverviewMessage(result);
+
+    expect(message.msgType).toBe("interactive");
+    expect(JSON.parse(message.content)).toEqual(createTodayOverviewCard(result));
+  });
+});
+
+// Task 13: what a bare p2p text message gets back now, in place of the real
+// operator card (createOperatorSummaryMessage) — the custom menu is the
+// intended way to ask for real numbers, so this must be plain text, never
+// another card.
+describe("createMenuHintMessage", () => {
+  it("is a plain text message, not a card, pointing at the menu and the war room", () => {
+    const message = createMenuHintMessage();
+
+    expect(message.msgType).toBe("text");
+    const text = (JSON.parse(message.content) as { text: string }).text;
+    expect(text).toContain("菜单");
+    expect(text).toContain("我的工单");
+    expect(text).toContain("今日概览");
+    expect(text).toContain("@");
   });
 });

@@ -58,9 +58,32 @@ export type FeishuEventOutcome =
       chatId: string;
       messageId: string;
     }>
+  // Task 13: the bot's custom menu (我的工单 / 今日概览 / 打开工作台) fires
+  // application.bot.menu_v6 — "打开工作台" is a link-type item that never
+  // reaches this server at all. `eventKey` is narrowed to only the menu items
+  // this deploy actually understands (see VOC_MENU_EVENT_KEYS below); an
+  // event_key outside that set is reported as "ignored" by parseMenuClick
+  // rather than ever becoming this kind, since Feishu's own custom-menu
+  // console can grow new items independently of this deploy and an unknown
+  // one must be silently harmless, not a card nobody asked for.
+  | Readonly<{
+      kind: "menu_click";
+      eventKey: VocMenuEventKey;
+      operatorOpenId: string;
+    }>
   | Readonly<{ kind: "invalid_card_action" }>
   | Readonly<{ kind: "ignored" }>
   | Readonly<{ kind: "unauthorized" }>;
+
+// The only two menu items this server has anything to say about — "打开工作台"
+// is configured in the Feishu console as a link-type item, which never
+// produces an event here at all. Kept as an explicit allowlist (rather than
+// accepting any string as an eventKey) so a future menu item added on the
+// Feishu side comes back "ignored" until this file is deliberately taught
+// about it, instead of silently reaching route.ts as an eventKey it has no
+// branch for.
+export const VOC_MENU_EVENT_KEYS = ["voc_my_tickets", "voc_today_overview"] as const;
+export type VocMenuEventKey = (typeof VOC_MENU_EVENT_KEYS)[number];
 
 export type ParseFeishuEventInput = Readonly<{
   rawBody: string;
@@ -184,6 +207,50 @@ function readOperatorOpenId(payload: JsonObject): string {
   const operator = payload.event.operator;
   if (!isJsonObject(operator)) return "";
   return typeof operator.open_id === "string" ? operator.open_id.trim() : "";
+}
+
+function isVocMenuEventKey(value: unknown): value is VocMenuEventKey {
+  return (
+    typeof value === "string" &&
+    (VOC_MENU_EVENT_KEYS as readonly string[]).includes(value)
+  );
+}
+
+// application.bot.menu_v6 nests the clicking operator's identity one level
+// deeper than a card callback does: Feishu's own schema 2.0 example for this
+// event type carries it at event.operator.operator_id.open_id, not
+// event.operator.open_id (readOperatorOpenId's path, used by
+// card.action.trigger). The two shapes are easy to confuse — same "operator"
+// key, same eventual "open_id" leaf — and getting the extra nesting wrong is
+// not a bug that throws: it just resolves silently to "", exactly like a
+// genuinely absent operator, which is why this event type gets its own
+// reader rather than reusing readOperatorOpenId.
+function readMenuOperatorOpenId(payload: JsonObject): string {
+  if (!isJsonObject(payload.event)) return "";
+  const operator = payload.event.operator;
+  if (!isJsonObject(operator)) return "";
+  const operatorId = operator.operator_id;
+  if (!isJsonObject(operatorId)) return "";
+  return typeof operatorId.open_id === "string" ? operatorId.open_id.trim() : "";
+}
+
+// A menu click is fire-and-forget (Feishu never inspects this route's
+// response body for this event type), and the bot's custom menu can grow new
+// items from the Feishu console alone, with no deploy here. An event_key this
+// file does not recognise therefore comes back "ignored" — the same outcome
+// as no event at all — rather than any kind of error outcome that would
+// suggest something is actually wrong.
+function parseMenuClick(payload: JsonObject): FeishuEventOutcome {
+  if (!isJsonObject(payload.event)) return { kind: "ignored" };
+
+  const eventKey = payload.event.event_key;
+  if (!isVocMenuEventKey(eventKey)) return { kind: "ignored" };
+
+  return {
+    kind: "menu_click",
+    eventKey,
+    operatorOpenId: readMenuOperatorOpenId(payload),
+  };
 }
 
 // Same rule as readOperatorOpenId above, applied to a plain message instead
@@ -374,6 +441,19 @@ export async function parseFeishuEvent({
     payload.header.event_type === "card.action.trigger"
   ) {
     return parseCardAction(payload);
+  }
+
+  // Task 13: handled directly, the same way card.action.trigger is just
+  // above, rather than registered on the EventDispatcher below — a menu click
+  // carries no message/chat shape for that dispatcher's own
+  // im.message.receive_v1-flavoured typing to make sense of, and this event
+  // needs nothing the dispatcher provides (no @-mention resolution, no
+  // message/chat narrowing).
+  if (
+    isJsonObject(payload.header) &&
+    payload.header.event_type === "application.bot.menu_v6"
+  ) {
+    return parseMenuClick(payload);
   }
 
   const dispatcher = new EventDispatcher({
