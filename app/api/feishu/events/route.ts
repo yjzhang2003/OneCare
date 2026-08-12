@@ -72,7 +72,10 @@ import {
 // dashboard's `use cache`), which rejects this route segment config outright.
 export const maxDuration = 10;
 
-type Scheduler = (task: () => Promise<void>) => void;
+// Exported so createResolveAction's own third parameter (below) can carry the
+// same type as a documented, reusable shape rather than an inline function
+// type repeated at each call site.
+export type Scheduler = (task: () => Promise<void>) => void;
 
 type FeishuEventRouteDependencies = {
   readEnv: () => BotEnv;
@@ -333,28 +336,38 @@ export function createAnswerGroupQuestion(
   };
 }
 
-// The three capabilities resolveWarRoomAction (Task 6) needs beyond
+// The capabilities resolveWarRoomAction (Task 6) needs beyond
 // getRecord/updateRecord (already covered by VocActionBitable, reused as-is
 // below). Pulled out as its own injectable type — like VocActionBitable next
 // to it — so a test can drive createResolveAction's real routing logic over
 // fakes instead of stubbing resolveAction itself, which is exactly how the
 // missing wiring this task fixes went unnoticed for ten prior tasks.
+//
+// notifyOperator (added alongside the sync/background split below) is a DM
+// to whoever clicked, used only from the background half — see
+// war-room-actions.ts's WarRoomActionInput for why a background failure can
+// no longer produce a toast.
 export type WarRoomActionDependencies = Readonly<{
   fallbackOpenIds: () => Promise<readonly string[]>;
   createChat: (name: string, memberOpenIds: readonly string[]) => Promise<string>;
   sendToChat: (chatId: string, card: FeishuCard) => Promise<void>;
+  notifyOperator: (openId: string, text: string) => Promise<void>;
 }>;
 
 // 负责人表's fallback column, read fresh on every call (no caching layer):
 // escalateToWarRoom in analyze/route.ts reads the same table the same way,
 // once per Cron shard, and that call is not cached either — a cache here
 // would just be a second, differently-invalidated source of truth for a
-// table small enough that re-reading it costs one Bitable round trip.
+// table small enough that re-reading it costs one Bitable round trip. This
+// one runs in the synchronous section (see createResolveAction below) — it
+// is one of the two reads measured into the ~1.4s synchronous budget.
 async function getFallbackOpenIds(): Promise<readonly string[]> {
   const ownerRules = await listOwnerRules(readBitableEnv(), getTokenProvider());
   return fallbackOwnerOpenIds(ownerRules);
 }
 
+// Runs only inside the background task (see createResolveAction below) —
+// never in the synchronous section.
 function createWarRoomChatForRecord(
   name: string,
   memberOpenIds: readonly string[],
@@ -365,6 +378,7 @@ function createWarRoomChatForRecord(
 // sendFeishuMessage's input is a discriminated union of "chatId" or "openId"
 // (never both) — this always takes the chatId branch, since resolveWarRoomAction
 // only ever posts into the war room chat it just created, never to a person.
+// Runs only inside the background task, same as createWarRoomChatForRecord.
 function sendCardToWarRoomChat(chatId: string, card: FeishuCard): Promise<void> {
   return sendFeishuMessage({
     env: readBotEnv(),
@@ -373,10 +387,21 @@ function sendCardToWarRoomChat(chatId: string, card: FeishuCard): Promise<void> 
   });
 }
 
+// The openId branch of sendFeishuMessage, reusing createTextMessage the same
+// way the group Q&A fallback replies do — a DM is an ordinary chat message,
+// not another card. Runs only inside the background task: this is how a
+// createChat/updateRecord/sendToChat failure is reported once the callback
+// itself has already answered with the "creating" toast (see
+// createResolveAction below).
+function notifyOperatorByDirectMessage(openId: string, text: string): Promise<void> {
+  return sendFeishuMessage({ env: readBotEnv(), openId, message: createTextMessage(text) });
+}
+
 const defaultWarRoomDependencies: WarRoomActionDependencies = {
   fallbackOpenIds: getFallbackOpenIds,
   createChat: createWarRoomChatForRecord,
   sendToChat: sendCardToWarRoomChat,
+  notifyOperator: notifyOperatorByDirectMessage,
 };
 
 function isWarRoomCardAction(
@@ -402,6 +427,29 @@ function isWarRoomCardAction(
 // "owner OR fallback" relaxation is not reimplemented here; it is applied
 // only inside that function, and only for these two actions.
 //
+// Task 11 follow-up: resolveWarRoomAction returns a WarRoomActionOutcome, not
+// a bare CardActionResult, precisely so this dispatcher can split its work —
+// `result` answers the callback synchronously in every case; `background`,
+// present only when a new group is actually being created, is scheduled with
+// `schedule` (Next's `after()` by default, the same primitive
+// createFeishuEventRoute already uses below for every other kind of deferred
+// work in this file) instead of being awaited here. This split exists
+// because a real-tenant measurement on 2026-08-12 put the five network calls
+// a fresh "create" decision used to make — getRecord, fallbackOpenIds,
+// createChat, updateRecord, sendToChat, all inside the one synchronous
+// callback — at ~2725ms against Feishu's ~3000ms deadline, using a fast
+// parameter-validation reject for createChat/sendToChat rather than the
+// slower real calls. A timeout there is worse than merely slow: Feishu marks
+// the callback failed while the group and the `协同群 ID` write have already
+// landed, so the very next click reports "already exists" and the operator
+// reasonably concludes their original click failed. Only getRecord and
+// fallbackOpenIds (~1.4s measured) remain in the synchronous section inside
+// resolveWarRoomAction itself, alongside the idempotence decision and the
+// authorization check — see that function's own comment for why those in
+// particular cannot move: idempotence is the only guard against a double
+// click creating two groups, and authorization must reject a stranger before
+// any "creating" toast is ever shown.
+//
 // The Bitable client arrives as a parameter so this dispatcher — the exact
 // code production runs — can be driven end to end over a fake Bitable
 // boundary. Replacing this function with a stub in tests is what let the
@@ -410,10 +458,11 @@ function isWarRoomCardAction(
 export function createResolveAction(
   bitable: () => VocActionBitable,
   warRoom: WarRoomActionDependencies = defaultWarRoomDependencies,
+  schedule: Scheduler = (task) => after(task),
 ): (input: CardActionRequest) => Promise<CardActionResult> {
   return async function resolveAction(input) {
     if (isWarRoomCardAction(input.action)) {
-      return resolveWarRoomAction({
+      const outcome = await resolveWarRoomAction({
         action: input.action,
         recordId: input.recordId,
         operatorOpenId: input.operatorOpenId,
@@ -422,7 +471,12 @@ export function createResolveAction(
         fallbackOpenIds: warRoom.fallbackOpenIds,
         createChat: warRoom.createChat,
         sendToChat: warRoom.sendToChat,
+        notifyOperator: warRoom.notifyOperator,
       });
+      if (outcome.background) {
+        schedule(outcome.background);
+      }
+      return outcome.result;
     }
     if (isVocCardAction(input.action)) {
       return resolveVocCardAction({

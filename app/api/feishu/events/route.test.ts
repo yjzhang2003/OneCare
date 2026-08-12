@@ -505,6 +505,9 @@ const unusedWarRoomDependencies: WarRoomActionDependencies = {
   sendToChat: async () => {
     throw new Error("sendToChat should not be called for this test");
   },
+  notifyOperator: async () => {
+    throw new Error("notifyOperator should not be called for this test");
+  },
 };
 
 // Only `readEnv` and the two outbound message senders are faked; parseEvent
@@ -514,6 +517,16 @@ function liveDependencies(
   warRoom: WarRoomActionDependencies = unusedWarRoomDependencies,
 ) {
   const scheduled: Array<() => Promise<void>> = [];
+  // One shared scheduler for both createResolveAction's own war-room
+  // background task (Task 11 follow-up) and createFeishuEventRoute's
+  // ordinary deferred message-sends: production wires both through the same
+  // `after()` primitive, so a single `scheduled` array is what a test needs
+  // to inspect "everything this click deferred past its synchronous
+  // response" — exactly what "the sync section returned before the
+  // background section ran" means operationally.
+  const schedule = (task: () => Promise<void>) => {
+    scheduled.push(task);
+  };
   return {
     scheduled,
     dependencies: {
@@ -538,7 +551,7 @@ function liveDependencies(
       })),
       replyMessage: vi.fn(async () => undefined),
       sendMessage: vi.fn(async () => undefined),
-      resolveAction: createResolveAction(() => client, warRoom),
+      resolveAction: createResolveAction(() => client, warRoom, schedule),
       // None of the card-action tests this factory serves ever produce a
       // group_question outcome, so this is never exercised — present only to
       // satisfy FeishuEventRouteDependencies.
@@ -549,9 +562,7 @@ function liveDependencies(
         }),
         async () => null,
       ),
-      schedule: (task: () => Promise<void>) => {
-        scheduled.push(task);
-      },
+      schedule,
       reportFailure: vi.fn(),
     },
   };
@@ -845,9 +856,18 @@ describe("POST /api/feishu/events — VOC closure loop end to end", () => {
 // closure-loop describe block above (real parseFeishuEvent, real
 // createResolveAction, only the Bitable/war-room network boundary faked) —
 // stubbing resolveAction itself is exactly how this gap went unnoticed before.
+//
+// Task 11 follow-up: a "create" decision now answers synchronously with an
+// interim toast and defers createChat/updateRecord/sendToChat into
+// `setup.scheduled` via `after()` (see liveDependencies' shared `schedule`
+// above) rather than doing them inline — a real-tenant measurement put the
+// old all-synchronous path at ~2725ms against Feishu's ~3000ms callback
+// deadline. Every test below that reaches a "create" decision therefore
+// asserts the synchronous response *before* running `setup.scheduled[0]()`,
+// and only then asserts the three deferred calls happened.
 // ---------------------------------------------------------------------------
 describe("POST /api/feishu/events — VOC war room actions, wired for real", () => {
-  it("routes voc_open_war_room to resolveWarRoomAction: creates a chat whose members include both the owner and the operator", async () => {
+  it("answers voc_open_war_room with an interim toast, and defers chat creation to the background — members include both owner and operator", async () => {
     const client = bitable(
       vocRecord({ ownerOpenIds: ["ou_owner"], warRoomChatId: "" }),
     );
@@ -866,6 +886,9 @@ describe("POST /api/feishu/events — VOC war room actions, wired for real", () 
       fallbackOpenIds: async () => ["ou_fallback"],
       createChat,
       sendToChat,
+      notifyOperator: async () => {
+        throw new Error("notifyOperator should not be called on the happy path");
+      },
     });
 
     const response = await createFeishuEventRoute(setup.dependencies)(
@@ -878,22 +901,70 @@ describe("POST /api/feishu/events — VOC war room actions, wired for real", () 
       ),
     );
 
+    // Synchronous response: an interim toast, nothing created or written yet.
     expect(response.status).toBe(200);
+    const body = (await response.json()) as CardCallbackResponse;
+    expect(body.toast?.type).toBe("info");
+    expect(body.toast?.content).toContain("正在创建");
+    expect(createChat).not.toHaveBeenCalled();
+    expect(client.updateRecord).not.toHaveBeenCalled();
+    expect(setup.scheduled).toHaveLength(1);
+
+    // Background: the deferred task actually does the three slow steps.
+    await setup.scheduled[0]();
+
     expect(createChat).toHaveBeenCalledTimes(1);
     const [, members] = createChat.mock.calls[0];
     expect(members).toContain("ou_owner");
     expect(members).toContain("ou_fallback");
     expect(sendToChat).toHaveBeenCalledWith("oc_new_room", expect.anything());
-
     expect(client.updateRecord).toHaveBeenCalledTimes(1);
     const [, fields] = client.updateRecord.mock.calls[0];
     expect(fields["协同群 ID"]).toBe("oc_new_room");
-
-    const body = (await response.json()) as CardCallbackResponse;
-    expect(body.toast?.type).toBe("success");
   });
 
-  it("routes voc_decline_war_room to resolveWarRoomAction: writes declined and never creates a chat", async () => {
+  it("DMs the operator through notifyOperator when the background chat creation fails", async () => {
+    const client = bitable(
+      vocRecord({ ownerOpenIds: ["ou_owner"], warRoomChatId: "" }),
+    );
+    const notifyOperator = vi.fn(
+      async (_openId: string, _text: string): Promise<void> => undefined,
+    );
+    const setup = liveDependencies(client, {
+      fallbackOpenIds: async () => [],
+      createChat: async () => {
+        throw new Error("feishu down");
+      },
+      sendToChat: async () => {
+        throw new Error("sendToChat should not be called when createChat failed");
+      },
+      notifyOperator,
+    });
+
+    const response = await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(
+        cardActionBody(
+          "voc_open_war_room",
+          { record_id: "rec12345" },
+          { operatorOpenId: "ou_owner" },
+        ),
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(setup.scheduled).toHaveLength(1);
+    expect(notifyOperator).not.toHaveBeenCalled();
+
+    await setup.scheduled[0]();
+
+    expect(client.updateRecord).not.toHaveBeenCalled();
+    expect(notifyOperator).toHaveBeenCalledTimes(1);
+    const [openId, text] = notifyOperator.mock.calls[0];
+    expect(openId).toBe("ou_owner");
+    expect(text).toContain("创建失败");
+  });
+
+  it("routes voc_decline_war_room to resolveWarRoomAction synchronously: writes declined, never creates a chat, and schedules nothing", async () => {
     const client = bitable(
       vocRecord({ ownerOpenIds: ["ou_owner"], warRoomChatId: "" }),
     );
@@ -907,6 +978,9 @@ describe("POST /api/feishu/events — VOC war room actions, wired for real", () 
       createChat,
       sendToChat: async () => {
         throw new Error("sendToChat should not be called for a decline");
+      },
+      notifyOperator: async () => {
+        throw new Error("notifyOperator should not be called for a decline");
       },
     });
 
@@ -922,12 +996,83 @@ describe("POST /api/feishu/events — VOC war room actions, wired for real", () 
 
     expect(response.status).toBe(200);
     expect(createChat).not.toHaveBeenCalled();
+    // Declining is decided entirely in the synchronous section — nothing is
+    // ever deferred for it.
+    expect(setup.scheduled).toHaveLength(0);
     expect(client.updateRecord).toHaveBeenCalledTimes(1);
     const [, fields] = client.updateRecord.mock.calls[0];
     expect(fields["协同群 ID"]).toBe("declined");
 
     const body = (await response.json()) as CardCallbackResponse;
     expect(body.toast?.content).toContain("暂不需要");
+  });
+
+  it.each([
+    ["a stranger with no owner/fallback claim", "ou_stranger", ""],
+    ["an already-existing war room", "ou_owner", "oc_existing"],
+    ["a previously declined war room", "ou_owner", "declined"],
+  ])(
+    "schedules nothing for %s (the four already-decided outcomes never reach the background)",
+    async (_label, operatorOpenId, warRoomChatId) => {
+      const client = bitable(
+        vocRecord({ ownerOpenIds: ["ou_owner"], warRoomChatId }),
+      );
+      const setup = liveDependencies(client, {
+        fallbackOpenIds: async () => [],
+        createChat: async () => {
+          throw new Error("createChat should not be called for this case");
+        },
+        sendToChat: async () => {
+          throw new Error("sendToChat should not be called for this case");
+        },
+        notifyOperator: async () => {
+          throw new Error("notifyOperator should not be called for this case");
+        },
+      });
+
+      const response = await createFeishuEventRoute(setup.dependencies)(
+        signedRequest(
+          cardActionBody(
+            "voc_open_war_room",
+            { record_id: "rec12345" },
+            { operatorOpenId },
+          ),
+        ),
+      );
+
+      expect(response.status).toBe(200);
+      expect(setup.scheduled).toHaveLength(0);
+      expect(client.updateRecord).not.toHaveBeenCalled();
+    },
+  );
+
+  it("schedules nothing for a click on a record that does not exist", async () => {
+    const client = bitable(null);
+    const setup = liveDependencies(client, {
+      fallbackOpenIds: async () => [],
+      createChat: async () => {
+        throw new Error("createChat should not be called for a missing record");
+      },
+      sendToChat: async () => {
+        throw new Error("sendToChat should not be called for a missing record");
+      },
+      notifyOperator: async () => {
+        throw new Error("notifyOperator should not be called for a missing record");
+      },
+    });
+
+    const response = await createFeishuEventRoute(setup.dependencies)(
+      signedRequest(
+        cardActionBody(
+          "voc_open_war_room",
+          { record_id: "rec12345" },
+          { operatorOpenId: "ou_owner" },
+        ),
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(setup.scheduled).toHaveLength(0);
   });
 
   // The load-bearing case: the same relaxation that lets a fallback approver
@@ -955,6 +1100,9 @@ describe("POST /api/feishu/events — VOC war room actions, wired for real", () 
       fallbackOpenIds: async () => ["ou_fallback"],
       createChat,
       sendToChat,
+      notifyOperator: async () => {
+        throw new Error("notifyOperator should not be called on the happy path");
+      },
     });
 
     const openResponse = await createFeishuEventRoute(setup.dependencies)(
@@ -967,7 +1115,9 @@ describe("POST /api/feishu/events — VOC war room actions, wired for real", () 
       ),
     );
     const openBody = (await openResponse.json()) as CardCallbackResponse;
-    expect(openBody.toast?.type).toBe("success");
+    expect(openBody.toast?.type).toBe("info");
+    expect(setup.scheduled).toHaveLength(1);
+    await setup.scheduled[0]();
     expect(createChat).toHaveBeenCalledTimes(1);
 
     // Same record, same operator, a status action instead: resolveVocCardAction
@@ -985,20 +1135,22 @@ describe("POST /api/feishu/events — VOC war room actions, wired for real", () 
     const followUpBody = (await followUpResponse.json()) as CardCallbackResponse;
     expect(followUpBody.toast?.type).toBe("error");
     expect(followUpBody.toast?.content).toContain("负责人");
-    // Only the war-room click above wrote anything; the rejected state click
-    // must not have touched the record.
+    // Only the war-room click's background write above touched the record;
+    // the rejected state click must not have.
     expect(client.updateRecord).toHaveBeenCalledTimes(1);
+    // And it must not have queued a second background task.
+    expect(setup.scheduled).toHaveLength(1);
   });
 
   // Complements the closure-loop describe block above: those tests already
   // pin down state-action behavior (transitions, notes, rejections) using
   // `liveDependencies`' default war-room fakes, which throw if ever invoked.
   // This test names the property directly instead of leaving it implicit.
-  it("never touches the war-room dependencies (fallbackOpenIds/createChat/sendToChat) for a status action", async () => {
+  it("never touches the war-room dependencies (fallbackOpenIds/createChat/sendToChat/notifyOperator) for a status action, and schedules nothing", async () => {
     const client = bitable(vocRecord({ state: "待跟进", ownerOpenIds: ["ou_owner"] }));
     // liveDependencies' default `unusedWarRoomDependencies` throws on any
     // call, so simply not throwing here already proves the point; the
-    // explicit success assertion below is what makes that intent legible.
+    // explicit assertions below make that intent legible.
     const setup = liveDependencies(client);
 
     const response = await createFeishuEventRoute(setup.dependencies)(
@@ -1014,6 +1166,7 @@ describe("POST /api/feishu/events — VOC war room actions, wired for real", () 
     expect(response.status).toBe(200);
     const body = (await response.json()) as CardCallbackResponse;
     expect(body.toast?.type).toBe("success");
+    expect(setup.scheduled).toHaveLength(0);
   });
 });
 
