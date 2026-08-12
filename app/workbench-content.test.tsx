@@ -2,7 +2,17 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The detail panel's action island calls useRouter, which throws outside a
+// mounted App Router ("invariant expected app router to be mounted"). Only
+// refresh() is used, and only after a write returns — this file asserts which
+// buttons render, never what clicking them does, so a stub is the whole need.
+// Before the island existed this file needed no mock at all, which is why the
+// gap only appeared once a non-terminal ticket was rendered.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: () => {} }),
+}));
 
 import type { VocMetrics } from "../src/features/voc/metrics";
 import type { WorkbenchData, WorkbenchTicket } from "../src/features/workbench/data";
@@ -489,6 +499,76 @@ describe("WorkbenchContent", () => {
     const params = hrefParams(closeLink);
     expect(params.has("ticket")).toBe(false);
     expect(params.get("queue")).toBe("open");
+  });
+
+  function detailFor(overrides: Partial<WorkbenchTicket>) {
+    const target: WorkbenchTicket = {
+      ...ticket,
+      recordNumber: "R-777",
+      ...overrides,
+    };
+    renderWorkbench({
+      data: {
+        metrics: { status: "ok", metrics: emptyMetrics() },
+        tickets: [target],
+      },
+      searchParams: { queue: "all", ticket: "R-777" },
+    });
+    return screen
+      .getByRole("heading", { name: /工单详情.*R-777/ })
+      .closest("section")!;
+  }
+
+  it("offers the transitions the current state allows", () => {
+    const detail = detailFor({ state: "待跟进", hasOwner: true });
+
+    expect(
+      within(detail).getByRole("button", { name: "开始跟进" }),
+    ).toBeInTheDocument();
+    // 确认闭环 is legal from 待闭环 only. A button for it here would be a button
+    // whose only outcome is an error.
+    expect(
+      within(detail).queryByRole("button", { name: "确认闭环" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers a claim, and only a claim, on an unassigned ticket", () => {
+    const detail = detailFor({ state: "已分析", hasOwner: false });
+
+    expect(
+      within(detail).getByRole("button", { name: "我来跟进" }),
+    ).toBeInTheDocument();
+    expect(
+      within(detail).getByRole("button", { name: "无需建单" }),
+    ).toBeInTheDocument();
+    // 需建单 is guarded on having an owner: claim first, then it appears. Those
+    // two clicks are the only way out of the 已分析 dead end.
+    expect(
+      within(detail).queryByRole("button", { name: "需建单" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the claim once a ticket has an owner", () => {
+    const detail = detailFor({ state: "待跟进", hasOwner: true });
+    expect(
+      within(detail).queryByRole("button", { name: "我来跟进" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says a terminal state is terminal rather than showing an empty toolbar", () => {
+    const detail = detailFor({ state: "已闭环", hasOwner: true });
+
+    expect(within(detail).getByText(/已闭环是终态/)).toBeInTheDocument();
+    expect(within(detail).queryAllByRole("button")).toHaveLength(0);
+  });
+
+  // The panel cannot know whether the viewer is the owner, so it must not imply
+  // that every offered button will succeed.
+  it("warns that only the owner may transition", () => {
+    const detail = detailFor({ state: "待跟进", hasOwner: true });
+    expect(
+      within(detail).getByText(/只有负责人本人能做/),
+    ).toBeInTheDocument();
   });
 });
 
