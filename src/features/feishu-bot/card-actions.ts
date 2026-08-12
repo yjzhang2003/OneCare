@@ -1,6 +1,7 @@
 import type { BitableClient } from "../bitable/client";
 import { VOC_FIELD_NAMES } from "../bitable/field-map";
 import { transition, type VocAction } from "../voc/service-event";
+import { transitionFields } from "../voc/transition-fields";
 import { buildAnswerFacts } from "../warroom/facts";
 import { warRoomDecision } from "../warroom/naming";
 import type {
@@ -227,26 +228,22 @@ export async function resolveVocCardAction(
     };
   }
 
-  const fields: Record<string, unknown> = {
-    [VOC_FIELD_NAMES.state]: outcome.next,
-  };
-  // Unconditional on the column, not on truthiness: the state machine has
-  // already refused an empty note for the two actions that carry one, so
-  // reaching here with a note column means there is real text to write.
-  if (noteColumn === "followUpNote") {
-    fields[VOC_FIELD_NAMES.followUpNote] = input.note;
-  }
-  if (noteColumn === "closingNote") {
-    fields[VOC_FIELD_NAMES.closingNote] = input.note;
-  }
-  if (outcome.next === "已闭环") {
-    // Calibrated against the live Base (field-map.ts): a Bitable DateTime
-    // field is epoch milliseconds on the wire, not an ISO string. Writing an
-    // ISO string here is silently rejected by the real API and turns a
-    // legitimate closure into a "写回失败" error — this was caught by the
-    // real-Base round trip, not by mocked unit tests.
-    fields[VOC_FIELD_NAMES.closedAt] = Date.now();
-  }
+  // Which columns a transition writes now lives in transitionFields, shared
+  // with the workbench's web write path (src/features/workbench/write-actions.ts).
+  // Two copies of this decision would drift, and the drift would surface as
+  // "tickets touched from a card carry different data than tickets touched from
+  // the web" — a quiet inconsistency in the Base rather than a test failure.
+  //
+  // One behavioural difference from the inline version this replaces: reaching
+  // 待跟进 stamps 建单时间. No card action can reach 待跟进 — ACTION_TO_TRANSITION
+  // maps no card to 需建单 — so for this call site the difference is
+  // unreachable, and this refactor is behaviour-neutral in production.
+  //
+  // The note is passed straight through rather than switched on noteColumn:
+  // transitionFields keys the note column off the target state, and each of the
+  // two note-carrying actions is the only action reaching its target state, so
+  // the two are equivalent.
+  const fields = transitionFields(outcome.next, input.note, Date.now());
 
   try {
     await input.bitable.updateRecord(input.recordId, fields);
