@@ -57,7 +57,15 @@ import {
 // `runtime = "nodejs"` was dropped: it is the App Router default anyway, and
 // task 14 enables `cacheComponents` in next.config.ts (for the VOC
 // dashboard's `use cache`), which rejects this route segment config outright.
-export const maxDuration = 60;
+// 60s was set when tagging was a stub. Measured against the live aily skill on
+// 2026-08-12: one record takes roughly 23 seconds, because the batch had to be
+// cut to one record per call — a five-record batch takes 36.5s when it works and
+// otherwise comes back as an aily gateway 504. A SHARD_SIZE of 5 therefore needs
+// about two minutes, and the first production run of this route died at
+// FUNCTION_INVOCATION_TIMEOUT with nothing written: the per-record write design
+// meant no half-processed rows, but no progress either. 300s is Vercel's current
+// default ceiling and leaves room for a shard that runs slower than measured.
+export const maxDuration = 300;
 
 // The spec derives this from "single shard end-to-end <= 20s" (§5.6); 5 is
 // the stated starting point pending a real measurement. Injected as a plain
