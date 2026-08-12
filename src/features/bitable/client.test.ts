@@ -337,4 +337,77 @@ describe("createBitableClient", () => {
     expect(await client.findByWarRoomChatId("")).toBeNull();
     expect(fetcher).not.toHaveBeenCalled();
   });
+
+  // Task 14: replaces the ~10.7s full-table scan the two bot-menu cards used
+  // to do (readVocRecordsCached + in-memory filtering over 3628 records) with
+  // a filtered records/search count that measured ~1.0s against the live
+  // Base — records/search's own `total` is the count, so this never asks for
+  // the matching rows themselves (page_size=1 is enough to read `total`).
+  describe("countRecords", () => {
+    it("counts with a filtered records/search request, not a full scan", async () => {
+      const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+        expect(url).toContain("/records/search");
+        expect(url).toContain("page_size=1");
+        expect(url).toContain("user_id_type=open_id");
+        expect(init?.method).toBe("POST");
+        return jsonResponse({ code: 0, data: { total: 3 } });
+      });
+
+      const client = createBitableClient(env, async () => "t", fetcher as unknown as typeof fetch);
+      const count = await client.countRecords([
+        { field_name: "负责人", value: ["ou_339b8012eda95556fc1efea551455bdb"] },
+        { field_name: "流程状态", value: ["待跟进"] },
+      ]);
+
+      expect(count).toBe(3);
+      const [, init] = fetcher.mock.calls[0];
+      const body = JSON.parse(init?.body as string) as {
+        filter: {
+          conjunction: string;
+          conditions: ReadonlyArray<{
+            field_name: string;
+            operator: string;
+            value: readonly string[];
+          }>;
+        };
+      };
+      expect(body.filter.conjunction).toBe("and");
+      expect(body.filter.conditions).toEqual([
+        { field_name: "负责人", operator: "is", value: ["ou_339b8012eda95556fc1efea551455bdb"] },
+        { field_name: "流程状态", operator: "is", value: ["待跟进"] },
+      ]);
+    });
+
+    it("omits the filter entirely for an unconditional total count", async () => {
+      const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+        expect(JSON.parse(init?.body as string)).toEqual({});
+        return jsonResponse({ code: 0, data: { total: 3628 } });
+      });
+
+      const client = createBitableClient(env, async () => "t", fetcher as unknown as typeof fetch);
+      expect(await client.countRecords([])).toBe(3628);
+    });
+
+    it("throws rather than returning 0 on a non-zero business code", async () => {
+      const fetcher = vi.fn(async () => jsonResponse({ code: 99991400, msg: "bad filter" }));
+      const client = createBitableClient(env, async () => "t", fetcher as unknown as typeof fetch);
+
+      await expect(
+        client.countRecords([{ field_name: "流程状态", value: ["待跟进"] }]),
+      ).rejects.toThrow(/99991400/);
+    });
+
+    // A read that "succeeds" with a malformed shape must not be mistaken for
+    // a real count of zero — the same rule this project applies to every
+    // other failure mode of a VOC read (readVocRecordsCached's own comment
+    // states it first).
+    it("throws rather than returning 0 when data.total is missing or not a number", async () => {
+      const fetcher = vi.fn(async () => jsonResponse({ code: 0, data: {} }));
+      const client = createBitableClient(env, async () => "t", fetcher as unknown as typeof fetch);
+
+      await expect(
+        client.countRecords([{ field_name: "流程状态", value: ["待跟进"] }]),
+      ).rejects.toThrow(/total/);
+    });
+  });
 });

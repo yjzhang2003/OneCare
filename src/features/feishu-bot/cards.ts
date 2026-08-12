@@ -1,8 +1,8 @@
 import type { VocRecord } from "../bitable/field-map";
 import type { VocReply } from "../tagging/contracts";
-import type { VocMetrics, VocMetricsResult } from "../voc/metrics";
 import type { VocState } from "../voc/service-event";
 import type { OperatorSummary } from "./operator-summary";
+import type { TodayOverviewCounts, TodayOverviewResult } from "./today-overview";
 import {
   ONECARE_CASE_ID,
   VOC_NOTE_FIELD_NAME,
@@ -132,6 +132,17 @@ function cardRoot(input: Readonly<{
   // card in this file still relies on.
   summary?: string;
 }>): FeishuCard {
+  // Task 14: no fallback to a default token here any more. Every call site in
+  // this file passes `icon` explicitly (verified: none ever relied on the
+  // old `?? "myai_colorful"` default), and both of the two production cards
+  // this task fixes now pass no icon at all rather than an unverified guess
+  // at a valid "_outlined" replacement for the "chart_colorful" placeholder
+  // token they used to carry — see createOperatorSummaryCard/
+  // createTodayOverviewCard. `icon` on the Card 2.0 header is genuinely
+  // optional, so when neither `input.icon` nor `completed` supplies one, the
+  // header renders with no icon field at all instead of a broken glyph.
+  const iconToken = input.completed ? "done_colorful" : input.icon;
+
   return {
     schema: "2.0",
     config: {
@@ -143,10 +154,9 @@ function cardRoot(input: Readonly<{
       title: { tag: "plain_text", content: input.title },
       subtitle: { tag: "plain_text", content: input.subtitle },
       template: input.completed ? "green" : (input.template ?? "turquoise"),
-      icon: {
-        tag: "standard_icon",
-        token: input.completed ? "done_colorful" : (input.icon ?? "myai_colorful"),
-      },
+      ...(iconToken
+        ? { icon: { tag: "standard_icon", token: iconToken } }
+        : {}),
       text_tag_list: [
         {
           tag: "text_tag",
@@ -450,6 +460,12 @@ function summaryField(label: string, value: number): CardElement {
   return field(label, `${value} 条`);
 }
 
+// Task 14: no `icon` here any more. The official icon documentation lists
+// only tokens ending in "_outlined" — "chart_colorful" (this card's icon
+// before this task) isn't documented at all, which is exactly why it
+// rendered as a broken placeholder glyph in production instead of a chart
+// icon. Rather than guess at an unverified "_outlined" replacement,
+// cardRoot's `icon` is left unset: no icon is a clean header, not a risk.
 export function createOperatorSummaryCard(
   summary: OperatorSummary | null,
 ): FeishuCard {
@@ -459,7 +475,6 @@ export function createOperatorSummaryCard(
     status: summary ? "实时数据" : "指标不可用",
     statusColor: summary ? "blue" : "grey",
     template: "blue",
-    icon: "chart_colorful",
     summary: "万护 OneCare 服务运营",
     elements: summary
       ? [
@@ -468,11 +483,7 @@ export function createOperatorSummaryCard(
             summaryField("我的跟进中", summary.myInProgress),
             summaryField("我的待闭环", summary.myPendingClosure),
           ),
-          columns(
-            summaryField("我的超时风险", summary.myOverdue),
-            summaryField("今日新增反馈", summary.newToday),
-            summaryField("全部反馈总量", summary.total),
-          ),
+          summaryField("全部反馈总量", summary.total),
           operationsWorkbenchButton(),
         ]
       : [
@@ -497,61 +508,34 @@ export function createOperatorSummaryMessage(
   };
 }
 
-// Task 13: the reply for the bot's custom-menu "今日概览" item. Unlike
-// createOperatorSummaryCard, this is a whole-org view with no per-operator
-// filtering at all, and it takes the full VocMetricsResult discriminated
-// union straight from getVocDashboardMetrics — never a value route.ts (or
-// this file) recomputed from raw records — so every number here traces back
-// to the one aggregateVocMetrics call the public dashboard and the gated
-// workbench already run through. "ok" vs "unavailable" is resolved here,
-// once, by this same switch every other consumer of a VocMetricsResult uses;
-// nothing upstream may collapse it into a boolean or a bare metrics object
-// first.
-const DIMENSION_TOP_LIMIT = 5;
-
+// Task 13 built this against getVocDashboardMetrics's full VocMetricsResult;
+// Task 14 replaced the read behind it with readTodayOverviewCounts's
+// counts-only TodayOverviewResult (today-overview.ts) after a real-tenant
+// measurement put the old full-table read at ~10.7s against ~1.0s for a
+// single filtered records/search count. "ok" vs "unavailable" is still
+// resolved here, once, exactly the same way — nothing upstream may collapse
+// it into a boolean or a bare counts object first — but the "ok" branch can
+// now only show what a count can answer directly: 反馈总量 (unfiltered),
+// 已建单/已闭环 (state-filtered), and 闭环率 (their ratio). negativeShare,
+// averageClosureHours, 打标覆盖率 and 问题维度 Top all needed the full record set
+// aggregateVocMetrics computes in memory — none of those reduce to "how many
+// rows match this filter", so none of them belong in a counts-only card. They
+// still exist, on the operations workbench the button below still points at;
+// the note beneath the numbers says so explicitly rather than leaving a
+// reader to wonder why a metric they remember from the dashboard is gone.
 function percentField(label: string, ratio: number): CardElement {
   return field(label, `${Math.round(ratio * 100)}%`);
 }
 
-function hoursField(label: string, value: number): CardElement {
-  return field(label, `${value.toFixed(1)} 小时`);
-}
-
-// Mirrors app/workbench-content.tsx's own MetricsSections exactly: 成功 /
-// (成功 + 失败) off the two counts aggregateVocMetrics already produced. That
-// page calls the same ratio 打标成功率; this card labels it 打标覆盖率, but it
-// is the identical arithmetic over the identical two fields, not a second,
-// independently-invented formula for what is supposed to be one number.
-function taggingCoverageRatio(metrics: VocMetrics): number {
-  const processed = metrics.taggingSucceeded + metrics.taggingFailed;
-  return processed === 0 ? 0 : metrics.taggingSucceeded / processed;
-}
-
-function dimensionTopMarkdown(dimensionTop: VocMetrics["dimensionTop"]): string {
-  if (dimensionTop.length === 0) {
-    return "**问题维度 Top**\n暂无维度数据";
-  }
-  const shown = dimensionTop.slice(0, DIMENSION_TOP_LIMIT);
-  const lines = shown
-    .map((row, index) => `${index + 1}. ${row.dimension} · ${row.count} 条`)
-    .join("\n");
-  return `**问题维度 Top ${shown.length}**\n${lines}`;
-}
-
-function todayOverviewElements(metrics: VocMetrics): CardElement[] {
+function todayOverviewElements(counts: TodayOverviewCounts): CardElement[] {
   return [
     columns(
-      summaryField("反馈总量", metrics.total),
-      summaryField("已建单", metrics.ticketsOpened),
-      summaryField("已闭环", metrics.ticketsClosed),
+      summaryField("反馈总量", counts.total),
+      summaryField("已建单", counts.ticketsOpened),
+      summaryField("已闭环", counts.ticketsClosed),
     ),
-    columns(
-      percentField("负向占比", metrics.negativeShare),
-      percentField("闭环率", metrics.closureRate),
-      hoursField("平均闭环时长", metrics.averageClosureHours),
-    ),
-    percentField("打标覆盖率", taggingCoverageRatio(metrics)),
-    markdown(dimensionTopMarkdown(metrics.dimensionTop)),
+    percentField("闭环率", counts.closureRate),
+    note("完整指标见运营工作台。"),
     operationsWorkbenchButton(),
   ];
 }
@@ -566,24 +550,27 @@ function unavailableOverviewElements(): CardElement[] {
   ];
 }
 
-export function createTodayOverviewCard(result: VocMetricsResult): FeishuCard {
+// Task 14: no `icon` here either, for the same reason as
+// createOperatorSummaryCard immediately above — "chart_colorful" is not a
+// documented token, and this card renders with none rather than an
+// unverified guess at a replacement.
+export function createTodayOverviewCard(result: TodayOverviewResult): FeishuCard {
   return cardRoot({
     title: "万护 OneCare 服务运营",
     subtitle: "今日概览",
     status: result.status === "ok" ? "实时数据" : "指标不可用",
     statusColor: result.status === "ok" ? "blue" : "grey",
     template: "blue",
-    icon: "chart_colorful",
     summary: "万护 OneCare 今日概览",
     elements:
       result.status === "ok"
-        ? todayOverviewElements(result.metrics)
+        ? todayOverviewElements(result.counts)
         : unavailableOverviewElements(),
   });
 }
 
 export function createTodayOverviewMessage(
-  result: VocMetricsResult,
+  result: TodayOverviewResult,
 ): FeishuOutboundMessage {
   return {
     msgType: "interactive",

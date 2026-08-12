@@ -1,65 +1,78 @@
-import type { VocRecord } from "../bitable/field-map";
-import { toWorkbenchTicket } from "../workbench/data";
-import { isOverdue } from "../workbench/query";
+import type { BitableClient } from "../bitable/client";
+import { VOC_FIELD_NAMES } from "../bitable/field-map";
 
-// Task 12: what a p2p text message from an operator now gets back, in place
-// of the demo command menu — this operator's own real VOC workload, matched
-// off `负责人` (VocRecord.ownerOpenIds) against the sender's own open_id from
-// the signed message event (event-handler.ts's readMessageSenderOpenId).
+// Task 14: this used to be computeOperatorSummary, a pure function over every
+// VOC record the caller had already read — which meant the "我的工单" menu
+// card cost a full readVocRecordsCached() scan first: 3628 records, paged
+// eight times, measured at ~10.7s end to end. records/search's own `total`
+// answers "how many of this operator's tickets are 待跟进" directly, in
+// ~1.0s, without ever reading a record body back — so this file now issues
+// that request instead of filtering an in-memory list.
 export type OperatorSummary = Readonly<{
   myPendingFollowUp: number;
   myInProgress: number;
   myPendingClosure: number;
-  // Reuses workbench/query.ts's own isOverdue (72 hours, not yet closed)
-  // rather than redefining the threshold here — the workbench page and this
-  // card must never disagree about what "overdue" means.
-  myOverdue: number;
-  newToday: number;
+  // The one full-table-shaped number kept from the old OperatorSummary:
+  // unlike myOverdue (a computed 72-hour-since-ticketOpenedAt check) and
+  // newToday (a same-Beijing-day check on feedbackAt), a shop-wide total is
+  // itself just a count with no filter at all — one more concurrent request,
+  // not a second full scan. myOverdue and newToday are gone outright: both
+  // needed a real record's timestamp fields, and keeping either would have
+  // meant keeping the very full-table read this fix exists to remove.
   total: number;
 }>;
 
-const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
+// Narrowed to the one method this reply touches, the same reasoning as
+// card-actions.ts's VocActionBitable: a fake standing in for this in a test
+// cannot silently support a wider surface (a full record read) than this
+// flow now actually uses.
+export type OperatorSummaryBitable = Pick<BitableClient, "countRecords">;
 
-// Asia/Shanghai has carried a flat UTC+8 offset with no DST since 1991, so
-// shifting the instant by a fixed 8 hours and reading off its UTC calendar
-// date is exactly the Beijing calendar date — no Intl.DateTimeFormat/timeZone
-// machinery required for what is, in the end, a same-day comparison.
-function beijingDateKey(iso: string): string | null {
-  const parsedMs = Date.parse(iso);
-  if (!Number.isFinite(parsedMs)) return null;
-  return new Date(parsedMs + BEIJING_OFFSET_MS).toISOString().slice(0, 10);
-}
+const PERSONAL_STATES = ["待跟进", "跟进中", "待闭环"] as const;
 
-export function computeOperatorSummary(
-  records: readonly VocRecord[],
+// Four independent records/search counts — three personal states plus one
+// unfiltered total — issued together via Promise.all rather than one after
+// another. Four ~1.0s requests run concurrently cost about as much as the
+// single slowest one; run serially (a `for` loop awaiting each in turn) they
+// would cost roughly four times that, eating back most of the latency win
+// this task exists to deliver.
+//
+// Any one of the four failing rejects the whole Promise.all, and this
+// returns null rather than a partial summary. A per-field "—" was
+// considered and rejected: this project's one hard rule (readVocRecordsCached's
+// own comment states it first) is that a failed read must never render as a
+// number a reader could mistake for real data, and Promise.all's
+// all-or-nothing rejection already gives that for free — a mixed
+// "some real numbers, one dash" card would need its own new rendering path
+// and its own new tests for a partial-failure mode nobody has actually
+// reported, whereas whole-card degrade reuses the exact "指标暂不可用" branch
+// createOperatorSummaryCard already has and already tests.
+export async function readOperatorSummary(
+  bitable: OperatorSummaryBitable,
   operatorOpenId: string,
-  now: Date,
-): OperatorSummary {
-  // An empty operatorOpenId (a message Feishu somehow sent with no sender —
-  // see event-handler.ts) matches nothing here, the same way it matches no
-  // Base row's 负责人 column: this never throws, it just reports an all-zero
-  // personal workload for an identity that resolved to nothing.
-  const mine = operatorOpenId
-    ? records.filter((record) => record.ownerOpenIds.includes(operatorOpenId))
-    : [];
+): Promise<OperatorSummary | null> {
+  // No usable identity to filter by. event-handler.ts's
+  // readMenuOperatorOpenId already degrades a malformed event to "" instead
+  // of throwing, and route.ts's menu_click branch already refuses to call
+  // this at all when that happens — this guard only stops a hypothetical
+  // direct caller from sending Bitable a "负责人 is ['']" filter, which has
+  // no defined meaning against a User field.
+  if (operatorOpenId.trim().length === 0) return null;
 
-  const myOverdue = mine
-    .map(toWorkbenchTicket)
-    .filter((ticket) => isOverdue(ticket, now.getTime())).length;
+  try {
+    const [myPendingFollowUp, myInProgress, myPendingClosure, total] =
+      await Promise.all([
+        ...PERSONAL_STATES.map((state) =>
+          bitable.countRecords([
+            { field_name: VOC_FIELD_NAMES.owner, value: [operatorOpenId] },
+            { field_name: VOC_FIELD_NAMES.state, value: [state] },
+          ]),
+        ),
+        bitable.countRecords([]),
+      ]);
 
-  const todayKey = beijingDateKey(now.toISOString());
-  const newToday = records.filter(
-    (record) =>
-      record.feedbackAt !== null &&
-      beijingDateKey(record.feedbackAt) === todayKey,
-  ).length;
-
-  return {
-    myPendingFollowUp: mine.filter((record) => record.state === "待跟进").length,
-    myInProgress: mine.filter((record) => record.state === "跟进中").length,
-    myPendingClosure: mine.filter((record) => record.state === "待闭环").length,
-    myOverdue,
-    newToday,
-    total: records.length,
-  };
+    return { myPendingFollowUp, myInProgress, myPendingClosure, total };
+  } catch {
+    return null;
+  }
 }

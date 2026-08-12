@@ -79,12 +79,28 @@ export type ListRecordsOptions = Readonly<{
   maxPages?: number;
 }>;
 
+// One equality condition in a records/search filter: "field_name is one of
+// value". countRecords always joins several of these with "and" (see its own
+// comment) — an owner filter alone is never enough to answer "how many of
+// this operator's tickets are 待跟进", and a state filter alone is never
+// enough to answer it per-operator.
+export type CountFilterCondition = Readonly<{
+  field_name: string;
+  value: readonly string[];
+}>;
+
 export type BitableClient = Readonly<{
   getRecord(recordId: string): Promise<VocRecord | null>;
   listRecords(options?: ListRecordsOptions): Promise<readonly VocRecord[]>;
   updateRecord(recordId: string, fields: BitableFields): Promise<void>;
   listFieldNames(): Promise<readonly string[]>;
   findByWarRoomChatId(chatId: string): Promise<VocRecord | null>;
+  // Task 14: a records/search count is ~1.0s against the live Base (measured)
+  // versus the ~10.7s a full listRecords() scan over the same table costs —
+  // the fix for the bot menu's two cards is to never pull the matching rows
+  // back at all, only Feishu's own `total` for the filter. An empty
+  // conditions array means "no filter" (the table's grand total).
+  countRecords(conditions: readonly CountFilterCondition[]): Promise<number>;
 }>;
 
 export function createBitableClient(
@@ -235,6 +251,43 @@ export function createBitableClient(
       const data = isRecord(payload.data) ? payload.data : {};
       const records = itemsToRecords(data.items);
       return records[0] ?? null;
+    },
+
+    async countRecords(conditions) {
+      // page_size=1: this only ever reads `data.total`, never the matching
+      // rows, so there is no reason to ask Feishu to serialise more than one.
+      const body =
+        conditions.length > 0
+          ? {
+              filter: {
+                conjunction: "and",
+                conditions: conditions.map((condition) => ({
+                  field_name: condition.field_name,
+                  operator: "is",
+                  value: condition.value,
+                })),
+              },
+            }
+          : {};
+
+      const payload = await call(
+        `${recordsUrl}/search?page_size=1&user_id_type=open_id`,
+        { method: "POST", body: JSON.stringify(body) },
+      );
+
+      if (payload.code !== 0) {
+        throw new Error(`Bitable count failed (code ${String(payload.code)})`);
+      }
+
+      const data = isRecord(payload.data) ? payload.data : {};
+      // A read that "succeeds" with no usable `total` must not be mistaken
+      // for a real count of zero (the same rule this project applies to
+      // every other VOC read failure) — so a malformed response is a thrown
+      // error here, not a silent 0.
+      if (typeof data.total !== "number") {
+        throw new Error("Bitable count response missing total");
+      }
+      return data.total;
     },
   };
 }

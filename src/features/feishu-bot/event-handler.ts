@@ -239,12 +239,28 @@ function readMenuOperatorOpenId(payload: JsonObject): string {
 // items from the Feishu console alone, with no deploy here. An event_key this
 // file does not recognise therefore comes back "ignored" — the same outcome
 // as no event at all — rather than any kind of error outcome that would
-// suggest something is actually wrong.
+// suggest something is actually wrong, and nothing is ever sent back to the
+// user for it: a future menu item must not start replying with a card or an
+// error message just because this deploy hasn't been taught about it yet.
+//
+// Task 14: "harmless to the user" used to also mean "invisible to this
+// deploy's own operator" — a real report that "今日概览" appeared to do
+// nothing had two suspected causes (see this task's own notes): the
+// ~10.7s full-table read fixed elsewhere in this task, and the possibility
+// that the event_key configured on the Feishu console side does not
+// actually match VOC_MENU_EVENT_KEYS. There was no way to tell which from
+// Vercel's logs, because an unrecognised key left no trace at all. This one
+// console.error line is that trace — server-side only, never a reply to the
+// user, and it fires only for the key this file does not recognise, never
+// for a normal, expected menu click.
 function parseMenuClick(payload: JsonObject): FeishuEventOutcome {
   if (!isJsonObject(payload.event)) return { kind: "ignored" };
 
   const eventKey = payload.event.event_key;
-  if (!isVocMenuEventKey(eventKey)) return { kind: "ignored" };
+  if (!isVocMenuEventKey(eventKey)) {
+    console.error("[onecare-bot] unrecognised menu event_key:", eventKey);
+    return { kind: "ignored" };
+  }
 
   return {
     kind: "menu_click",

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { BotEnv } from "../../lib/env";
 import { VOC_CARD_ACTIONS, VOC_NOTE_FIELD_NAME } from "./card-types";
@@ -725,14 +725,81 @@ describe("parseFeishuEvent menu clicks", () => {
 
   // The bot's custom menu can grow new items from the Feishu console alone,
   // with no deploy here — an event_key this file does not yet define must be
-  // silently harmless, never an error and never a card built from a key
-  // nothing here recognises.
+  // silently harmless to the *user*: never an error and never a card built
+  // from a key nothing here recognises.
   it("ignores an event_key the menu does not yet define, with zero crash", async () => {
-    const rawBody = JSON.stringify(menuClickBody({ eventKey: "voc_future_item" }));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const rawBody = JSON.stringify(menuClickBody({ eventKey: "voc_future_item" }));
 
-    await expect(
-      parse({ rawBody, headers: signedHeaders(rawBody), env }),
-    ).resolves.toEqual({ kind: "ignored" });
+      await expect(
+        parse({ rawBody, headers: signedHeaders(rawBody), env }),
+      ).resolves.toEqual({ kind: "ignored" });
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  // Task 14: "silently harmless to the user" must not mean "silent,
+  // full stop" — a user reported "今日概览" doing nothing, and the second
+  // suspected cause (alongside the ~10.7s full-table read Task 14 also
+  // fixes) was that the event_key configured on the Feishu console side
+  // might not actually be "voc_today_overview". Before this task there was
+  // no way to tell, from Vercel's own logs, what event_key had actually
+  // arrived — an unrecognised key vanished with no trace anywhere. This
+  // locks that a server-side console.error line now carries the exact
+  // event_key received, while the outcome the caller sees is unchanged.
+  it("logs the unrecognised event_key to the server console, even though the outcome is still 'ignored'", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const rawBody = JSON.stringify(
+        menuClickBody({ eventKey: "voc_mystery_item" }),
+      );
+
+      await parse({ rawBody, headers: signedHeaders(rawBody), env });
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      // console.error(...) is called with the fixed prefix as one argument
+      // and the received event_key as another (the same "label, then data"
+      // shape this codebase already uses, e.g. dashboard/route.ts's "VOC
+      // Bitable read failed:" logging) — checking the whole argument list
+      // is what actually proves the key itself was logged, not just some
+      // fixed string.
+      expect(errorSpy.mock.calls[0]).toContain("voc_mystery_item");
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  // The flip side of the test above: a recognised event_key is the expected,
+  // routine case and must never spam the server log.
+  it("logs nothing at all for a recognised event_key", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const rawBody = JSON.stringify(menuClickBody({ eventKey: "voc_today_overview" }));
+
+      await parse({ rawBody, headers: signedHeaders(rawBody), env });
+
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  // Never sends anything back to the user for an unrecognised key — the log
+  // above is a server-side diagnostic only, not a behaviour change to what
+  // the menu click's own outcome is or what route.ts does with it.
+  it("still sends nothing to the user for an unrecognised event_key beyond the logged line", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const rawBody = JSON.stringify(menuClickBody({ eventKey: "voc_mystery_item" }));
+
+      const outcome = await parse({ rawBody, headers: signedHeaders(rawBody), env });
+
+      expect(outcome).toEqual({ kind: "ignored" });
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it("trims a whitespace-padded nested operator open id", async () => {

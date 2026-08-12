@@ -41,7 +41,14 @@ import {
   parseFeishuEvent,
   type FeishuEventOutcome,
 } from "../../../../src/features/feishu-bot/event-handler";
-import { computeOperatorSummary } from "../../../../src/features/feishu-bot/operator-summary";
+import {
+  readOperatorSummary,
+  type OperatorSummaryBitable,
+} from "../../../../src/features/feishu-bot/operator-summary";
+import {
+  readTodayOverviewCounts,
+  type TodayOverviewBitable,
+} from "../../../../src/features/feishu-bot/today-overview";
 import { resolveWarRoomAction } from "../../../../src/features/feishu-bot/war-room-actions";
 import {
   buildAnswerFacts,
@@ -66,25 +73,6 @@ import {
   fallbackOwnerOpenIds,
   listOwnerRules,
 } from "../../voc/analyze/route";
-// Task 12: the p2p reply now shows the operator their own real VOC workload
-// instead of the demo command menu (bot-script.ts's createBotReply, still
-// exported and still tested on its own, but no longer wired to any entry
-// point). readVocRecordsCached already backs the public dashboard and the
-// gated workbench route (task 14) with a `"use cache"` boundary tuned for a
-// public, unauthenticated surface; reusing it here — rather than a fresh
-// `getBitableClient().listRecords()` call — means a p2p reply and the
-// workbench page can never show different numbers inside the same cache
-// window, and it avoids adding a second full-table read path on top of the
-// eight-page cross-border scan listRecords() already is.
-import {
-  getVocDashboardMetrics,
-  readVocRecordsCached,
-} from "../../voc/dashboard/route";
-// Task 13: the 今日概览 menu reply's whole reason for existing — see
-// createTodayOverviewReply below for why this discriminated union rides all
-// the way to createTodayOverviewMessage untouched, rather than being
-// collapsed into a boolean or a bare VocMetrics here.
-import type { VocMetricsResult } from "../../../../src/features/voc/metrics";
 
 // `runtime = "nodejs"` was dropped: it is the App Router default anyway, and
 // task 14 enables `cacheComponents` in next.config.ts (for the VOC
@@ -539,59 +527,48 @@ export function createResolveAction(
   };
 }
 
-// The shape readVocRecordsCached actually resolves to (its own VocRecordsRead
-// type is private to that module) — declared structurally here, the same way
-// VocActionBitable/GroupAnswerBitable above narrow BitableClient down to
-// exactly what their caller touches, so a fake in a test can stand in for
-// this without importing anything from the dashboard route.
-type VocRecordsResult =
-  | Readonly<{ ok: true; records: readonly VocRecord[] }>
-  | Readonly<{ ok: false }>;
-
-// Exported and DI'd the same way createAnswerGroupQuestion above is: `now` is
-// injectable so a test can fix "today" instead of racing the real clock (see
-// operator-summary.test.ts's own NOW constant for why that matters — Beijing
-// "today" is computed relative to it), and `readRecords` is injectable so a
-// test never has to touch readVocRecordsCached's real Bitable/env boundary to
-// prove this wiring is correct.
+// Task 14: this used to read every VOC record back via readVocRecordsCached
+// (the public dashboard's cached full-table scan) and filter it in memory —
+// measured at ~10.7s end to end against the live Base for 3628 records. That
+// full read is gone from this path entirely; `bitable` now supplies only
+// countRecords (see readOperatorSummary), and each menu click costs four
+// concurrent ~1.0s counts instead. Exported and DI'd the same way
+// createAnswerGroupQuestion above is, so a test never has to touch a real
+// Bitable/env boundary to prove this wiring is correct.
 export function createOperationsReply(
-  readRecords: () => Promise<VocRecordsResult>,
-  now: () => Date = () => new Date(),
+  bitable: () => OperatorSummaryBitable = getBitableClient,
 ): (operatorOpenId: string) => Promise<FeishuOutboundMessage> {
   return async function operationsReply(operatorOpenId) {
-    const result = await readRecords();
-    // A failed read must produce no numbers at all, never a silent 0 a
-    // reader could mistake for a real measurement — the same rule
-    // readVocRecordsCached's own comment states, applied here to what this
-    // reply shows. createOperatorSummaryMessage(null) is the "指标暂不可用"
-    // card, not an all-zero one.
-    const summary = result.ok
-      ? computeOperatorSummary(result.records, operatorOpenId, now())
-      : null;
+    // A failed count must produce no numbers at all, never a silent 0 a
+    // reader could mistake for a real measurement — readOperatorSummary
+    // itself already resolves "any count failed" to null for exactly this
+    // reason; createOperatorSummaryMessage(null) is the "指标暂不可用" card,
+    // not an all-zero one.
+    const summary = await readOperatorSummary(bitable(), operatorOpenId);
     return createOperatorSummaryMessage(summary);
   };
 }
 
-// Task 13: the "今日概览" menu reply. `getMetrics` resolves getVocDashboardMetrics's
-// own VocMetricsResult and hands it straight to createTodayOverviewMessage —
-// no branching on `.status` here, no re-deriving a boolean or a bare
-// VocMetrics first. getVocDashboardMetrics already resolved "read failed vs
-// read ok" once (see its own comment on why a `"use cache"` boundary must
-// never throw); collapsing that discriminated union a second time here would
-// just be a second place this file could get "unavailable" wrong.
+// Task 13: the "今日概览" menu reply. Task 14 replaced its data source the
+// same way as createOperationsReply above: getVocDashboardMetrics's full
+// VocMetricsResult (a second full-table aggregation) is gone, replaced by
+// readTodayOverviewCounts's five concurrent, count-only requests. This still
+// hands the whole TodayOverviewResult straight to createTodayOverviewMessage
+// — no branching on `.status` here, no re-deriving a boolean first —
+// exactly as before, just fed by a different, much cheaper read.
 export function createTodayOverviewReply(
-  getMetrics: () => Promise<VocMetricsResult> = getVocDashboardMetrics,
+  bitable: () => TodayOverviewBitable = getBitableClient,
 ): () => Promise<FeishuOutboundMessage> {
   return async function todayOverviewReply() {
-    return createTodayOverviewMessage(await getMetrics());
+    return createTodayOverviewMessage(await readTodayOverviewCounts(bitable()));
   };
 }
 
 const defaultDependencies: FeishuEventRouteDependencies = {
   readEnv: () => readBotEnv(),
   parseEvent: (input) => parseFeishuEvent({ ...input, botOpenId: getBotOpenId }),
-  operationsReply: createOperationsReply(readVocRecordsCached),
-  todayOverviewReply: createTodayOverviewReply(getVocDashboardMetrics),
+  operationsReply: createOperationsReply(getBitableClient),
+  todayOverviewReply: createTodayOverviewReply(getBitableClient),
   createMenuHint: createMenuHintMessage,
   createWelcome: createWelcomeMessage,
   replyMessage: replyToFeishuMessage,

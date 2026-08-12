@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 import type { BotEnv } from "../../../../src/lib/env";
+import type { CountFilterCondition } from "../../../../src/features/bitable/client";
 import type { VocRecord } from "../../../../src/features/bitable/field-map";
 import {
   parseFeishuEvent,
@@ -20,7 +21,6 @@ import {
   type OneCareCardAction,
   type VocCardAction,
 } from "../../../../src/features/feishu-bot/card-types";
-import type { VocMetricsResult } from "../../../../src/features/voc/metrics";
 import {
   createAnswerGroupQuestion,
   createFeishuEventRoute,
@@ -1799,27 +1799,44 @@ describe("POST /api/feishu/events — group @ Q&A end to end", () => {
 });
 
 // ---------------------------------------------------------------------------
-// createOperationsReply, Task 12 (now wired to the "我的工单" menu click
-// instead of a bare p2p text message — Task 13): event-handler.ts's
-// operatorOpenId -> computeOperatorSummary -> createOperatorSummaryMessage,
-// tested over a fake `readRecords` — this project's readVocRecordsCached (the
-// real production reader) is never touched by any test, in this file or
-// elsewhere, per the project rule against calling real Feishu/Bitable APIs
-// from a test.
+// createOperationsReply, Task 12 (wired to the "我的工单" menu click since
+// Task 13). Task 14 replaced its data source: instead of a fake `readRecords`
+// standing in for readVocRecordsCached's ~10.7s full-table scan, this now
+// drives readOperatorSummary over a fake BitableClient exposing only
+// countRecords — this project's real Bitable client is never touched by any
+// test, in this file or elsewhere, per the project rule against calling real
+// Feishu/Bitable APIs from a test.
 // ---------------------------------------------------------------------------
 
-describe("createOperationsReply", () => {
-  const NOW = new Date("2026-08-12T01:00:00.000Z");
+// A minimal fake BitableClient exposing only countRecords, keyed by
+// 负责人+流程状态 the same way readOperatorSummary actually queries it. `null`
+// makes every call reject, standing in for a failed Bitable count.
+function personalCountBitable(
+  byOwnerAndState: Readonly<{
+    total: number;
+    counts: Record<string, Record<string, number>>;
+  }> | null,
+) {
+  return {
+    countRecords: vi.fn(async (conditions: readonly CountFilterCondition[]) => {
+      if (!byOwnerAndState) {
+        throw new Error("Bitable count failed (code 99991400)");
+      }
+      if (conditions.length === 0) return byOwnerAndState.total;
+      const owner = conditions.find((c) => c.field_name === "负责人")?.value[0] ?? "";
+      const state = conditions.find((c) => c.field_name === "流程状态")?.value[0] ?? "";
+      return byOwnerAndState.counts[owner]?.[state] ?? 0;
+    }),
+  };
+}
 
+describe("createOperationsReply", () => {
   it("builds a card carrying only the requesting operator's own counts", async () => {
-    const records: readonly VocRecord[] = [
-      vocRecord({ recordId: "rec1", ownerOpenIds: ["ou_a"], state: "待跟进" }),
-      vocRecord({ recordId: "rec2", ownerOpenIds: ["ou_b"], state: "跟进中" }),
-    ];
-    const reply = createOperationsReply(
-      async () => ({ ok: true, records }),
-      () => NOW,
-    );
+    const client = personalCountBitable({
+      total: 2,
+      counts: { ou_a: { 待跟进: 1 } },
+    });
+    const reply = createOperationsReply(() => client);
 
     const message = await reply("ou_a");
 
@@ -1827,8 +1844,9 @@ describe("createOperationsReply", () => {
     expect(message.content).toContain("1 条");
   });
 
-  it("produces the unavailable card, with no numbers anywhere, when the read fails", async () => {
-    const reply = createOperationsReply(async () => ({ ok: false }), () => NOW);
+  it("produces the unavailable card, with no numbers anywhere, when a count fails", async () => {
+    const client = personalCountBitable(null);
+    const reply = createOperationsReply(() => client);
 
     const message = await reply("ou_a");
     const card = JSON.parse(message.content) as Record<string, unknown>;
@@ -1843,44 +1861,50 @@ describe("createOperationsReply", () => {
 
 // ---------------------------------------------------------------------------
 // createTodayOverviewReply, Task 13: the wiring behind the "今日概览" menu
-// click. Unlike createOperationsReply, `getMetrics` here resolves the whole
-// VocMetricsResult discriminated union getVocDashboardMetrics itself would
-// produce — this locks that the factory forwards it to
-// createTodayOverviewMessage untouched, for both the "ok" and the
-// "unavailable" branch, rather than collapsing it into something narrower
-// first.
+// click. Task 14 replaced its data source the same way as createOperationsReply
+// above: `getMetrics`'s full VocMetricsResult (from getVocDashboardMetrics's
+// ~10.7s full-table aggregation) is gone, replaced by readTodayOverviewCounts
+// over a fake BitableClient exposing only countRecords.
 // ---------------------------------------------------------------------------
 
+function overviewCountBitable(
+  byState: Readonly<{ total: number; counts: Record<string, number> }> | null,
+) {
+  return {
+    countRecords: vi.fn(async (conditions: readonly CountFilterCondition[]) => {
+      if (!byState) {
+        throw new Error("Bitable count failed (code 99991400)");
+      }
+      if (conditions.length === 0) return byState.total;
+      const state = conditions[0]?.value[0] ?? "";
+      return byState.counts[state] ?? 0;
+    }),
+  };
+}
+
 describe("createTodayOverviewReply", () => {
-  it("carries the read metrics straight through to the card, with no per-operator filtering", async () => {
-    const metricsResult: VocMetricsResult = {
-      status: "ok",
-      metrics: {
-        total: 42,
-        byPolarity: { 好评: 10, 中评: 12, 差评: 20 },
-        dimensionTop: [{ dimension: "维修价格", count: 9 }],
-        byChannel: [{ channel: "客服热线", count: 42 }],
-        negativeShare: 0.5,
-        ticketsOpened: 30,
-        ticketsClosed: 18,
-        closureRate: 0.6,
-        averageClosureHours: 8,
-        taggingAttempted: 42,
-        taggingSucceeded: 36,
-        taggingFailed: 2,
-        taggingPending: 4,
-      },
-    };
-    const reply = createTodayOverviewReply(async () => metricsResult);
+  it("carries the read counts straight through to the card, with no per-operator filtering", async () => {
+    const client = overviewCountBitable({
+      total: 42,
+      counts: { 待跟进: 5, 跟进中: 5, 待闭环: 0, 已闭环: 30 },
+    });
+    const reply = createTodayOverviewReply(() => client);
 
     const message = await reply();
 
     expect(message.content).toContain("反馈总量");
     expect(message.content).toContain("42");
+    expect(message.content).toContain("已建单");
+    expect(message.content).toContain("40");
+    expect(message.content).toContain("已闭环");
+    expect(message.content).toContain("30");
+    expect(message.content).toContain("闭环率");
+    expect(message.content).toContain("75%");
   });
 
-  it("produces the unavailable card, with no numbers anywhere, when the read is unavailable", async () => {
-    const reply = createTodayOverviewReply(async () => ({ status: "unavailable" }));
+  it("produces the unavailable card, with no numbers anywhere, when a count fails", async () => {
+    const client = overviewCountBitable(null);
+    const reply = createTodayOverviewReply(() => client);
 
     const message = await reply();
     const card = JSON.parse(message.content) as Record<string, unknown>;
@@ -1999,9 +2023,17 @@ function menuClickEventBody(eventKey: string, operatorOpenId = "ou_operator") {
   };
 }
 
+// Task 14: replaces the readVocRecordsCached/getVocDashboardMetrics-shaped
+// fakes with a fake BitableClient exposing only countRecords — the same
+// dependency surface production now wires both replies through. `null` for
+// either forces every count for that card to fail, standing in for the old
+// `{ status: "unavailable" }` / `{ ok: false }` sentinels.
 function liveMenuDependencies(
-  records: readonly VocRecord[],
-  metricsResult: VocMetricsResult,
+  personal: Readonly<{
+    total: number;
+    counts: Record<string, Record<string, number>>;
+  }> | null,
+  overview: Readonly<{ total: number; counts: Record<string, number> }> | null,
 ) {
   const scheduled: Array<() => Promise<void>> = [];
   return {
@@ -2010,8 +2042,8 @@ function liveMenuDependencies(
       readEnv: () => env,
       parseEvent: (input: { rawBody: string; headers: Headers; env: BotEnv }) =>
         parseFeishuEvent({ ...input, botOpenId: async () => "ou_bot_unused" }),
-      operationsReply: createOperationsReply(async () => ({ ok: true, records })),
-      todayOverviewReply: createTodayOverviewReply(async () => metricsResult),
+      operationsReply: createOperationsReply(() => personalCountBitable(personal)),
+      todayOverviewReply: createTodayOverviewReply(() => overviewCountBitable(overview)),
       createMenuHint: vi.fn(() => ({
         msgType: "text" as const,
         content: JSON.stringify({ text: "请使用菜单查看数据" }),
@@ -2048,8 +2080,10 @@ function liveMenuDependencies(
 
 describe("POST /api/feishu/events — menu clicks, end to end", () => {
   it("replies to voc_my_tickets with a real card carrying no demo markers, DMed to the real event body's operator", async () => {
-    const records = [vocRecord({ ownerOpenIds: ["ou_operator"], state: "待跟进" })];
-    const setup = liveMenuDependencies(records, { status: "unavailable" });
+    const setup = liveMenuDependencies(
+      { total: 1, counts: { ou_operator: { 待跟进: 1 } } },
+      null,
+    );
 
     const response = await createFeishuEventRoute(setup.dependencies)(
       signedRequest(menuClickEventBody("voc_my_tickets", "ou_operator")),
@@ -2072,12 +2106,13 @@ describe("POST /api/feishu/events — menu clicks, end to end", () => {
   });
 
   it("counts only the clicking operator's own records for voc_my_tickets, proven end to end from a real event body", async () => {
-    const records = [
-      vocRecord({ recordId: "rec_alice", ownerOpenIds: ["ou_alice"], state: "待跟进" }),
-      vocRecord({ recordId: "rec_bob_1", ownerOpenIds: ["ou_bob"], state: "待跟进" }),
-      vocRecord({ recordId: "rec_bob_2", ownerOpenIds: ["ou_bob"], state: "待跟进" }),
-    ];
-    const setup = liveMenuDependencies(records, { status: "unavailable" });
+    const setup = liveMenuDependencies(
+      {
+        total: 3,
+        counts: { ou_alice: { 待跟进: 1 }, ou_bob: { 待跟进: 2 } },
+      },
+      null,
+    );
 
     await createFeishuEventRoute(setup.dependencies)(
       signedRequest(menuClickEventBody("voc_my_tickets", "ou_bob")),
@@ -2093,26 +2128,11 @@ describe("POST /api/feishu/events — menu clicks, end to end", () => {
     expect(content).toContain("2 条");
   });
 
-  it("replies to voc_today_overview with the shared, un-recomputed VocMetricsResult, DMed to the clicking operator", async () => {
-    const metricsResult: VocMetricsResult = {
-      status: "ok",
-      metrics: {
-        total: 120,
-        byPolarity: { 好评: 40, 中评: 30, 差评: 50 },
-        dimensionTop: [{ dimension: "维修时间", count: 12 }],
-        byChannel: [{ channel: "电商评价", count: 120 }],
-        negativeShare: 0.4,
-        ticketsOpened: 80,
-        ticketsClosed: 60,
-        closureRate: 0.75,
-        averageClosureHours: 12.5,
-        taggingAttempted: 120,
-        taggingSucceeded: 100,
-        taggingFailed: 5,
-        taggingPending: 15,
-      },
-    };
-    const setup = liveMenuDependencies([], metricsResult);
+  it("replies to voc_today_overview with the shared, un-recomputed counts, DMed to the clicking operator", async () => {
+    const setup = liveMenuDependencies(null, {
+      total: 120,
+      counts: { 待跟进: 20, 跟进中: 20, 待闭环: 40, 已闭环: 60 },
+    });
 
     await createFeishuEventRoute(setup.dependencies)(
       signedRequest(menuClickEventBody("voc_today_overview", "ou_operator")),
@@ -2124,13 +2144,16 @@ describe("POST /api/feishu/events — menu clicks, end to end", () => {
     const content = call[0].message.content;
     expect(content).toContain("反馈总量");
     expect(content).toContain("120");
-    expect(content).toContain("打标覆盖率");
+    expect(content).toContain("已建单");
+    expect(content).toContain("已闭环");
+    expect(content).toContain("60");
+    expect(content).toContain("闭环率");
   });
 
   // The menu can grow new items from the Feishu console alone; this deploy
   // must treat one it does not recognise as a complete no-op, never a card.
   it("sends zero outbound calls for a menu item this deploy does not recognise", async () => {
-    const setup = liveMenuDependencies([], { status: "unavailable" });
+    const setup = liveMenuDependencies(null, null);
 
     const response = await createFeishuEventRoute(setup.dependencies)(
       signedRequest(menuClickEventBody("voc_future_item", "ou_operator")),

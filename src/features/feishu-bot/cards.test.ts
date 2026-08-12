@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { VocRecord } from "../bitable/field-map";
 import type { TagResult } from "../tagging/contracts";
-import type { VocMetrics, VocMetricsResult } from "../voc/metrics";
 import type { OperatorSummary } from "./operator-summary";
+import type { TodayOverviewCounts, TodayOverviewResult } from "./today-overview";
 import {
   ONECARE_CARD_ACTIONS,
   ONECARE_CASE_ID,
@@ -520,8 +520,6 @@ function operatorSummary(overrides: Partial<OperatorSummary> = {}): OperatorSumm
     myPendingFollowUp: 3,
     myInProgress: 2,
     myPendingClosure: 1,
-    myOverdue: 4,
-    newToday: 7,
     total: 3628,
     ...overrides,
   };
@@ -531,6 +529,12 @@ function operatorSummary(overrides: Partial<OperatorSummary> = {}): OperatorSumm
 // text message gets back. Unlike every demo view above, this card must never
 // carry the demo case id, the word "演示", or a "not real data" disclaimer —
 // the whole point of sending it is that the numbers on it are real.
+//
+// Task 14: myOverdue and newToday are gone from OperatorSummary (and so from
+// this card) — both needed a full record's timestamp fields, and this card's
+// data source switched from a ~10.7s full-table scan to four concurrent
+// records/search counts that never read a record body at all (see
+// operator-summary.ts's own comment for the measured numbers).
 describe("createOperatorSummaryCard", () => {
   it("is a real Card 2.0 payload with no demo markers at all", () => {
     const card = createOperatorSummaryCard(operatorSummary());
@@ -542,15 +546,27 @@ describe("createOperatorSummaryCard", () => {
     expect(json).toContain("万护 OneCare 服务运营");
   });
 
-  it("renders each of the operator's own counts and the two shop-wide totals", () => {
+  // Task 14: neither this card nor createTodayOverviewCard may use a
+  // "_colorful" icon token — the user verified against Feishu's own icon
+  // documentation that every valid standard_icon token ends in "_outlined",
+  // and "chart_colorful" (this card's icon before this task) is not
+  // documented at all, which is why it rendered as a broken placeholder in
+  // production. Rather than guess at an unverified "_outlined" replacement,
+  // this card renders with no icon at all — cardRoot's `icon` is optional,
+  // and an absent icon is not a rendering risk the way an invalid token is.
+  it("carries no _colorful icon token anywhere in the card", () => {
+    const json = JSON.stringify(createOperatorSummaryCard(operatorSummary()));
+    expect(json).not.toContain("_colorful");
+    expect(JSON.stringify(createOperatorSummaryCard(null))).not.toContain("_colorful");
+  });
+
+  it("renders each of the operator's own counts and the shop-wide total", () => {
     const json = JSON.stringify(
       createOperatorSummaryCard(
         operatorSummary({
           myPendingFollowUp: 11,
           myInProgress: 22,
           myPendingClosure: 33,
-          myOverdue: 44,
-          newToday: 55,
           total: 3628,
         }),
       ),
@@ -562,10 +578,6 @@ describe("createOperatorSummaryCard", () => {
     expect(json).toContain("22 条");
     expect(json).toContain("我的待闭环");
     expect(json).toContain("33 条");
-    expect(json).toContain("我的超时风险");
-    expect(json).toContain("44 条");
-    expect(json).toContain("今日新增反馈");
-    expect(json).toContain("55 条");
     expect(json).toContain("全部反馈总量");
     expect(json).toContain("3628 条");
   });
@@ -638,36 +650,33 @@ describe("createOperatorSummaryMessage", () => {
   });
 });
 
-// Task 13: the "今日概览" custom-menu reply. Unlike createOperatorSummaryCard,
-// this is a whole-org view with no per-operator filtering, and it takes the
-// full VocMetricsResult discriminated union directly — these tests exercise
-// both branches of that union the same way createOperatorSummaryCard's own
-// tests exercise `summary | null`.
-function vocMetrics(overrides: Partial<VocMetrics> = {}): VocMetrics {
+// Task 13 built this against getVocDashboardMetrics's full VocMetricsResult;
+// Task 14 replaced the read behind it with readTodayOverviewCounts's
+// counts-only TodayOverviewResult (see today-overview.ts) — a ~10.7s
+// full-table aggregation traded for five concurrent, ~1.0s-each
+// records/search counts. Only the four numbers a count can answer directly
+// survive on the card: 反馈总量 (an unfiltered total), 已建单 and 已闭环 (each a
+// state-filtered count), and 闭环率 (their ratio). negativeShare,
+// averageClosureHours, 打标覆盖率 and 问题维度 Top all needed the full record
+// set in memory and are gone from this card entirely — the brief's own
+// reasoning is that a menu card's value is a number in three seconds, not a
+// second copy of the dashboard; the workbench button (kept) is where those
+// live now, alongside a one-line pointer saying so.
+function todayOverviewCounts(
+  overrides: Partial<TodayOverviewCounts> = {},
+): TodayOverviewCounts {
   return {
     total: 120,
-    byPolarity: { 好评: 40, 中评: 30, 差评: 50 },
-    dimensionTop: [
-      { dimension: "维修时间", count: 12 },
-      { dimension: "维修价格", count: 9 },
-    ],
-    byChannel: [{ channel: "电商评价", count: 120 }],
-    negativeShare: 0.4,
     ticketsOpened: 80,
     ticketsClosed: 60,
     closureRate: 0.75,
-    averageClosureHours: 12.5,
-    taggingAttempted: 120,
-    taggingSucceeded: 100,
-    taggingFailed: 5,
-    taggingPending: 15,
     ...overrides,
   };
 }
 
 describe("createTodayOverviewCard", () => {
   it("is a real Card 2.0 payload with no demo markers at all", () => {
-    const card = createTodayOverviewCard({ status: "ok", metrics: vocMetrics() });
+    const card = createTodayOverviewCard({ status: "ok", counts: todayOverviewCounts() });
     const json = JSON.stringify(card);
 
     expect(card.schema).toBe("2.0");
@@ -676,58 +685,70 @@ describe("createTodayOverviewCard", () => {
     expect(json).toContain("今日概览");
   });
 
-  it("renders every metric the brief calls for, each traceable to the given VocMetrics field", () => {
+  // Same rule and reasoning as createOperatorSummaryCard's equivalent test:
+  // "chart_colorful" (this card's icon before this task) is not a documented
+  // token, so this card now renders with no icon at all rather than guessing
+  // at an unverified "_outlined" replacement.
+  it("carries no _colorful icon token anywhere in the card", () => {
+    const okJson = JSON.stringify(
+      createTodayOverviewCard({ status: "ok", counts: todayOverviewCounts() }),
+    );
+    const unavailableJson = JSON.stringify(
+      createTodayOverviewCard({ status: "unavailable" }),
+    );
+
+    expect(okJson).not.toContain("_colorful");
+    expect(unavailableJson).not.toContain("_colorful");
+  });
+
+  it("renders every count-derived metric, each traceable to a TodayOverviewCounts field", () => {
     const json = JSON.stringify(
       createTodayOverviewCard({
         status: "ok",
-        metrics: vocMetrics({
+        counts: todayOverviewCounts({
           total: 3628,
-          negativeShare: 0.42,
           ticketsOpened: 900,
           ticketsClosed: 540,
           closureRate: 0.6,
-          averageClosureHours: 26.5,
-          taggingSucceeded: 100,
-          taggingFailed: 0,
         }),
       }),
     );
 
     expect(json).toContain("反馈总量");
     expect(json).toContain("3628");
-    expect(json).toContain("负向占比");
-    expect(json).toContain("42%");
     expect(json).toContain("已建单");
     expect(json).toContain("900");
     expect(json).toContain("已闭环");
     expect(json).toContain("540");
     expect(json).toContain("闭环率");
     expect(json).toContain("60%");
-    expect(json).toContain("平均闭环时长");
-    expect(json).toContain("26.5 小时");
-    expect(json).toContain("打标覆盖率");
-    // taggingSucceeded 100 / (100 + taggingFailed 0) = 100%, the same
-    // 成功/(成功+失败) formula app/workbench-content.tsx already computes for
-    // 打标成功率 — this only proves this card reuses that exact arithmetic.
-    expect(json).toContain("100%");
-    expect(json).toContain("问题维度 Top");
-    expect(json).toContain("维修时间");
-    expect(json).toContain("维修价格");
   });
 
-  it("shows no dimensions and says so when dimensionTop is empty", () => {
+  // The metrics this card no longer computes must not silently reappear —
+  // there is no field on TodayOverviewCounts to render them from any more.
+  it("no longer renders the metrics that need a full-table aggregation", () => {
     const json = JSON.stringify(
-      createTodayOverviewCard({
-        status: "ok",
-        metrics: vocMetrics({ dimensionTop: [] }),
-      }),
+      createTodayOverviewCard({ status: "ok", counts: todayOverviewCounts() }),
     );
 
-    expect(json).toContain("暂无维度数据");
+    expect(json).not.toContain("负向占比");
+    expect(json).not.toContain("平均闭环时长");
+    expect(json).not.toContain("打标覆盖率");
+    expect(json).not.toContain("问题维度");
+  });
+
+  // The brief's explicit requirement: what got dropped from the card must be
+  // pointed at, not just silently missing.
+  it("tells the reader the full metrics live on the operations workbench", () => {
+    const json = JSON.stringify(
+      createTodayOverviewCard({ status: "ok", counts: todayOverviewCounts() }),
+    );
+
+    expect(json).toContain("完整指标见运营工作台");
   });
 
   it("links the workbench button to the real operations site", () => {
-    const card = createTodayOverviewCard({ status: "ok", metrics: vocMetrics() });
+    const card = createTodayOverviewCard({ status: "ok", counts: todayOverviewCounts() });
     const buttons = collectTaggedValues(card, "button") as Array<
       Record<string, unknown>
     >;
@@ -750,7 +771,7 @@ describe("createTodayOverviewCard", () => {
   // mistake for a real measurement. Checked at the strongest level available,
   // exactly like createOperatorSummaryCard's own equivalent test — the
   // card's entire content area carries no digit character whatsoever.
-  it("shows no numbers at all when the metrics are unavailable, only an unavailable notice", () => {
+  it("shows no numbers at all when the counts are unavailable, only an unavailable notice", () => {
     const card = createTodayOverviewCard({ status: "unavailable" });
     const elementsJson = JSON.stringify(
       (card.body as Record<string, unknown>).elements,
@@ -761,7 +782,7 @@ describe("createTodayOverviewCard", () => {
     expect(JSON.stringify(card)).not.toContain("演示");
   });
 
-  it("still offers the workbench button when the metrics are unavailable", () => {
+  it("still offers the workbench button when the counts are unavailable", () => {
     const card = createTodayOverviewCard({ status: "unavailable" });
     const buttons = collectTaggedValues(card, "button") as Array<
       Record<string, unknown>
@@ -778,7 +799,7 @@ describe("createTodayOverviewCard", () => {
 
 describe("createTodayOverviewMessage", () => {
   it("wraps the today-overview card as an interactive outbound message", () => {
-    const result: VocMetricsResult = { status: "ok", metrics: vocMetrics() };
+    const result: TodayOverviewResult = { status: "ok", counts: todayOverviewCounts() };
     const message = createTodayOverviewMessage(result);
 
     expect(message.msgType).toBe("interactive");

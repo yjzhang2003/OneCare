@@ -1,165 +1,128 @@
 import { describe, expect, it } from "vitest";
 
-import type { VocRecord } from "../bitable/field-map";
-import { computeOperatorSummary } from "./operator-summary";
+import type { CountFilterCondition } from "../bitable/client";
+import {
+  readOperatorSummary,
+  type OperatorSummaryBitable,
+} from "./operator-summary";
 
-function vocRecord(overrides: Partial<VocRecord> = {}): VocRecord {
-  return {
-    recordId: "rec1",
-    recordNumber: "VOC-0001",
-    channel: "电商评价",
-    category: "冰箱",
-    model: "BCD-525WNK1PU",
-    content: "冷藏室温度持续偏高",
-    rating: 2,
-    feedbackAt: "2026-08-10T02:00:00.000Z",
-    state: "待跟进",
-    polarity: "差评",
-    dimensions: ["维修时间"],
-    summary: "",
-    replies: [],
-    severity: "中",
-    ownerOpenIds: ["ou_operator_a"],
-    ownerNames: ["张三"],
-    retryCount: 0,
-    ticketOpenedAt: "2026-08-10T02:00:00.000Z",
-    closedAt: null,
-    warRoomChatId: "",
-    ...overrides,
-  };
+// Task 14: computeOperatorSummary (the pure, full-record filter this file
+// used to export) is gone. The "我的工单" menu card measured ~10.7s because it
+// pulled every one of 3628 records back just to filter them in memory —
+// readOperatorSummary replaces that with four concurrent, filtered
+// records/search counts (~1.0s each, measured against the live Base) and
+// never reads a record body at all.
+
+type FakeCall = readonly CountFilterCondition[];
+
+function fakeBitable(
+  handler: (conditions: FakeCall) => Promise<number>,
+): OperatorSummaryBitable {
+  return { countRecords: handler };
 }
 
-// A fixed instant so every test describes "now" the same way instead of
-// depending on the real wall clock at test-run time. 2026-08-12T01:00:00Z is
-// 2026-08-12T09:00:00+08:00 in Beijing — safely inside "today" there with
-// room on both sides for the UTC-yesterday/Beijing-today fixture below.
-const NOW = new Date("2026-08-12T01:00:00.000Z");
+describe("readOperatorSummary", () => {
+  it("counts each of the three personal states filtered by 负责人 + 流程状态", async () => {
+    const calls: FakeCall[] = [];
+    const bitable = fakeBitable(async (conditions) => {
+      calls.push(conditions);
+      return 0;
+    });
 
-describe("computeOperatorSummary", () => {
-  it("counts only the records owned by the requesting operator", () => {
-    const records = [
-      vocRecord({ recordId: "rec1", ownerOpenIds: ["ou_a"], state: "待跟进" }),
-      vocRecord({ recordId: "rec2", ownerOpenIds: ["ou_a"], state: "跟进中" }),
-      vocRecord({ recordId: "rec3", ownerOpenIds: ["ou_b"], state: "待跟进" }),
-      vocRecord({ recordId: "rec4", ownerOpenIds: ["ou_b"], state: "待闭环" }),
-    ];
+    await readOperatorSummary(bitable, "ou_a");
 
-    const forA = computeOperatorSummary(records, "ou_a", NOW);
-    const forB = computeOperatorSummary(records, "ou_b", NOW);
-
-    expect(forA.myPendingFollowUp).toBe(1);
-    expect(forA.myInProgress).toBe(1);
-    expect(forA.myPendingClosure).toBe(0);
-    expect(forB.myPendingFollowUp).toBe(1);
-    expect(forB.myInProgress).toBe(0);
-    expect(forB.myPendingClosure).toBe(1);
-    // Both operators still see the same shop-wide totals — those two fields
-    // are never filtered by owner.
-    expect(forA.total).toBe(4);
-    expect(forB.total).toBe(4);
+    // The three personal-state counts, each carrying both the owner filter
+    // and one state filter — a bare owner filter alone cannot tell 待跟进
+    // apart from 跟进中, and a bare state filter alone would count every
+    // operator's tickets together.
+    expect(calls).toContainEqual([
+      { field_name: "负责人", value: ["ou_a"] },
+      { field_name: "流程状态", value: ["待跟进"] },
+    ]);
+    expect(calls).toContainEqual([
+      { field_name: "负责人", value: ["ou_a"] },
+      { field_name: "流程状态", value: ["跟进中"] },
+    ]);
+    expect(calls).toContainEqual([
+      { field_name: "负责人", value: ["ou_a"] },
+      { field_name: "流程状态", value: ["待闭环"] },
+    ]);
+    // The shop-wide total: no owner filter, no state filter.
+    expect(calls).toContainEqual([]);
+    expect(calls).toHaveLength(4);
   });
 
-  it("reports an all-zero personal workload for an operator who owns nothing", () => {
-    const records = [
-      vocRecord({ ownerOpenIds: ["ou_a"], state: "待跟进" }),
-      vocRecord({ ownerOpenIds: ["ou_a"], state: "跟进中" }),
-    ];
+  it("maps each count to the field it counted, positionally correct", async () => {
+    const bitable = fakeBitable(async (conditions) => {
+      if (conditions.length === 0) return 3628;
+      const state = conditions.find((c) => c.field_name === "流程状态")?.value[0];
+      if (state === "待跟进") return 11;
+      if (state === "跟进中") return 22;
+      if (state === "待闭环") return 33;
+      throw new Error(`unexpected conditions: ${JSON.stringify(conditions)}`);
+    });
 
-    const summary = computeOperatorSummary(records, "ou_stranger", NOW);
+    const summary = await readOperatorSummary(bitable, "ou_a");
 
-    expect(summary.myPendingFollowUp).toBe(0);
-    expect(summary.myInProgress).toBe(0);
-    expect(summary.myPendingClosure).toBe(0);
-    expect(summary.myOverdue).toBe(0);
-    // The two shop-wide numbers are unaffected by the empty personal match.
-    expect(summary.total).toBe(2);
+    expect(summary).toEqual({
+      myPendingFollowUp: 11,
+      myInProgress: 22,
+      myPendingClosure: 33,
+      total: 3628,
+    });
   });
 
-  it("degrades to an all-zero personal workload for an empty operator id, without throwing", () => {
-    const records = [vocRecord({ ownerOpenIds: ["ou_a"] })];
+  // The whole reason four separate requests are worth making at all instead
+  // of one filtered listRecords() scan: run concurrently, their wall-clock
+  // cost is the slowest single ~1.0s request, not four of them stacked. This
+  // proves concurrency directly from call ordering (no timers, no real
+  // clock) — a serial `for (const state of states) await countRecords(...)`
+  // would only have made the first call by the time this assertion runs.
+  it("issues all four counts concurrently rather than one after another", async () => {
+    const calls: FakeCall[] = [];
+    const resolvers: Array<(value: number) => void> = [];
+    const bitable = fakeBitable(
+      (conditions) =>
+        new Promise<number>((resolve) => {
+          calls.push(conditions);
+          resolvers.push(resolve);
+        }),
+    );
 
-    expect(() => computeOperatorSummary(records, "", NOW)).not.toThrow();
-    const summary = computeOperatorSummary(records, "", NOW);
-    expect(summary.myPendingFollowUp).toBe(0);
-    expect(summary.myOverdue).toBe(0);
+    const pending = readOperatorSummary(bitable, "ou_a");
+
+    // Flush microtasks so every synchronous call inside Promise.all has had
+    // the chance to run, without resolving any of them yet.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(calls).toHaveLength(4);
+
+    resolvers.forEach((resolve, index) => resolve(index));
+    await expect(pending).resolves.not.toBeNull();
   });
 
-  // isOverdue (workbench/query.ts) is 72 hours since ticketOpenedAt (falling
-  // back to feedbackAt) for a record not yet in a terminal state — reused
-  // here rather than redefined, so this card and the workbench page can
-  // never disagree about what "overdue" means.
-  it("counts only the operator's own overdue tickets, reusing workbench/query.ts's isOverdue", () => {
-    const records = [
-      // 80 hours before NOW, still open: overdue.
-      vocRecord({
-        recordId: "rec_overdue",
-        ownerOpenIds: ["ou_a"],
-        state: "跟进中",
-        ticketOpenedAt: "2026-08-08T17:00:00.000Z",
-      }),
-      // 10 hours before NOW, still open: not overdue.
-      vocRecord({
-        recordId: "rec_fresh",
-        ownerOpenIds: ["ou_a"],
-        state: "跟进中",
-        ticketOpenedAt: "2026-08-11T15:00:00.000Z",
-      }),
-      // 80 hours before NOW but already closed: not overdue.
-      vocRecord({
-        recordId: "rec_closed",
-        ownerOpenIds: ["ou_a"],
-        state: "已闭环",
-        ticketOpenedAt: "2026-08-08T17:00:00.000Z",
-      }),
-      // Someone else's overdue ticket must never count against this operator.
-      vocRecord({
-        recordId: "rec_other",
-        ownerOpenIds: ["ou_b"],
-        state: "跟进中",
-        ticketOpenedAt: "2026-08-08T17:00:00.000Z",
-      }),
-    ];
+  // The project's one hard rule (readVocRecordsCached's own comment): a
+  // failed read must never render as a number a reader could mistake for
+  // real data. Any single one of the four counts failing must not produce a
+  // partial summary with a silent 0 sitting next to three real numbers.
+  it("degrades to null, not a partial summary, when any one count fails", async () => {
+    const bitable = fakeBitable(async (conditions) => {
+      const state = conditions.find((c) => c.field_name === "流程状态")?.value[0];
+      if (state === "跟进中") throw new Error("Bitable count failed (code 99991400)");
+      return 5;
+    });
 
-    const summary = computeOperatorSummary(records, "ou_a", NOW);
-    expect(summary.myOverdue).toBe(1);
+    await expect(readOperatorSummary(bitable, "ou_a")).resolves.toBeNull();
   });
 
-  it("counts today's new feedback in Beijing time, not UTC", () => {
-    const records = [
-      // UTC 2026-08-11 20:00 is Beijing 2026-08-12 04:00 — Beijing "today"
-      // relative to NOW, even though the UTC calendar date is "yesterday".
-      vocRecord({
-        recordId: "rec_beijing_today",
-        feedbackAt: "2026-08-11T20:00:00.000Z",
-      }),
-      // UTC 2026-08-11 10:00 is Beijing 2026-08-11 18:00 — genuinely
-      // yesterday in both zones.
-      vocRecord({
-        recordId: "rec_yesterday",
-        feedbackAt: "2026-08-11T10:00:00.000Z",
-      }),
-      // NOW itself: Beijing 2026-08-12 09:00 — today either way.
-      vocRecord({ recordId: "rec_now", feedbackAt: NOW.toISOString() }),
-    ];
+  it("returns null for an empty operator id without calling countRecords", async () => {
+    const countRecords = async () => {
+      throw new Error("should not be called");
+    };
 
-    const summary = computeOperatorSummary(records, "ou_unused", NOW);
-    expect(summary.newToday).toBe(2);
-  });
-
-  it("excludes a record with no feedback time from today's count", () => {
-    const records = [vocRecord({ feedbackAt: null })];
-
-    const summary = computeOperatorSummary(records, "ou_unused", NOW);
-    expect(summary.newToday).toBe(0);
-  });
-
-  it("reports the shop-wide total as every record, regardless of owner or state", () => {
-    const records = [
-      vocRecord({ recordId: "rec1", state: "待分析" }),
-      vocRecord({ recordId: "rec2", state: "已闭环" }),
-      vocRecord({ recordId: "rec3", ownerOpenIds: [] }),
-    ];
-
-    expect(computeOperatorSummary(records, "ou_unused", NOW).total).toBe(3);
+    await expect(readOperatorSummary({ countRecords }, "")).resolves.toBeNull();
+    await expect(readOperatorSummary({ countRecords }, "   ")).resolves.toBeNull();
   });
 });
