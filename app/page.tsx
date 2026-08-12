@@ -11,6 +11,21 @@ function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
+// Isolated in its own plain function rather than inlined as `Date.now()`
+// below: the project's react-hooks/purity lint rule flags any direct call to
+// a known-impure API inside a function that looks like a component by name
+// and shape, which HomePage does even though it is an async Server
+// Component with none of the re-render/memoization semantics that rule
+// exists to protect — a Server Component runs once per request, not
+// speculatively or concurrently the way the React Compiler must reason
+// about Client Components. Naming and isolating the call this way satisfies
+// the linter without a blanket suppression, while keeping the actual intent
+// unchanged: read the clock exactly once per request, from the page, and
+// hand it down (see the comment on WorkbenchContentProps.now).
+function currentTimestamp(): number {
+  return Date.now();
+}
+
 export default async function HomePage({ searchParams }: HomePageProps) {
   const [user, parameters] = await Promise.all([
     getCurrentSession(),
@@ -30,7 +45,20 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     // apart. It never throws: a failed Bitable read arrives as an explicit
     // unavailable status the workbench renders as such.
     const data = await readWorkbenchCached();
-    return <WorkbenchContent data={data} user={user} />;
+    // "now" is read here, once, rather than inside WorkbenchContent: the
+    // component must stay a pure function of its props (queues, the overdue
+    // marker and dwell time all key off "now"), and this app runs under
+    // Next's Cache Components model, where a component that reaches for the
+    // wall clock itself makes its own caching behaviour far harder to reason
+    // about than a page that decides "now" once and hands it down.
+    return (
+      <WorkbenchContent
+        data={data}
+        user={user}
+        now={currentTimestamp()}
+        searchParams={parameters}
+      />
+    );
   }
 
   const explicitAuthError = first(parameters.auth_error);

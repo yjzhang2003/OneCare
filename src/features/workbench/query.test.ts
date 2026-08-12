@@ -23,6 +23,8 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
     content: "报修后等了三天没人上门",
     polarity: "差评",
     dimensions: ["维修时间"],
+    summary: "",
+    replies: [],
     severity: "中",
     state: "待跟进",
     ownerNames: ["张三"],

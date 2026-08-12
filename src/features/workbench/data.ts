@@ -1,4 +1,5 @@
 import type { VocRecord } from "../bitable/field-map";
+import type { VocReply } from "../tagging/contracts";
 import {
   aggregateVocMetrics,
   type VocMetricsInput,
@@ -24,6 +25,13 @@ export type WorkbenchTicket = Readonly<{
   content: string;
   polarity: VocPolarity | null;
   dimensions: readonly VocDimension[];
+  // AI-authored, read-only. Added for the ticket detail drill-down (task 15):
+  // an operator opening one record needs the summary and drafted replies
+  // right there, not a second navigation to the Feishu card that has them.
+  summary: string;
+  // Same {tone, text} shape the card renders "【语气】正文" from. Read-only here
+  // too — this page has no write path, so these are reference text only.
+  replies: readonly VocReply[];
   severity: VocSeverity | null;
   state: VocState;
   ownerNames: readonly string[];
@@ -59,6 +67,8 @@ export function toWorkbenchTicket(record: VocRecord): WorkbenchTicket {
     content: record.content,
     polarity: record.polarity,
     dimensions: record.dimensions,
+    summary: record.summary,
+    replies: record.replies,
     severity: record.severity,
     state: record.state,
     ownerNames: record.ownerNames,

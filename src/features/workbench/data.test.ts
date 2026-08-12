@@ -40,6 +40,8 @@ describe("toWorkbenchTicket", () => {
       content: "报修后等了三天没人上门",
       polarity: "差评",
       dimensions: ["维修时间"],
+      summary: "等待三天无人上门",
+      replies: [],
       severity: "中",
       state: "待跟进",
       ownerNames: ["张三"],
@@ -60,6 +62,20 @@ describe("toWorkbenchTicket", () => {
     expect(
       toWorkbenchTicket(record({ closedAt: "not a date" })).durationHours,
     ).toBeNull();
+  });
+
+  it("carries the AI summary and reply drafts through for the ticket detail view", () => {
+    const ticket = toWorkbenchTicket(
+      record({
+        summary: "冰箱异响，用户要求上门检修",
+        replies: [{ tone: "安抚", text: "非常抱歉给您带来不便，我们会尽快安排上门。" }],
+      }),
+    );
+
+    expect(ticket.summary).toBe("冰箱异响，用户要求上门检修");
+    expect(ticket.replies).toEqual([
+      { tone: "安抚", text: "非常抱歉给您带来不便，我们会尽快安排上门。" },
+    ]);
   });
 
   it("never exposes the record id or owner open ids", () => {
