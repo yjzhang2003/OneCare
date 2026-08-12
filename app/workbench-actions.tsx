@@ -42,12 +42,27 @@ export function WorkbenchActions({
   canClaim,
 }: WorkbenchActionsProps) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  // Which intent is in flight, not merely whether one is: a single boolean put a
+  // spinner on every button at once, which reads as "all of these are happening".
+  // Everything is still disabled while one runs — that part guards against a
+  // double submit — but only the button actually waiting spins.
+  const [inFlight, setInFlight] = useState<WorkbenchAction | "claim" | null>(
+    null,
+  );
   const [pending, setPending] = useState<Pending>(null);
   const [note, setNote] = useState("");
+  const busy = inFlight !== null;
 
-  async function submit(body: unknown) {
-    setBusy(true);
+  // Resolves true when this intent is finished with — either it landed, or it
+  // became moot — and false when the operator should be left where they were to
+  // try again. That distinction is the whole reason this returns anything: the
+  // note modal must not discard a paragraph of typed 闭环结论 because the Base
+  // write timed out.
+  async function submit(
+    intent: WorkbenchAction | "claim",
+    body: unknown,
+  ): Promise<boolean> {
+    setInFlight(intent);
     try {
       const response = await fetch(
         `/api/voc/tickets/${encodeURIComponent(recordId)}/action`,
@@ -76,22 +91,30 @@ export function WorkbenchActions({
         // all show the new state. Without it the operator is looking at data
         // they just changed.
         router.refresh();
-      } else if (response.status === 409) {
-        // A stale view is the one failure the operator cannot fix by trying
-        // again, so it refreshes for them rather than only complaining.
+        return true;
+      }
+
+      if (response.status === 409) {
+        // A stale view is the one failure retrying cannot fix — the action was
+        // decided against a state that no longer holds — so this refreshes for
+        // them and lets the intent go, rather than inviting a retry that would
+        // be refused for the same reason.
         Message.warning(message);
         router.refresh();
-      } else {
-        Message.error(message);
+        return true;
       }
+
+      // 403 / 422 / 502: refused or failed, but the intent still stands and the
+      // typed note is still wanted.
+      Message.error(message);
+      return false;
     } catch {
       // A network failure is the one case where the server said nothing, so
       // this is the only wording this component owns.
       Message.error("网络异常，请检查连接后重试");
+      return false;
     } finally {
-      setBusy(false);
-      setPending(null);
-      setNote("");
+      setInFlight(null);
     }
   }
 
@@ -101,7 +124,7 @@ export function WorkbenchActions({
       setPending({ action, label });
       return;
     }
-    void submit({ kind: "transition", action, seenState });
+    void submit(action, { kind: "transition", action, seenState });
   }
 
   return (
@@ -110,14 +133,20 @@ export function WorkbenchActions({
         {canClaim && (
           <Button
             type="primary"
-            loading={busy}
-            onClick={() => void submit({ kind: "claim", seenState })}
+            loading={inFlight === "claim"}
+            disabled={busy && inFlight !== "claim"}
+            onClick={() => void submit("claim", { kind: "claim", seenState })}
           >
             我来跟进
           </Button>
         )}
         {actions.map((action) => (
-          <Button key={action} loading={busy} onClick={() => start(action)}>
+          <Button
+            key={action}
+            loading={inFlight === action}
+            disabled={busy && inFlight !== action}
+            onClick={() => start(action)}
+          >
             {action}
           </Button>
         ))}
@@ -126,19 +155,40 @@ export function WorkbenchActions({
       <Modal
         title={pending?.label}
         visible={pending !== null}
+        // Arco keeps a closed modal's DOM mounted by default, which would leave
+        // the operator's typed note sitting in a hidden textarea after the
+        // dialog is gone. Unmounting it means the text exists only while the
+        // dialog that collected it does.
+        unmountOnExit
         confirmLoading={busy}
         okButtonProps={{ disabled: note.trim().length === 0 }}
+        // Closing mid-request would leave the operator with no idea whether the
+        // write landed, so neither the cancel button nor the mask nor Esc is a
+        // way out while one is in flight.
+        cancelButtonProps={{ disabled: busy }}
+        maskClosable={!busy}
+        escToExit={!busy}
         onCancel={() => {
           setPending(null);
           setNote("");
         }}
         onOk={() => {
           if (!pending) return;
-          void submit({
+          void submit(pending.action, {
             kind: "transition",
             action: pending.action,
             seenState,
             note,
+          }).then((done) => {
+            // Closed and cleared only once the intent is finished with. A
+            // refusal or a failed write leaves the modal open with the text
+            // intact — the operator may have written several sentences of
+            // 闭环结论, and losing that to a transient Bitable timeout would
+            // teach them not to trust the field.
+            if (done) {
+              setPending(null);
+              setNote("");
+            }
           });
         }}
       >
