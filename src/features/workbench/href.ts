@@ -17,6 +17,9 @@ export type QueryPatch = Readonly<
       | "severity"
       | "state"
       | "owner"
+      | "unit"
+      | "level1"
+      | "ticketNo"
       | "search"
       | "sort"
       | "page"
@@ -33,7 +36,9 @@ export type StringFilterField =
   | "dimension"
   | "severity"
   | "state"
-  | "owner";
+  | "owner"
+  | "unit"
+  | "level1";
 
 function baseParams(query: WorkbenchQuery): Record<string, string | null> {
   return {
@@ -45,6 +50,9 @@ function baseParams(query: WorkbenchQuery): Record<string, string | null> {
     severity: query.severity,
     state: query.state,
     owner: query.owner,
+    unit: query.unit,
+    level1: query.level1,
+    ticketNo: query.sourceTicketNo,
     search: query.search.length > 0 ? query.search : null,
     sort: query.sort,
     page: query.page > 1 ? String(query.page) : null,

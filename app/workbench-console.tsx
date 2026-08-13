@@ -176,7 +176,6 @@ export function WorkbenchConsole({
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const [tableHeight, setTableHeight] = useState<number | null>(null);
 
-
   useEffect(() => {
     const wrap = tableWrapRef.current;
     if (!wrap) return;
@@ -428,6 +427,17 @@ export function WorkbenchConsole({
               {QUEUES.find((q) => q.key === query.queue)?.hint}
             </Typography.Paragraph>
 
+            {query.sourceTicketNo !== null && (
+              <Alert
+                type="info"
+                style={{ marginBottom: 12 }}
+                content={`只显示来源单号 ${query.sourceTicketNo} 的记录`}
+                action={
+                  <Link href={filterHref(query, { ticketNo: null })}>清除</Link>
+                }
+              />
+            )}
+
             {metrics === null && (
               // Raised out of the 数据概览 tab and onto the main view. A failed
               // Bitable read empties `tickets` as well as the aggregates, and an
@@ -451,6 +461,8 @@ export function WorkbenchConsole({
                   {filterSelect("polarity", "情绪极性")}
                   {filterSelect("dimension", "问题维度")}
                   {filterSelect("owner", "负责人")}
+                  {filterSelect("unit", "事业部")}
+                  {filterSelect("level1", "问题分类")}
                   <Input.Search
                     allowClear
                     placeholder="搜原文 / 编号 / 机型"
@@ -536,7 +548,14 @@ export function WorkbenchConsole({
         footer={null}
         onCancel={() => go(ticketHref(query, null))}
       >
-        {selected && <TicketDrawer ticket={selected} query={query} now={now} />}
+        {selected && (
+          <TicketDrawer
+            ticket={selected}
+            query={query}
+            now={now}
+            related={view.selectedRelated}
+          />
+        )}
       </Drawer>
     </Layout>
   );
@@ -634,10 +653,12 @@ function TicketDrawer({
   ticket,
   query,
   now,
+  related,
 }: Readonly<{
   ticket: WorkbenchTicket;
   query: WorkbenchQuery;
   now: number;
+  related: number;
 }>) {
   const dwell = dwellHours(ticket, now);
   // Computed from the row the server already sent — the browser never decides
@@ -680,6 +701,45 @@ function TicketDrawer({
         title="工单信息"
         data={[
           { label: "记录编号", value: ticket.recordNumber },
+          {
+            label: "来源单号",
+            value:
+              ticket.sourceTicketNo.length === 0 ? (
+                ABSENT
+              ) : related > 0 ? (
+                // The number itself is the link: following it lists every record
+                // logged under the same 400 case or the same review, which is the
+                // capability the recovered column bought.
+                <Link
+                  href={filterHref(query, {
+                    ticketNo: ticket.sourceTicketNo,
+                    ticket: null,
+                  })}
+                >
+                  {ticket.sourceTicketNo}（另有 {related} 条同单号）
+                </Link>
+              ) : (
+                ticket.sourceTicketNo
+              ),
+          },
+          {
+            label: "来源",
+            value:
+              ticket.sourceDetail.length === 0 ? ABSENT : ticket.sourceDetail,
+          },
+          { label: "事业部", value: ticket.businessUnit || ABSENT },
+          { label: "问题分类", value: ticket.categoryLevel1 || ABSENT },
+          {
+            label: "原始出处",
+            value:
+              ticket.sourceUrl.length === 0 ? (
+                ABSENT
+              ) : (
+                <a href={ticket.sourceUrl} target="_blank" rel="noreferrer">
+                  打开原始页面
+                </a>
+              ),
+          },
           {
             label: "渠道 / 品类",
             value:

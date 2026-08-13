@@ -31,6 +31,8 @@ function filterOptions(
     severity: distinctValues(tickets.map((ticket) => ticket.severity ?? "")),
     state: distinctValues(tickets.map((ticket) => ticket.state)),
     owner: distinctValues(tickets.flatMap((ticket) => ticket.ownerNames)),
+    unit: distinctValues(tickets.map((ticket) => ticket.businessUnit)),
+    level1: distinctValues(tickets.map((ticket) => ticket.categoryLevel1)),
   };
 }
 

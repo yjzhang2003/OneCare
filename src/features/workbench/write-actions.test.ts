@@ -38,6 +38,11 @@ function record(overrides: Partial<VocRecord> = {}): VocRecord {
     ticketOpenedAt: null,
     closedAt: null,
     warRoomChatId: "",
+    sourceTicketNo: "CAS-42567239-Q7Q8Q",
+    sourceUrl: "",
+    sourceDetail: "400投诉",
+    businessUnit: "冰冷事业部",
+    categoryLevel1: "安装调试",
     ...overrides,
   };
 }

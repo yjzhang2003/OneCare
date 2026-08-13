@@ -55,6 +55,11 @@ function deps(overrides: Record<string, unknown> = {}) {
         // fixture (see the "war room escalation" describe block below), so
         // there is no equivalent "severity" default to set here.
         warRoomChatId: "",
+        sourceTicketNo: "CAS-42567239-Q7Q8Q",
+        sourceUrl: "",
+        sourceDetail: "400投诉",
+        businessUnit: "冰冷事业部",
+        categoryLevel1: "安装调试",
       },
     ]),
     // Recordid-aware (not a fixed single-item array) so a shard of more than
@@ -167,6 +172,11 @@ const highSeverityRecord = {
   state: "待分析" as const,
   retryCount: 0,
   warRoomChatId: "",
+  sourceTicketNo: "CAS-42567239-Q7Q8Q",
+  sourceUrl: "",
+  sourceDetail: "400投诉",
+  businessUnit: "冰冷事业部",
+  categoryLevel1: "安装调试",
 };
 
 const midSeverityRecord = {
@@ -1175,6 +1185,11 @@ function pendingRecord(overrides: Record<string, unknown> = {}) {
     // own tests care about this column, so it gets the value that means "no
     // group yet" and every existing call site below keeps working unchanged.
     warRoomChatId: "",
+    sourceTicketNo: "CAS-42567239-Q7Q8Q",
+    sourceUrl: "",
+    sourceDetail: "400投诉",
+    businessUnit: "冰冷事业部",
+    categoryLevel1: "安装调试",
     ...overrides,
   };
 }
@@ -1248,6 +1263,11 @@ const fullVocRecord: VocRecord = {
   ticketOpenedAt: null,
   closedAt: null,
   warRoomChatId: "",
+  sourceTicketNo: "CAS-42567239-Q7Q8Q",
+  sourceUrl: "",
+  sourceDetail: "400投诉",
+  businessUnit: "冰冷事业部",
+  categoryLevel1: "安装调试",
 };
 
 // A complete TagResult, used the same way fullVocRecord is above — only to

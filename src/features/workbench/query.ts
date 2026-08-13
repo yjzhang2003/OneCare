@@ -66,6 +66,11 @@ export type WorkbenchQuery = Readonly<{
   severity: string | null;
   state: string | null;
   owner: string | null;
+  unit: string | null;
+  level1: string | null;
+  // An exact source case number, not a search term: the drawer links here to show
+  // every record that came from the same 400 case or the same review.
+  sourceTicketNo: string | null;
   search: string;
   sort: SortKey;
   page: number;
@@ -107,6 +112,9 @@ export function parseWorkbenchQuery(params: RawParams): WorkbenchQuery {
     severity: oneOf(params.severity, VOC_SEVERITIES),
     state: oneOf(params.state, VOC_STATES),
     owner: first(params.owner),
+    unit: first(params.unit),
+    level1: first(params.level1),
+    sourceTicketNo: first(params.ticketNo),
     search: first(params.search) ?? "",
     sort: (oneOf(params.sort, sortKeys) ?? "feedback_desc") as SortKey,
     page: Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1,
@@ -166,7 +174,11 @@ function matchesSearch(ticket: WorkbenchTicket, search: string): boolean {
   return (
     ticket.content.toLowerCase().includes(needle) ||
     ticket.model.toLowerCase().includes(needle) ||
-    ticket.recordNumber.toLowerCase().includes(needle)
+    ticket.recordNumber.toLowerCase().includes(needle) ||
+    // An operator handed a 400 case number in chat pastes it here, and it is not
+    // the record number — it is the number the customer's own call was logged
+    // under, which is what anyone outside this system will quote.
+    ticket.sourceTicketNo.toLowerCase().includes(needle)
   );
 }
 
@@ -183,6 +195,16 @@ function matchesFilters(ticket: WorkbenchTicket, query: WorkbenchQuery): boolean
     return false;
   }
   if (query.owner !== null && !ticket.ownerNames.includes(query.owner)) {
+    return false;
+  }
+  if (query.unit !== null && ticket.businessUnit !== query.unit) return false;
+  if (query.level1 !== null && ticket.categoryLevel1 !== query.level1) {
+    return false;
+  }
+  if (
+    query.sourceTicketNo !== null &&
+    ticket.sourceTicketNo !== query.sourceTicketNo
+  ) {
     return false;
   }
   return matchesSearch(ticket, query.search);
@@ -235,6 +257,10 @@ export type WorkbenchPage = Readonly<{
   pageCount: number;
   queueCounts: Readonly<Record<QueueKey, number>>;
   selected: WorkbenchTicket | null;
+  // How many OTHER records share the selected ticket's source case number.
+  // Computed here rather than in the browser because it needs every record, and
+  // the browser only ever receives the current page.
+  selectedRelated: number;
 }>;
 
 export function applyWorkbenchQuery(
@@ -259,6 +285,13 @@ export function applyWorkbenchQuery(
     .slice()
     .sort((a, b) => compare(a, b, query.sort, now));
 
+  // Looked up across every record rather than within the current page: a link to
+  // one ticket has to open it even when the recipient's filters exclude it.
+  const selected =
+    query.ticket === null
+      ? null
+      : (tickets.find((ticket) => ticket.recordNumber === query.ticket) ?? null);
+
   const pageCount = Math.max(1, Math.ceil(matchedRows.length / PAGE_SIZE));
   const page = Math.min(query.page, pageCount);
   const start = (page - 1) * PAGE_SIZE;
@@ -271,10 +304,14 @@ export function applyWorkbenchQuery(
     queueCounts,
     // Looked up across every record rather than within the current page: a link
     // to one ticket has to open it even when the recipient's filters exclude it.
-    selected:
-      query.ticket === null
-        ? null
-        : (tickets.find((ticket) => ticket.recordNumber === query.ticket) ??
-          null),
+    selected,
+    selectedRelated:
+      selected === null || selected.sourceTicketNo.length === 0
+        ? 0
+        : tickets.filter(
+            (ticket) =>
+              ticket.sourceTicketNo === selected.sourceTicketNo &&
+              ticket.recordNumber !== selected.recordNumber,
+          ).length,
   };
 }

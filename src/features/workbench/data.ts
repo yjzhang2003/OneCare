@@ -50,6 +50,15 @@ export type WorkbenchTicket = Readonly<{
   // is therefore left to the route handler to answer.
   retryCount: number;
   hasOwner: boolean;
+  // Recovered from the source export. sourceTicketNo is the one that adds a
+  // capability rather than a column: ~856 of the 3628 rows share a source case
+  // number with another row, so "the other records from this same 400 case" is a
+  // real question this data can now answer.
+  sourceTicketNo: string;
+  sourceUrl: string;
+  sourceDetail: string;
+  businessUnit: string;
+  categoryLevel1: string;
   ticketOpenedAt: string | null;
   closedAt: string | null;
   durationHours: number | null;
@@ -90,6 +99,11 @@ export function toWorkbenchTicket(record: VocRecord): WorkbenchTicket {
     ownerNames: record.ownerNames,
     retryCount: record.retryCount,
     hasOwner: record.ownerOpenIds.length > 0,
+    sourceTicketNo: record.sourceTicketNo,
+    sourceUrl: record.sourceUrl,
+    sourceDetail: record.sourceDetail,
+    businessUnit: record.businessUnit,
+    categoryLevel1: record.categoryLevel1,
     ticketOpenedAt: record.ticketOpenedAt,
     closedAt: record.closedAt,
     durationHours: hours(record.ticketOpenedAt, record.closedAt),

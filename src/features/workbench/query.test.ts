@@ -18,6 +18,11 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
     recordId: "rec1",
     retryCount: 0,
     hasOwner: true,
+    sourceTicketNo: "CAS-42567239-Q7Q8Q",
+    sourceUrl: "",
+    sourceDetail: "400投诉",
+    businessUnit: "冰冷事业部",
+    categoryLevel1: "安装调试",
     recordNumber: "R-001",
     feedbackAt: "2026-02-09T00:00:00.000Z",
     channel: "电商评价",
@@ -374,5 +379,100 @@ describe("applyWorkbenchQuery", () => {
 
     expect(JSON.stringify(pool)).toBe(snapshot);
     expect(pool[0]?.recordNumber).toBe("A");
+  });
+});
+
+// The capability the recovered 来源单号 column buys. ~856 of the 3628 imported
+// rows share a source case number with another row, so "the other records logged
+// under this same 400 case" is a real question — and the count has to be computed
+// over every record, because the browser only ever receives one page.
+describe("source-case grouping", () => {
+  const A = { sourceTicketNo: "CAS-1" };
+  const B = { sourceTicketNo: "CAS-2" };
+
+  it("counts the other records sharing the selected ticket's case number", () => {
+    const page = applyWorkbenchQuery(
+      [
+        ticket({ recordNumber: "R-1", ...A }),
+        ticket({ recordNumber: "R-2", ...A }),
+        ticket({ recordNumber: "R-3", ...A }),
+        ticket({ recordNumber: "R-4", ...B }),
+      ],
+      parseWorkbenchQuery({ queue: "all", ticket: "R-1" }),
+      NOW,
+    );
+
+    expect(page.selected?.recordNumber).toBe("R-1");
+    expect(page.selectedRelated).toBe(2);
+  });
+
+  it("excludes the selected ticket itself", () => {
+    const page = applyWorkbenchQuery(
+      [ticket({ recordNumber: "R-1", ...A })],
+      parseWorkbenchQuery({ queue: "all", ticket: "R-1" }),
+      NOW,
+    );
+    expect(page.selectedRelated).toBe(0);
+  });
+
+  // A blank case number must not group: 2036 of the rows have no doc_url and some
+  // have no case number either, and joining every blank together would report
+  // hundreds of "related" records that share nothing at all.
+  it("never groups records by an empty case number", () => {
+    const page = applyWorkbenchQuery(
+      [
+        ticket({ recordNumber: "R-1", sourceTicketNo: "" }),
+        ticket({ recordNumber: "R-2", sourceTicketNo: "" }),
+      ],
+      parseWorkbenchQuery({ queue: "all", ticket: "R-1" }),
+      NOW,
+    );
+    expect(page.selectedRelated).toBe(0);
+  });
+
+  it("filters the list to one source case", () => {
+    const page = applyWorkbenchQuery(
+      [
+        ticket({ recordNumber: "R-1", ...A }),
+        ticket({ recordNumber: "R-2", ...A }),
+        ticket({ recordNumber: "R-3", ...B }),
+      ],
+      parseWorkbenchQuery({ queue: "all", ticketNo: "CAS-1" }),
+      NOW,
+    );
+    expect(page.rows.map((row) => row.recordNumber)).toEqual(["R-1", "R-2"]);
+  });
+
+  // Anyone outside this system quotes the 400 case number, not our record number.
+  it("finds a ticket by its source case number through search", () => {
+    const page = applyWorkbenchQuery(
+      [
+        ticket({ recordNumber: "R-1", sourceTicketNo: "CAS-42567239-Q7Q8Q" }),
+        ticket({ recordNumber: "R-2", sourceTicketNo: "CAS-9" }),
+      ],
+      parseWorkbenchQuery({ queue: "all", search: "42567239" }),
+      NOW,
+    );
+    expect(page.rows.map((row) => row.recordNumber)).toEqual(["R-1"]);
+  });
+});
+
+describe("recovered source dimensions", () => {
+  it("filters by 事业部 and by 问题分类一级", () => {
+    const rows = [
+      ticket({ recordNumber: "R-1", businessUnit: "冰冷事业部", categoryLevel1: "安装调试" }),
+      ticket({ recordNumber: "R-2", businessUnit: "厨电事业部", categoryLevel1: "安装调试" }),
+      ticket({ recordNumber: "R-3", businessUnit: "冰冷事业部", categoryLevel1: "购买交互" }),
+    ];
+
+    expect(
+      applyWorkbenchQuery(rows, parseWorkbenchQuery({ queue: "all", unit: "冰冷事业部" }), NOW)
+        .rows.map((r) => r.recordNumber),
+    ).toEqual(["R-1", "R-3"]);
+
+    expect(
+      applyWorkbenchQuery(rows, parseWorkbenchQuery({ queue: "all", level1: "购买交互" }), NOW)
+        .rows.map((r) => r.recordNumber),
+    ).toEqual(["R-3"]);
   });
 });
