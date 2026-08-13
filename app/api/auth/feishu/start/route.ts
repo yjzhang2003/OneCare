@@ -9,8 +9,6 @@ import { buildAuthorizationUrl } from "../../../../../src/features/auth/feishu";
 import type { AuthEnv } from "../../../../../src/lib/env";
 import { readAuthEnv } from "../../../../../src/lib/env";
 
-export const runtime = "nodejs";
-
 type StartDependencies = {
   readEnv: () => AuthEnv;
   generateState: () => string;

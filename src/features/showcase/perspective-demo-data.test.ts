@@ -5,7 +5,6 @@ import {
   customerDemo,
   engineerDemo,
   serviceCase,
-  vocTopics,
 } from "./perspective-demo-data";
 
 describe("perspective demo data", () => {
@@ -16,6 +15,5 @@ describe("perspective demo data", () => {
     expect(customerDemo.caseId).toBe(serviceCase.id);
     expect(agentDemo.caseId).toBe(serviceCase.id);
     expect(engineerDemo.caseId).toBe(serviceCase.id);
-    expect(vocTopics[0].relatedCaseId).toBe(serviceCase.id);
   });
 });

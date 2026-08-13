@@ -1,0 +1,11 @@
+# Kept separate from .gitignore because the Vercel CLI does not derive its upload
+# set from it: a 22MB .playwright-mcp directory of browser screenshots and console
+# logs was being uploaded on every deploy, and the upload failed part-way twice
+# before the size was traced here.
+#
+# Only build inputs belong in a deployment. Everything below is either produced
+# by the build, or is local working material with no role in it.
+.next
+.playwright-mcp
+.superpowers
+docs

@@ -1,18 +1,38 @@
 import { after } from "next/server";
 
+import type { VocRecord } from "../../../../src/features/bitable/field-map";
 import {
-  createBotReply,
-  type BotReply,
-} from "../../../../src/features/feishu-bot/bot-script";
+  createBitableClient,
+  createTenantTokenProvider,
+  type BitableClient,
+  type TenantTokenProvider,
+} from "../../../../src/features/bitable/client";
 import {
   resolveCardAction,
+  resolveVocCardAction,
   type CardActionResult,
+  type VocActionBitable,
 } from "../../../../src/features/feishu-bot/card-actions";
-import type {
-  FeishuOutboundMessage,
-  OneCareCardAction,
+import {
+  VOC_CARD_ACTIONS,
+  type FeishuCard,
+  type FeishuOutboundMessage,
+  type OneCareCardAction,
+  type VocCardAction,
 } from "../../../../src/features/feishu-bot/card-types";
-import { createWelcomeMessage } from "../../../../src/features/feishu-bot/cards";
+import {
+  createMenuHintMessage,
+  createOperatorSummaryMessage,
+  createTextMessage,
+  createTodayOverviewMessage,
+  createVocTicketCard,
+  createWelcomeMessage,
+} from "../../../../src/features/feishu-bot/cards";
+import {
+  createBotOpenIdProvider,
+  createWarRoomChat,
+  listChatMessages,
+} from "../../../../src/features/feishu-bot/chat-client";
 import {
   replyToFeishuMessage,
   sendFeishuMessage,
@@ -21,12 +41,48 @@ import {
   parseFeishuEvent,
   type FeishuEventOutcome,
 } from "../../../../src/features/feishu-bot/event-handler";
-import { readBotEnv, type BotEnv } from "../../../../src/lib/env";
+import {
+  readOperatorSummary,
+  type OperatorSummaryBitable,
+} from "../../../../src/features/feishu-bot/operator-summary";
+import {
+  readTodayOverviewCounts,
+  type TodayOverviewBitable,
+} from "../../../../src/features/feishu-bot/today-overview";
+import { resolveWarRoomAction } from "../../../../src/features/feishu-bot/war-room-actions";
+import {
+  buildAnswerFacts,
+  computeFactsAggregates,
+  stripMention,
+} from "../../../../src/features/warroom/facts";
+import {
+  createAnswerProvider,
+  type AnswerProvider,
+} from "../../../../src/features/tagging/answer-provider";
+import {
+  readBitableEnv,
+  readBotEnv,
+  readTaggingEnv,
+  type BotEnv,
+} from "../../../../src/lib/env";
+// Task 11: the fix for this file's own oldest gap reuses analyze/route.ts's
+// existing 负责人表 read and its "usable, deduplicated 兜底 openId list" filter
+// rather than re-parsing the owner table a second, independent way — see
+// getFallbackOpenIds below.
+import {
+  fallbackOwnerOpenIds,
+  listOwnerRules,
+} from "../../voc/analyze/route";
 
-export const runtime = "nodejs";
+// `runtime = "nodejs"` was dropped: it is the App Router default anyway, and
+// task 14 enables `cacheComponents` in next.config.ts (for the VOC
+// dashboard's `use cache`), which rejects this route segment config outright.
 export const maxDuration = 10;
 
-type Scheduler = (task: () => Promise<void>) => void;
+// Exported so createResolveAction's own third parameter (below) can carry the
+// same type as a documented, reusable shape rather than an inline function
+// type repeated at each call site.
+export type Scheduler = (task: () => Promise<void>) => void;
 
 type FeishuEventRouteDependencies = {
   readEnv: () => BotEnv;
@@ -35,7 +91,19 @@ type FeishuEventRouteDependencies = {
     headers: Headers;
     env: BotEnv;
   }) => Promise<FeishuEventOutcome>;
-  createReply: (text: string) => BotReply;
+  // Task 13: what the "我的工单" custom-menu item gets back — the clicking
+  // operator's own real VOC workload. Unchanged since Task 12 except for who
+  // calls it: a bare p2p text message no longer does (see createMenuHint
+  // below), only a menu_click outcome for eventKey "voc_my_tickets" does now.
+  operationsReply: (operatorOpenId: string) => Promise<FeishuOutboundMessage>;
+  // Task 13: what the "今日概览" custom-menu item gets back — the whole-org
+  // view, no operator filtering. Takes no argument: unlike operationsReply,
+  // this reply is the same for whoever clicked.
+  todayOverviewReply: () => Promise<FeishuOutboundMessage>;
+  // Task 13: what a bare p2p text message gets back now — a short pointer to
+  // the custom menu (or to @-mentioning the bot in a war room), never a card.
+  // Sync, like createWelcome below: building it touches no I/O.
+  createMenuHint: () => FeishuOutboundMessage;
   createWelcome: () => FeishuOutboundMessage;
   replyMessage: (input: {
     env: BotEnv;
@@ -47,19 +115,470 @@ type FeishuEventRouteDependencies = {
     chatId: string;
     message: FeishuOutboundMessage;
   }) => Promise<void>;
-  resolveAction: (action: OneCareCardAction) => CardActionResult;
+  // Task 13: a menu click carries no chat id at all, only the clicking
+  // operator's own open_id — its reply can only ever be a direct message, not
+  // sendMessage's chatId-shaped call above. Kept as its own dependency
+  // (rather than widening sendMessage's declared parameter to the
+  // {chatId}|{openId} union sendFeishuMessage already accepts) so every
+  // existing sendMessage fake in this file's tests — every one of them typed
+  // to the chatId shape alone — keeps compiling unchanged.
+  sendDirectMessage: (
+    input: Readonly<{ env: BotEnv; openId: string; message: FeishuOutboundMessage }>,
+  ) => Promise<void>;
+  resolveAction: (input: CardActionRequest) => Promise<CardActionResult>;
+  answerGroupQuestion: (
+    input: Readonly<{ chatId: string; text: string }>,
+  ) => Promise<FeishuOutboundMessage>;
   schedule: Scheduler;
   reportFailure: () => void;
 };
 
+// Every field the dispatcher needs, all required. `note` is not optional here
+// on purpose: the previous shape omitted it entirely, so this route called
+// resolveVocCardAction without 跟进记录/闭环结论, TypeScript was satisfied
+// because they were optional parameters, and both actions were rejected by
+// their own guards in production while every test on both sides passed.
+type CardActionRequest = Readonly<{
+  action: OneCareCardAction | VocCardAction;
+  recordId: string;
+  operatorOpenId: string;
+  note: string;
+}>;
+
+function isVocCardAction(
+  action: OneCareCardAction | VocCardAction,
+): action is VocCardAction {
+  return (VOC_CARD_ACTIONS as readonly string[]).includes(action);
+}
+
+// Built once per server instance and reused across requests, exactly like
+// createTenantTokenProvider's own internal cache: a card callback has a
+// three second budget and cannot afford to re-read env vars or re-exchange a
+// token on every click. Constructed lazily (only when a VOC action or a war
+// room question actually arrives) so a missing Bitable env var never breaks
+// the nine demo actions, which never touch it.
+let tokenProvider: TenantTokenProvider | null = null;
+function getTokenProvider(): TenantTokenProvider {
+  if (!tokenProvider) {
+    const botEnv = readBotEnv();
+    tokenProvider = createTenantTokenProvider(botEnv.appId, botEnv.appSecret);
+  }
+  return tokenProvider;
+}
+
+let bitableClient: BitableClient | null = null;
+function getBitableClient(): BitableClient {
+  if (!bitableClient) {
+    bitableClient = createBitableClient(readBitableEnv(), getTokenProvider());
+  }
+  return bitableClient;
+}
+
+// Feeds event-handler.ts's mention check (see ParseFeishuEventInput there for
+// why this exists at all: this app can see every group message, not only
+// ones that @ it). `async` so a synchronous throw from getTokenProvider()
+// (a missing bot credential) becomes a rejected promise like any other
+// failure here, rather than an uncaught exception — parseFeishuEvent treats
+// any rejection the same as "cannot confirm identity" and ignores the
+// message rather than guessing it was mentioned.
+let botOpenIdProvider: ReturnType<typeof createBotOpenIdProvider> | null = null;
+async function getBotOpenId(): Promise<string> {
+  if (!botOpenIdProvider) {
+    botOpenIdProvider = createBotOpenIdProvider(getTokenProvider());
+  }
+  return botOpenIdProvider();
+}
+
+// Lazy and swallowing its own configuration errors on purpose: a tenant
+// running the field-shortcut tagging track (or one that has not configured
+// the war room answer skill at all) has no aily answer skill to call, and
+// that absence must read exactly like any other "cannot answer right now"
+// failure — never as a 503 that takes the rest of this route down with it.
+let answerProvider: AnswerProvider | null = null;
+function getAnswerProvider(): AnswerProvider | null {
+  try {
+    if (!answerProvider) {
+      const taggingEnv = readTaggingEnv();
+      if (taggingEnv.provider !== "aily") return null;
+      answerProvider = createAnswerProvider({
+        ailyAppId: taggingEnv.ailyAppId,
+        skillId: taggingEnv.answerSkillId,
+        // Same credential rule as the tagging call (Task 8 prerequisite P1,
+        // analyze/route.ts's getTaggingProvider): the aily skill-start API
+        // resolves the calling application from the credential, not from the
+        // app id in the URL, so a tenant whose aily app is published under
+        // its own app id needs that app's credential here too.
+        tenantAccessToken: taggingEnv.credential
+          ? createTenantTokenProvider(
+              taggingEnv.credential.appId,
+              taggingEnv.credential.appSecret,
+            )
+          : getTokenProvider(),
+      });
+    }
+    return answerProvider;
+  } catch {
+    return null;
+  }
+}
+
+// Task 9's closure archival, wired for real: resolveVocCardAction calls these
+// only after 确认闭环's own write has already landed and only when it has
+// resolved, from the record it already read, that a real war room chat
+// exists — this route never decides that itself and never does a second
+// getRecord to find out.
+const CLOSURE_SUMMARY_QUESTION =
+  "请把这次协同过程收敛成一段闭环结论，说明问题、处理动作与结果";
+
+// AnswerProvider.answer takes exactly two string scalars (question, facts) —
+// aily's custom skill parameters are String/Boolean/Float/Integer only, no
+// object (buildAnswerFacts's own comment documents the same constraint) — so
+// the transcript has nowhere to travel as a third parameter. It rides folded
+// into the same `facts` string instead. `facts` here is always
+// buildAnswerFacts's own output (resolveVocCardAction is the only caller),
+// so the parse is not expected to ever fail; the catch just keeps a
+// hypothetical malformed value from crashing the closing-summary attempt
+// instead of degrading it to "cannot answer right now" like every other
+// failure on this path.
+function closureFacts(facts: string, transcript: readonly string[]): string {
+  let ticket: unknown = facts;
+  try {
+    ticket = JSON.parse(facts);
+  } catch {
+    // See comment above: defensive only.
+  }
+  return JSON.stringify({ ticket, transcript });
+}
+
+async function summariseClosure(
+  facts: string,
+  transcript: readonly string[],
+): Promise<string | null> {
+  const provider = getAnswerProvider();
+  if (!provider) return null;
+  return provider.answer(
+    CLOSURE_SUMMARY_QUESTION,
+    closureFacts(facts, transcript),
+  );
+}
+
+// `chatId` arrives from resolveVocCardAction, which is the only party that
+// knows a war room exists (and which chat it is) by the time this runs — see
+// its own ResolveVocCardActionInput.readTranscript comment for why this
+// cannot be pre-bound the way a simpler `() => Promise<...>` would be.
+// listChatMessages (Task 4) already turns every failure mode — network
+// error, non-zero Feishu code, an empty group, an unparseable message — into
+// an empty transcript rather than a throw, so nothing extra is caught here;
+// a summary built from zero messages is exactly as "cannot summarise
+// meaningfully" as an outright failure, and resolveVocCardAction's own
+// null-check on the model's response handles that uniformly.
+function readWarRoomTranscript(chatId: string): Promise<readonly string[]> {
+  return listChatMessages({ env: readBotEnv(), chatId });
+}
+
+const NO_TICKET_MESSAGE = "这个群没有关联的 VOC 工单";
+const CANNOT_ANSWER_MESSAGE =
+  "暂时答不上来，可以稍后再问，或直接在多维表格里查这条记录";
+
+function ticketCardMessage(ticket: VocRecord): FeishuOutboundMessage {
+  return {
+    msgType: "interactive",
+    content: JSON.stringify(
+      createVocTicketCard(
+        ticket,
+        {
+          summary: ticket.summary,
+          polarity: ticket.polarity ?? "—",
+          dimensions: ticket.dimensions,
+          replies: ticket.replies,
+        },
+        // Untruncated, like the war room's opening card (war-room-actions.ts):
+        // everyone in this group was deliberately added to work the ticket.
+        { fullContent: true },
+      ),
+    ),
+  };
+}
+
+// Everything the group Q&A flow needs from Bitable, named narrowly (like
+// VocActionBitable above it) rather than accepting the whole BitableClient —
+// a fake standing in for this in a test cannot silently support a wider
+// surface than this flow actually touches.
+type GroupAnswerBitable = Pick<
+  BitableClient,
+  "findByWarRoomChatId" | "listRecords"
+>;
+
+// Spec §6.1's ordered flow, and the one place the "查不到关联工单时不要去问模型"
+// requirement is enforced: a chat id that resolves to no ticket returns
+// NO_TICKET_MESSAGE and never reaches `answer` at all — there is no fact base
+// to ground a reply in, and answering anyway is exactly the behaviour that
+// would make the whole feature untrustworthy. A Bitable failure while looking
+// the ticket up (a real outage, not "no ticket") gets the same
+// CANNOT_ANSWER_MESSAGE as an answer-skill failure — both mean "the bot could
+// not do its job this time", and neither is the group's problem to guess at.
+export function createAnswerGroupQuestion(
+  bitable: () => GroupAnswerBitable,
+  answer: (question: string, facts: string) => Promise<string | null>,
+): (
+  input: Readonly<{ chatId: string; text: string }>,
+) => Promise<FeishuOutboundMessage> {
+  return async function answerGroupQuestion(input) {
+    let ticket: VocRecord | null;
+    try {
+      ticket = await bitable().findByWarRoomChatId(input.chatId);
+    } catch {
+      return createTextMessage(CANNOT_ANSWER_MESSAGE);
+    }
+
+    if (!ticket) {
+      return createTextMessage(NO_TICKET_MESSAGE);
+    }
+
+    const question = stripMention(input.text);
+    if (question.length === 0) {
+      return ticketCardMessage(ticket);
+    }
+
+    let records: readonly VocRecord[];
+    try {
+      records = await bitable().listRecords();
+    } catch {
+      return createTextMessage(CANNOT_ANSWER_MESSAGE);
+    }
+
+    const facts = buildAnswerFacts({
+      ticket,
+      ...computeFactsAggregates(ticket, records),
+    });
+
+    let prose: string | null;
+    try {
+      prose = await answer(question, facts);
+    } catch {
+      prose = null;
+    }
+
+    return prose
+      ? createTextMessage(prose)
+      : createTextMessage(CANNOT_ANSWER_MESSAGE);
+  };
+}
+
+// The capabilities resolveWarRoomAction (Task 6) needs beyond
+// getRecord/updateRecord (already covered by VocActionBitable, reused as-is
+// below). Pulled out as its own injectable type — like VocActionBitable next
+// to it — so a test can drive createResolveAction's real routing logic over
+// fakes instead of stubbing resolveAction itself, which is exactly how the
+// missing wiring this task fixes went unnoticed for ten prior tasks.
+//
+// notifyOperator (added alongside the sync/background split below) is a DM
+// to whoever clicked, used only from the background half — see
+// war-room-actions.ts's WarRoomActionInput for why a background failure can
+// no longer produce a toast.
+export type WarRoomActionDependencies = Readonly<{
+  fallbackOpenIds: () => Promise<readonly string[]>;
+  createChat: (name: string, memberOpenIds: readonly string[]) => Promise<string>;
+  sendToChat: (chatId: string, card: FeishuCard) => Promise<void>;
+  notifyOperator: (openId: string, text: string) => Promise<void>;
+}>;
+
+// 负责人表's fallback column, read fresh on every call (no caching layer):
+// escalateToWarRoom in analyze/route.ts reads the same table the same way,
+// once per Cron shard, and that call is not cached either — a cache here
+// would just be a second, differently-invalidated source of truth for a
+// table small enough that re-reading it costs one Bitable round trip. This
+// one runs in the synchronous section (see createResolveAction below) — it
+// is one of the two reads measured into the ~1.4s synchronous budget.
+async function getFallbackOpenIds(): Promise<readonly string[]> {
+  const ownerRules = await listOwnerRules(readBitableEnv(), getTokenProvider());
+  return fallbackOwnerOpenIds(ownerRules);
+}
+
+// Runs only inside the background task (see createResolveAction below) —
+// never in the synchronous section.
+function createWarRoomChatForRecord(
+  name: string,
+  memberOpenIds: readonly string[],
+): Promise<string> {
+  return createWarRoomChat({ env: readBotEnv(), name, memberOpenIds });
+}
+
+// sendFeishuMessage's input is a discriminated union of "chatId" or "openId"
+// (never both) — this always takes the chatId branch, since resolveWarRoomAction
+// only ever posts into the war room chat it just created, never to a person.
+// Runs only inside the background task, same as createWarRoomChatForRecord.
+function sendCardToWarRoomChat(chatId: string, card: FeishuCard): Promise<void> {
+  return sendFeishuMessage({
+    env: readBotEnv(),
+    chatId,
+    message: { msgType: "interactive", content: JSON.stringify(card) },
+  });
+}
+
+// The openId branch of sendFeishuMessage, reusing createTextMessage the same
+// way the group Q&A fallback replies do — a DM is an ordinary chat message,
+// not another card. Runs only inside the background task: this is how a
+// createChat/updateRecord/sendToChat failure is reported once the callback
+// itself has already answered with the "creating" toast (see
+// createResolveAction below).
+function notifyOperatorByDirectMessage(openId: string, text: string): Promise<void> {
+  return sendFeishuMessage({ env: readBotEnv(), openId, message: createTextMessage(text) });
+}
+
+const defaultWarRoomDependencies: WarRoomActionDependencies = {
+  fallbackOpenIds: getFallbackOpenIds,
+  createChat: createWarRoomChatForRecord,
+  sendToChat: sendCardToWarRoomChat,
+  notifyOperator: notifyOperatorByDirectMessage,
+};
+
+function isWarRoomCardAction(
+  action: OneCareCardAction | VocCardAction,
+): action is "voc_open_war_room" | "voc_decline_war_room" {
+  return action === "voc_open_war_room" || action === "voc_decline_war_room";
+}
+
+// The single dispatch point for every card click, demo or real: a VOC action
+// carries a real record id and operator identity and goes through the triple
+// check (Task 12); the nine demo actions keep using the untouched, synchronous
+// demo resolver.
+//
+// Task 11: voc_open_war_room / voc_decline_war_room are checked, and
+// dispatched to resolveWarRoomAction, before the isVocCardAction branch below
+// — even though VOC_CARD_ACTIONS (and therefore isVocCardAction) still
+// considers both of them VocCardActions. Without this earlier branch they
+// fall through to resolveVocCardAction, which enforces strict owner-only
+// authorization and has no state-machine transition defined for either
+// action (see its own ACTION_TO_TRANSITION comment) — that misrouting is the
+// entire defect this task exists to fix: every real click on either button
+// returned "该操作暂不支持" and created nothing. resolveWarRoomAction's own
+// "owner OR fallback" relaxation is not reimplemented here; it is applied
+// only inside that function, and only for these two actions.
+//
+// Task 11 follow-up: resolveWarRoomAction returns a WarRoomActionOutcome, not
+// a bare CardActionResult, precisely so this dispatcher can split its work —
+// `result` answers the callback synchronously in every case; `background`,
+// present only when a new group is actually being created, is scheduled with
+// `schedule` (Next's `after()` by default, the same primitive
+// createFeishuEventRoute already uses below for every other kind of deferred
+// work in this file) instead of being awaited here. This split exists
+// because a real-tenant measurement on 2026-08-12 put the five network calls
+// a fresh "create" decision used to make — getRecord, fallbackOpenIds,
+// createChat, updateRecord, sendToChat, all inside the one synchronous
+// callback — at ~2725ms against Feishu's ~3000ms deadline, using a fast
+// parameter-validation reject for createChat/sendToChat rather than the
+// slower real calls. A timeout there is worse than merely slow: Feishu marks
+// the callback failed while the group and the `协同群 ID` write have already
+// landed, so the very next click reports "already exists" and the operator
+// reasonably concludes their original click failed. Only getRecord and
+// fallbackOpenIds (~1.4s measured) remain in the synchronous section inside
+// resolveWarRoomAction itself, alongside the idempotence decision and the
+// authorization check — see that function's own comment for why those in
+// particular cannot move: idempotence is the only guard against a double
+// click creating two groups, and authorization must reject a stranger before
+// any "creating" toast is ever shown.
+//
+// The Bitable client arrives as a parameter so this dispatcher — the exact
+// code production runs — can be driven end to end over a fake Bitable
+// boundary. Replacing this function with a stub in tests is what let the
+// missing note reach production: the route's own tests never saw the call it
+// actually makes.
+export function createResolveAction(
+  bitable: () => VocActionBitable,
+  warRoom: WarRoomActionDependencies = defaultWarRoomDependencies,
+  schedule: Scheduler = (task) => after(task),
+): (input: CardActionRequest) => Promise<CardActionResult> {
+  return async function resolveAction(input) {
+    if (isWarRoomCardAction(input.action)) {
+      const outcome = await resolveWarRoomAction({
+        action: input.action,
+        recordId: input.recordId,
+        operatorOpenId: input.operatorOpenId,
+        getRecord: (recordId) => bitable().getRecord(recordId),
+        updateRecord: (recordId, fields) => bitable().updateRecord(recordId, fields),
+        fallbackOpenIds: warRoom.fallbackOpenIds,
+        createChat: warRoom.createChat,
+        sendToChat: warRoom.sendToChat,
+        notifyOperator: warRoom.notifyOperator,
+      });
+      if (outcome.background) {
+        schedule(outcome.background);
+      }
+      return outcome.result;
+    }
+    if (isVocCardAction(input.action)) {
+      return resolveVocCardAction({
+        action: input.action,
+        recordId: input.recordId,
+        operatorOpenId: input.operatorOpenId,
+        note: input.note,
+        bitable: bitable(),
+        // Both unconditionally injected: resolveVocCardAction only ever
+        // calls them for voc_confirm_closure, and only once it has resolved
+        // a real war room chat off the record it already read. Every other
+        // action (and the no-war-room / declined cases of this one) leaves
+        // them untouched.
+        readTranscript: readWarRoomTranscript,
+        summarise: summariseClosure,
+      });
+    }
+    return resolveCardAction(input.action);
+  };
+}
+
+// Task 14: this used to read every VOC record back via readVocRecordsCached
+// (the public dashboard's cached full-table scan) and filter it in memory —
+// measured at ~10.7s end to end against the live Base for 3628 records. That
+// full read is gone from this path entirely; `bitable` now supplies only
+// countRecords (see readOperatorSummary), and each menu click costs four
+// concurrent ~1.0s counts instead. Exported and DI'd the same way
+// createAnswerGroupQuestion above is, so a test never has to touch a real
+// Bitable/env boundary to prove this wiring is correct.
+export function createOperationsReply(
+  bitable: () => OperatorSummaryBitable = getBitableClient,
+): (operatorOpenId: string) => Promise<FeishuOutboundMessage> {
+  return async function operationsReply(operatorOpenId) {
+    // A failed count must produce no numbers at all, never a silent 0 a
+    // reader could mistake for a real measurement — readOperatorSummary
+    // itself already resolves "any count failed" to null for exactly this
+    // reason; createOperatorSummaryMessage(null) is the "指标暂不可用" card,
+    // not an all-zero one.
+    const summary = await readOperatorSummary(bitable(), operatorOpenId);
+    return createOperatorSummaryMessage(summary);
+  };
+}
+
+// Task 13: the "今日概览" menu reply. Task 14 replaced its data source the
+// same way as createOperationsReply above: getVocDashboardMetrics's full
+// VocMetricsResult (a second full-table aggregation) is gone, replaced by
+// readTodayOverviewCounts's five concurrent, count-only requests. This still
+// hands the whole TodayOverviewResult straight to createTodayOverviewMessage
+// — no branching on `.status` here, no re-deriving a boolean first —
+// exactly as before, just fed by a different, much cheaper read.
+export function createTodayOverviewReply(
+  bitable: () => TodayOverviewBitable = getBitableClient,
+): () => Promise<FeishuOutboundMessage> {
+  return async function todayOverviewReply() {
+    return createTodayOverviewMessage(await readTodayOverviewCounts(bitable()));
+  };
+}
+
 const defaultDependencies: FeishuEventRouteDependencies = {
   readEnv: () => readBotEnv(),
-  parseEvent: parseFeishuEvent,
-  createReply: createBotReply,
+  parseEvent: (input) => parseFeishuEvent({ ...input, botOpenId: getBotOpenId }),
+  operationsReply: createOperationsReply(getBitableClient),
+  todayOverviewReply: createTodayOverviewReply(getBitableClient),
+  createMenuHint: createMenuHintMessage,
   createWelcome: createWelcomeMessage,
   replyMessage: replyToFeishuMessage,
   sendMessage: sendFeishuMessage,
-  resolveAction: resolveCardAction,
+  sendDirectMessage: sendFeishuMessage,
+  resolveAction: createResolveAction(getBitableClient),
+  answerGroupQuestion: createAnswerGroupQuestion(getBitableClient, async (question, facts) => {
+    const provider = getAnswerProvider();
+    return provider ? provider.answer(question, facts) : null;
+  }),
   schedule: (task) => after(task),
   reportFailure: () => console.error("[onecare-bot] reply_failed"),
 };
@@ -114,7 +633,12 @@ export function createFeishuEventRoute(
       if (outcome.kind === "card_action") {
         let result: CardActionResult;
         try {
-          result = dependencies.resolveAction(outcome.action);
+          result = await dependencies.resolveAction({
+            action: outcome.action,
+            recordId: outcome.recordId,
+            operatorOpenId: outcome.operatorOpenId,
+            note: outcome.note,
+          });
         } catch {
           return json({
             toast: { type: "error", content: "操作未完成，请稍后重试" },
@@ -138,13 +662,70 @@ export function createFeishuEventRoute(
         return json({ toast: { type: "info", content: result.toast } });
       }
 
-      const reply = dependencies.createReply(outcome.text);
+      if (outcome.kind === "group_question") {
+        dependencies.schedule(async () => {
+          try {
+            const message = await dependencies.answerGroupQuestion({
+              chatId: outcome.chatId,
+              text: outcome.text,
+            });
+            await dependencies.sendMessage({
+              env,
+              chatId: outcome.chatId,
+              message,
+            });
+          } catch {
+            dependencies.reportFailure();
+          }
+        });
+        return json({});
+      }
+
+      if (outcome.kind === "menu_click") {
+        const operatorOpenId = outcome.operatorOpenId;
+        // No usable recipient (see event-handler.ts's readMenuOperatorOpenId
+        // comment: a malformed or missing operator_id path degrades to "",
+        // silently, never a throw). There is nowhere to send a reply and no
+        // identity to build voc_my_tickets's personal counts from, so this
+        // takes the same "do nothing at all" outcome as an event this route
+        // never recognised in the first place — never a card whose numbers
+        // could be mistaken for someone else's.
+        if (operatorOpenId.length === 0) {
+          return json({});
+        }
+
+        const buildReply =
+          outcome.eventKey === "voc_my_tickets"
+            ? () => dependencies.operationsReply(operatorOpenId)
+            : dependencies.todayOverviewReply;
+
+        dependencies.schedule(async () => {
+          try {
+            const message = await buildReply();
+            await dependencies.sendDirectMessage({
+              env,
+              openId: operatorOpenId,
+              message,
+            });
+          } catch {
+            dependencies.reportFailure();
+          }
+        });
+        return json({});
+      }
+
+      // Task 13: a bare p2p text message no longer builds the operator's real
+      // card (that now happens only for the "我的工单" menu click above) — it
+      // gets a short, synchronous pointer to the custom menu instead. This is
+      // the fix for "any text at all reopens a card nobody asked for": the
+      // menu now exists as the deliberate way to ask for real numbers, so a
+      // stray typed message should not compete with it.
       dependencies.schedule(async () => {
         try {
           await dependencies.replyMessage({
             env,
             messageId: outcome.messageId,
-            message: reply.message,
+            message: dependencies.createMenuHint(),
           });
         } catch {
           dependencies.reportFailure();

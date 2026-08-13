@@ -16,6 +16,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@arco-design/web-react": "^2.66.16",
     "@larksuiteoapi/node-sdk": "^1.71.1",
     "next": "16.2.10",
     "react": "19.2.7",

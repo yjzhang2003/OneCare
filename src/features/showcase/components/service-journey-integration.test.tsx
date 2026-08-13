@@ -8,7 +8,34 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { perspectives } from "../content";
+import type { VocMetricsResult } from "../../voc/metrics";
 import { PerspectiveTabs } from "./perspective-tabs";
+
+// A real VocMetricsResult shape (task 14, fix round 1 added the
+// "unavailable" branch): OperationsWorkspace reads this instead of the
+// removed vocTopics fixture. These tests never assert on the VOC panel's
+// own numbers, so any well-formed "ok" value works here.
+const metrics: VocMetricsResult = {
+  status: "ok",
+  metrics: {
+    total: 3,
+    byPolarity: { 好评: 1, 中评: 1, 差评: 1 },
+    dimensionTop: [
+      { dimension: "维修时间", count: 2 },
+      { dimension: "服务态度", count: 1 },
+    ],
+    byChannel: [{ channel: "电商评价", count: 3 }],
+    negativeShare: 0.67,
+    ticketsOpened: 2,
+    ticketsClosed: 1,
+    closureRate: 0.5,
+    averageClosureHours: 12,
+    taggingAttempted: 3,
+    taggingSucceeded: 2,
+    taggingFailed: 1,
+    taggingPending: 0,
+  },
+};
 
 const scrollToDescriptor = Object.getOwnPropertyDescriptor(
   HTMLElement.prototype,
@@ -38,7 +65,7 @@ afterEach(() => {
 
 describe("linked service journey", () => {
   it("offers knowledge help before the customer can request a human", () => {
-    render(<PerspectiveTabs perspectives={perspectives} />);
+    render(<PerspectiveTabs metrics={metrics} perspectives={perspectives} />);
     const customer = within(screen.getByTestId("workspace-customer"));
 
     expect(customer.getByText("AI 自助服务")).toBeInTheDocument();
@@ -70,7 +97,7 @@ describe("linked service journey", () => {
   });
 
   it("updates customer and engineer views when the agent creates a work order", () => {
-    render(<PerspectiveTabs perspectives={perspectives} />);
+    render(<PerspectiveTabs metrics={metrics} perspectives={perspectives} />);
     const customer = within(screen.getByTestId("workspace-customer"));
     const agent = within(screen.getByTestId("workspace-agent"));
     const engineer = within(screen.getByTestId("workspace-engineer"));
@@ -110,7 +137,7 @@ describe("linked service journey", () => {
   });
 
   it("unlocks operations after service completion and resets every view", () => {
-    render(<PerspectiveTabs perspectives={perspectives} />);
+    render(<PerspectiveTabs metrics={metrics} perspectives={perspectives} />);
     const customer = within(screen.getByTestId("workspace-customer"));
     const agent = within(screen.getByTestId("workspace-agent"));
     const engineer = within(screen.getByTestId("workspace-engineer"));
@@ -168,7 +195,7 @@ describe("linked service journey", () => {
   });
 
   it("keeps the assisted-service path closed after AI self-help succeeds", () => {
-    render(<PerspectiveTabs perspectives={perspectives} />);
+    render(<PerspectiveTabs metrics={metrics} perspectives={perspectives} />);
     const customer = within(screen.getByTestId("workspace-customer"));
     const agent = within(screen.getByTestId("workspace-agent"));
 

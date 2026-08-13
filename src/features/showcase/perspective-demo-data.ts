@@ -45,32 +45,3 @@ export const engineerDemo = {
   contactPreference: "到达前 20 分钟联系",
   possibleCauses: ["冷藏温度传感器漂移", "风道密封效率下降"],
 } as const;
-
-export const vocTopics = [
-  {
-    id: "temperature",
-    label: "冷藏室温度偏高",
-    voices: 128,
-    change: "+18%",
-    models: 3,
-    relatedCaseId: serviceCase.id,
-  },
-  {
-    id: "installation",
-    label: "安装等待时间",
-    voices: 76,
-    change: "+7%",
-    models: 5,
-    relatedCaseId: serviceCase.id,
-  },
-  {
-    id: "repetition",
-    label: "客服重复询问",
-    voices: 54,
-    change: "−11%",
-    models: 2,
-    relatedCaseId: serviceCase.id,
-  },
-] as const;
-
-export type VocTopicId = (typeof vocTopics)[number]["id"];

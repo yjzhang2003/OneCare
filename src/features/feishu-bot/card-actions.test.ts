@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import { VOC_FIELD_NAMES, type VocRecord } from "../bitable/field-map";
+import { DECLINED_MARKER } from "../warroom/naming";
 import type { OneCareCardAction, OneCareCardView } from "./card-types";
-import { resolveCardAction } from "./card-actions";
+import { resolveCardAction, resolveVocCardAction } from "./card-actions";
 
 describe("resolveCardAction", () => {
   it.each([
@@ -60,4 +62,458 @@ describe("resolveCardAction", () => {
       );
     },
   );
+});
+
+// Typed explicitly as VocRecord (rather than left to inference) so that a
+// later reassignment of getRecord's mock with a different VocState literal
+// (see "reports success without writing...") stays assignable — inference
+// from the object literal alone would freeze `state` at the narrow "待跟进"
+// literal type and reject any other valid VocState.
+const record: VocRecord = {
+  recordId: "rec1",
+  recordNumber: "VOC-0001",
+  channel: "电商评价",
+  category: "冰箱",
+  model: "BCD-525WNK1PU",
+  content: "等了三天",
+  rating: 2,
+  feedbackAt: "2026-01-20T00:00:00.000Z",
+  state: "待跟进",
+  polarity: "差评",
+  dimensions: ["维修时间"],
+  summary: "用户反馈上门维修延迟三天",
+  replies: [{ tone: "致歉安抚", text: "非常抱歉给您带来不便" }],
+  severity: "中",
+  ownerOpenIds: ["ou_owner"],
+  ownerNames: [],
+  retryCount: 0,
+  ticketOpenedAt: "2026-01-23T02:00:00.000Z",
+  closedAt: null,
+  warRoomChatId: "",
+};
+
+function client(overrides: Partial<{ record: VocRecord | null }> = {}) {
+  const updateRecord = vi.fn(
+    async (_recordId: string, _fields: Record<string, unknown>) => undefined,
+  );
+  return {
+    updateRecord,
+    getRecord: vi.fn(async (_recordId: string) =>
+      overrides.record === undefined ? record : overrides.record,
+    ),
+  };
+}
+
+describe("resolveVocCardAction", () => {
+  it("advances the state for the assigned owner", async () => {
+    const bitable = client();
+
+    const result = await resolveVocCardAction({
+      action: "voc_start_follow_up",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "",
+      bitable,
+    });
+
+    expect(result.kind).toBe("update");
+    expect(bitable.updateRecord).toHaveBeenCalledWith("rec1", {
+      流程状态: "跟进中",
+    });
+  });
+
+  it("rejects an operator who is not the owner and writes nothing", async () => {
+    const bitable = client();
+
+    const result = await resolveVocCardAction({
+      action: "voc_start_follow_up",
+      recordId: "rec1",
+      operatorOpenId: "ou_stranger",
+      note: "",
+      bitable,
+    });
+
+    expect(result.kind).toBe("update");
+    if (result.kind !== "update") return;
+    expect(result.response.toast?.type).toBe("error");
+    expect(result.response.toast?.content).toContain("负责人");
+    expect(result.response.card).toBeUndefined();
+    expect(bitable.updateRecord).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing record", async () => {
+    const bitable = client({ record: null });
+
+    const result = await resolveVocCardAction({
+      action: "voc_start_follow_up",
+      recordId: "recGone",
+      operatorOpenId: "ou_owner",
+      note: "",
+      bitable,
+    });
+
+    if (result.kind !== "update") throw new Error("expected update");
+    expect(result.response.toast?.type).toBe("error");
+    expect(bitable.updateRecord).not.toHaveBeenCalled();
+  });
+
+  it("rejects an illegal transition and writes nothing", async () => {
+    const bitable = client();
+
+    const result = await resolveVocCardAction({
+      action: "voc_confirm_closure",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "已处理",
+      bitable,
+    });
+
+    if (result.kind !== "update") throw new Error("expected update");
+    expect(result.response.toast?.type).toBe("error");
+    expect(bitable.updateRecord).not.toHaveBeenCalled();
+  });
+
+  it("reports success without writing when the action already landed", async () => {
+    const bitable = client();
+    bitable.getRecord = vi.fn(async () => ({ ...record, state: "跟进中" as const }));
+
+    const result = await resolveVocCardAction({
+      action: "voc_start_follow_up",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "",
+      bitable,
+    });
+
+    if (result.kind !== "update") throw new Error("expected update");
+    expect(result.response.toast?.type).toBe("info");
+    expect(bitable.updateRecord).not.toHaveBeenCalled();
+  });
+
+  it("surfaces an error toast when the Base write fails", async () => {
+    const bitable = client();
+    bitable.updateRecord = vi.fn(async () => {
+      throw new Error("bitable down");
+    });
+
+    const result = await resolveVocCardAction({
+      action: "voc_start_follow_up",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "",
+      bitable,
+    });
+
+    if (result.kind !== "update") throw new Error("expected update");
+    expect(result.response.toast?.type).toBe("error");
+  });
+
+  it("writes the closure timestamp as epoch milliseconds, not an ISO string", async () => {
+    // Calibrated against the live Base (field-map.ts): a Bitable DateTime
+    // field reads back as epoch milliseconds, and writing an ISO string
+    // instead is silently rejected by the real API — updateRecord throws and
+    // the whole confirm-closure step fails. Only a real-Base run surfaces
+    // this; the mock alone would happily accept either shape.
+    const bitable = client();
+    bitable.getRecord = vi.fn(async () => ({ ...record, state: "待闭环" as const }));
+    const before = Date.now();
+
+    const result = await resolveVocCardAction({
+      action: "voc_confirm_closure",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "已处理",
+      bitable,
+    });
+
+    const after = Date.now();
+    expect(result.kind).toBe("update");
+    expect(bitable.updateRecord).toHaveBeenCalledTimes(1);
+    const [, fields] = bitable.updateRecord.mock.calls[0];
+    expect(typeof fields.闭环时间).toBe("number");
+    expect(fields.闭环时间 as number).toBeGreaterThanOrEqual(before);
+    expect(fields.闭环时间 as number).toBeLessThanOrEqual(after);
+  });
+});
+
+// `note` replaced an optional followUpNote/closingNote pair. These lock the
+// action → column derivation, so a caller can no longer land follow-up text in
+// the closure column (or write neither and still compile).
+describe("resolveVocCardAction note handling", () => {
+  it("writes 提交跟进结果's note into 跟进记录 only", async () => {
+    const bitable = client();
+    bitable.getRecord = vi.fn(async () => ({ ...record, state: "跟进中" as const }));
+
+    await resolveVocCardAction({
+      action: "voc_submit_follow_up",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "已联系用户，约定明天上门",
+      bitable,
+    });
+
+    expect(bitable.updateRecord).toHaveBeenCalledWith("rec1", {
+      流程状态: "待闭环",
+      跟进记录: "已联系用户，约定明天上门",
+    });
+  });
+
+  it("writes 确认闭环's note into 闭环结论 only", async () => {
+    const bitable = client();
+    bitable.getRecord = vi.fn(async () => ({ ...record, state: "待闭环" as const }));
+
+    await resolveVocCardAction({
+      action: "voc_confirm_closure",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "已完成维修并完成回访",
+      bitable,
+    });
+
+    const [, fields] = bitable.updateRecord.mock.calls[0];
+    expect(fields.闭环结论).toBe("已完成维修并完成回访");
+    expect(fields.跟进记录).toBeUndefined();
+  });
+
+  it("never writes a note column for an action that carries no note", async () => {
+    const bitable = client();
+
+    await resolveVocCardAction({
+      action: "voc_start_follow_up",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      // A stray note on a note-free action must not leak into the Base: the
+      // column is chosen by the action, not by whatever the caller passed.
+      note: "无关文本",
+      bitable,
+    });
+
+    expect(bitable.updateRecord).toHaveBeenCalledWith("rec1", {
+      流程状态: "跟进中",
+    });
+  });
+
+  it.each([
+    ["voc_submit_follow_up", "跟进中", "跟进记录不能为空"],
+    ["voc_confirm_closure", "待闭环", "闭环结论不能为空"],
+  ] as const)(
+    "refuses %s with a blank note and writes nothing",
+    async (action, state, reason) => {
+      for (const note of ["", "   ", "\n\t"]) {
+        const bitable = client();
+        bitable.getRecord = vi.fn(async () => ({ ...record, state }));
+
+        const result = await resolveVocCardAction({
+          action,
+          recordId: "rec1",
+          operatorOpenId: "ou_owner",
+          note,
+          bitable,
+        });
+
+        if (result.kind !== "update") throw new Error("expected update");
+        expect(result.response.toast?.content).toBe(reason);
+        expect(result.response.card).toBeUndefined();
+        expect(bitable.updateRecord).not.toHaveBeenCalled();
+      }
+    },
+  );
+});
+
+// I4: a green toast on a card still showing the previous status tag and the
+// button that was just used reads, in an unedited screen recording, as a frozen
+// card next to a Base that moved.
+describe("resolveVocCardAction card refresh", () => {
+  it.each([
+    ["voc_start_follow_up", "待跟进", "跟进中", "voc_submit_follow_up"],
+    ["voc_submit_follow_up", "跟进中", "待闭环", "voc_confirm_closure"],
+  ] as const)(
+    "returns a card at the new state after %s",
+    async (action, from, to, nextAction) => {
+      const bitable = client();
+      bitable.getRecord = vi.fn(async () => ({ ...record, state: from }));
+
+      const result = await resolveVocCardAction({
+        action,
+        recordId: "rec1",
+        operatorOpenId: "ou_owner",
+        note: "已联系用户",
+        bitable,
+      });
+
+      if (result.kind !== "update") throw new Error("expected update");
+      expect(result.response.toast).toEqual({
+        type: "success",
+        content: `已更新为${to}`,
+      });
+      expect(result.response.card?.type).toBe("raw");
+
+      const card = JSON.stringify(result.response.card?.data);
+      expect(card).toContain(to);
+      expect(card).not.toContain(from);
+      // The card must offer whatever is legal next, so the loop can continue
+      // from the card the owner is already looking at.
+      expect(card).toContain(nextAction);
+    },
+  );
+
+  it("returns a closed card with no further action after 确认闭环", async () => {
+    const bitable = client();
+    bitable.getRecord = vi.fn(async () => ({ ...record, state: "待闭环" as const }));
+
+    const result = await resolveVocCardAction({
+      action: "voc_confirm_closure",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "已完成维修",
+      bitable,
+    });
+
+    if (result.kind !== "update") throw new Error("expected update");
+    const data = result.response.card?.data ?? {};
+    expect((data.header as Record<string, unknown>).template).toBe("green");
+    expect(JSON.stringify(data)).toContain("当前状态无需操作");
+    expect(JSON.stringify(data)).not.toContain("voc_");
+  });
+
+  it("re-renders from the record already read, without a second getRecord", async () => {
+    const bitable = client();
+
+    const result = await resolveVocCardAction({
+      action: "voc_start_follow_up",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "",
+      bitable,
+    });
+
+    expect(bitable.getRecord).toHaveBeenCalledTimes(1);
+    if (result.kind !== "update") throw new Error("expected update");
+    // The AI summary and reply suggestions survive the refresh: they are what
+    // the owner writes the follow-up note from, and they only exist on the
+    // record that single read returned.
+    const card = JSON.stringify(result.response.card?.data);
+    expect(card).toContain("用户反馈上门维修延迟三天");
+    expect(card).toContain("【致歉安抚】非常抱歉给您带来不便");
+  });
+
+  it("renders a placeholder rather than crashing when the record has no polarity", async () => {
+    const bitable = client();
+    bitable.getRecord = vi.fn(async () => ({
+      ...record,
+      polarity: null,
+      summary: "",
+      replies: [],
+    }));
+
+    const result = await resolveVocCardAction({
+      action: "voc_start_follow_up",
+      recordId: "rec1",
+      operatorOpenId: "ou_owner",
+      note: "",
+      bitable,
+    });
+
+    if (result.kind !== "update") throw new Error("expected update");
+    expect(result.response.card?.type).toBe("raw");
+    expect(JSON.stringify(result.response.card?.data)).not.toContain(
+      "AI 回复话术建议",
+    );
+  });
+});
+
+// Task 9: the archival step appended after 确认闭环's own write already
+// landed. `note` (required — see ResolveVocCardActionInput above) is filled
+// in here with a placeholder: the load-bearing thing under test is that the
+// closure write and the summary write are two separate calls, not the exact
+// content of the manual note the second write goes on to overwrite. `bitable`
+// is built fresh per test (via client(), same helper every other describe
+// block here uses) with the record already parked at 待闭环 — the transition
+// 确认闭环 requires — rather than reused across tests, so one test's call
+// count can never leak into another's assertions.
+//
+// There is no `chatId` input anymore: the gate is `record.warRoomChatId`,
+// read from the same getRecord this call already made for the triple check,
+// so each fixture below sets that field directly instead of passing a
+// parallel chatId argument.
+describe("resolveVocCardAction closure archival", () => {
+  function readyForClosure(warRoomChatId: string) {
+    const bitable = client();
+    bitable.getRecord = vi.fn(async () => ({
+      ...record,
+      state: "待闭环" as const,
+      warRoomChatId,
+    }));
+    return bitable;
+  }
+
+  it("archives when the ticket has a real war room chat", async () => {
+    const writes: Array<Record<string, unknown>> = [];
+    const bitable = readyForClosure("oc_1");
+
+    await resolveVocCardAction({
+      action: "voc_confirm_closure", recordId: "rec1", operatorOpenId: "ou_owner",
+      note: "已处理",
+      bitable: { ...bitable, updateRecord: async (_id: string, fields: Record<string, unknown>) => { writes.push(fields); } },
+      readTranscript: async () => ["先跟进了", "已上门解决"],
+      summarise: async () => "已上门更换配件，用户确认解决。",
+    });
+
+    expect(writes[0]?.[VOC_FIELD_NAMES.state]).toBe("已闭环");
+    expect(writes[1]?.[VOC_FIELD_NAMES.closingNote]).toBe("已上门更换配件，用户确认解决。");
+  });
+
+  it("keeps the closure when the summary fails", async () => {
+    // This is the load-bearing rule of the whole design. Closure is a fact that
+    // already happened; a failed summary must not be able to undo it.
+    const writes: Array<Record<string, unknown>> = [];
+    const bitable = readyForClosure("oc_1");
+
+    const result = await resolveVocCardAction({
+      action: "voc_confirm_closure", recordId: "rec1", operatorOpenId: "ou_owner",
+      note: "已处理",
+      bitable: { ...bitable, updateRecord: async (_id: string, fields: Record<string, unknown>) => { writes.push(fields); } },
+      readTranscript: async () => ["内容"],
+      summarise: async () => null,
+    });
+
+    expect(writes[0]?.[VOC_FIELD_NAMES.state]).toBe("已闭环");
+    expect(writes).toHaveLength(1);
+    expect(JSON.stringify(result)).toMatch(/结论生成失败/);
+  });
+
+  it("skips the summary entirely for a ticket with no war room", async () => {
+    const summarise = vi.fn(async () => "x");
+    const readTranscript = vi.fn(async () => []);
+    const bitable = readyForClosure("");
+
+    await resolveVocCardAction({
+      action: "voc_confirm_closure", recordId: "rec1", operatorOpenId: "ou_owner",
+      note: "已处理",
+      bitable, readTranscript, summarise,
+    });
+
+    expect(readTranscript).not.toHaveBeenCalled();
+    expect(summarise).not.toHaveBeenCalled();
+  });
+
+  // The easiest branch to get wrong: DECLINED_MARKER ("declined") is a
+  // non-empty string sitting in the same column a real chat id lives in. Any
+  // "truthy means archive" shortcut would pass this value straight to
+  // readTranscript and fire a request guaranteed to fail against a chat that
+  // was deliberately never created.
+  it("skips the summary entirely when the war room was declined", async () => {
+    const summarise = vi.fn(async () => "x");
+    const readTranscript = vi.fn(async () => []);
+    const bitable = readyForClosure(DECLINED_MARKER);
+
+    await resolveVocCardAction({
+      action: "voc_confirm_closure", recordId: "rec1", operatorOpenId: "ou_owner",
+      note: "已处理",
+      bitable, readTranscript, summarise,
+    });
+
+    expect(readTranscript).not.toHaveBeenCalled();
+    expect(summarise).not.toHaveBeenCalled();
+  });
 });

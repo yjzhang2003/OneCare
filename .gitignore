@@ -6,3 +6,7 @@ node_modules/
 .env*
 !.env.example
 .vercel
+docs/data/
+
+# Playwright MCP browser artifacts (console logs, traces) — scratch only
+.playwright-mcp/

@@ -5571,3 +5571,91 @@ a {
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Arco 运营控制台外壳
+
+   The site body is near-black with a grid, which every other page paints over
+   with its own paper surface. The console is full-bleed rather than a floating
+   card — an operations console occupies the window, it does not sit in it — so
+   it has to paint that surface itself. The first version of the old workbench
+   shipped with no background at all and rendered dark-on-dark; jsdom computes
+   no contrast, so no assertion in this repo can catch a repeat. Hence explicit
+   backgrounds on every surface below.
+--------------------------------------------------------------------------- */
+.oc-console {
+  min-height: 100vh;
+  background: var(--color-fill-1, #f7f8fa);
+
+  /* Arco ships one blue as its accent everywhere. Remapping the six primary
+     steps to this project's signal orange is the whole theme reconciliation:
+     Arco's neutrals already sit close to the paper/ink palette, and a deeper
+     retheme is not what the last days before the deadline are for. */
+  --primary-1: 255, 244, 236;
+  --primary-2: 255, 217, 190;
+  --primary-3: 255, 185, 140;
+  --primary-4: 255, 154, 92;
+  --primary-5: 249, 127, 49;
+  --primary-6: 229, 103, 15;
+  --primary-7: 193, 80, 9;
+}
+
+.oc-console__sider {
+  background: #fff;
+  border-right: 1px solid var(--color-border-2, #e5e6eb);
+}
+
+.oc-console__brand {
+  padding: 18px 16px 12px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-text-1, #1d2129);
+}
+
+.oc-console__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 56px;
+  padding: 0 20px;
+  background: #fff;
+  border-bottom: 1px solid var(--color-border-2, #e5e6eb);
+}
+
+.oc-console__user {
+  color: var(--color-text-2, #4e5969);
+  font-size: 13px;
+}
+
+.oc-console__content {
+  padding: 16px 20px 32px;
+}
+
+/* Right-aligned, matching where every console this one is modelled on puts it. */
+.oc-console__pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/* Bottom-right: the only link that leaves the console, kept clear of the work. */
+.oc-console__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px 20px;
+  background: transparent;
+}
+
+/* Pushes the count tag to the right edge of the menu item so the five counts
+   line up in a column instead of floating after labels of different widths. */
+.oc-console__queue-label {
+  flex: 1;
+  margin-left: 4px;
+}
+
+.oc-console .arco-menu-item {
+  display: flex;
+  align-items: center;
+}

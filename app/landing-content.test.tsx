@@ -1,7 +1,35 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import type { VocMetricsResult } from "../src/features/voc/metrics";
 import { LandingContent } from "./landing-content";
+
+// A real VocMetricsResult shape (task 14, fix round 1 added the "unavailable"
+// branch): LandingContent now threads this to the operations workspace
+// instead of that workspace reading a fabricated vocTopics fixture. The
+// tests below only assert on markup unrelated to specific numbers, so any
+// well-formed "ok" value works here.
+const metrics: VocMetricsResult = {
+  status: "ok",
+  metrics: {
+    total: 3,
+    byPolarity: { 好评: 1, 中评: 1, 差评: 1 },
+    dimensionTop: [
+      { dimension: "维修时间", count: 2 },
+      { dimension: "服务态度", count: 1 },
+    ],
+    byChannel: [{ channel: "电商评价", count: 3 }],
+    negativeShare: 0.67,
+    ticketsOpened: 2,
+    ticketsClosed: 1,
+    closureRate: 0.5,
+    averageClosureHours: 12,
+    taggingAttempted: 3,
+    taggingSucceeded: 2,
+    taggingFailed: 1,
+    taggingPending: 0,
+  },
+};
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
@@ -11,7 +39,9 @@ afterEach(cleanup);
 
 describe("LandingContent", () => {
   it("presents the Hisense showroom story with interactive perspectives", () => {
-    const { container } = render(<LandingContent user={null} />);
+    const { container } = render(
+      <LandingContent metrics={metrics} user={null} />,
+    );
 
     expect(
       screen.getByRole("heading", {
@@ -190,7 +220,7 @@ describe("LandingContent", () => {
   });
 
   it("moves between perspective tabs with the keyboard", () => {
-    render(<LandingContent user={null} />);
+    render(<LandingContent metrics={metrics} user={null} />);
     fireEvent.click(screen.getByRole("link", { name: "四个视角" }));
 
     const customer = screen.getByRole("tab", { name: "客服" });
@@ -210,7 +240,9 @@ describe("LandingContent", () => {
   });
 
   it("keeps text controls centered and free of decorative arrows", () => {
-    const { container } = render(<LandingContent user={null} />);
+    const { container } = render(
+      <LandingContent metrics={metrics} user={null} />,
+    );
     fireEvent.click(screen.getByRole("link", { name: "团队" }));
 
     const textControls = container.querySelectorAll(
@@ -230,6 +262,7 @@ describe("LandingContent", () => {
   it("returns signed-in visitors to the Feishu experience gateway", () => {
     render(
       <LandingContent
+        metrics={metrics}
         user={{ openId: "ou_onecare", name: "服务运营员" }}
       />,
     );
@@ -246,10 +279,42 @@ describe("LandingContent", () => {
   });
 
   it("renders only safe copy for a known authentication error", () => {
-    render(<LandingContent user={null} authError="invalid_state" />);
+    render(
+      <LandingContent authError="invalid_state" metrics={metrics} user={null} />,
+    );
 
     expect(screen.getByRole("alert")).toHaveTextContent(
       "登录请求已失效，请重新发起。",
     );
+  });
+
+  it("offers a manual entry into the workbench for a session-less visitor", () => {
+    render(<LandingContent metrics={metrics} user={null} />);
+
+    expect(screen.getByRole("link", { name: "进入工作台" })).toHaveAttribute(
+      "href",
+      "/enter",
+    );
+  });
+
+  it("does not offer the workbench entry link to an already signed-in visitor", () => {
+    render(
+      <LandingContent
+        metrics={metrics}
+        user={{ openId: "ou_onecare", name: "服务运营员" }}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: "进入工作台" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a safe, generic notice when a prior authorization attempt failed", () => {
+    render(<LandingContent authError="tried" metrics={metrics} user={null} />);
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("工作台授权未成功");
+    expect(alert.textContent).not.toMatch(/error|exception|stack|token/i);
   });
 });

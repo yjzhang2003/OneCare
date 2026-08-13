@@ -7,6 +7,7 @@ import {
   initialServiceJourneyState,
   serviceJourneyReducer,
 } from "../service-journey";
+import type { VocMetricsResult } from "../../voc/metrics";
 import { AgentWorkspace } from "./agent-workspace";
 import { CustomerWorkspace } from "./customer-workspace";
 import { EngineerWorkspace } from "./engineer-workspace";
@@ -14,11 +15,12 @@ import { OperationsWorkspace } from "./operations-workspace";
 
 type PerspectiveTabsProps = {
   perspectives: readonly Perspective[];
+  metrics: VocMetricsResult;
 };
 
 const workspaceIds = ["customer", "agent", "engineer", "operations"] as const;
 
-export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
+export function PerspectiveTabs({ perspectives, metrics }: PerspectiveTabsProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [journey, dispatch] = useReducer(
     serviceJourneyReducer,
@@ -141,6 +143,7 @@ export function PerspectiveTabs({ perspectives }: PerspectiveTabsProps) {
                 <OperationsWorkspace
                   journey={journey}
                   key={journey.stage === "detected" ? "initial" : "active"}
+                  metrics={metrics}
                   onCreateImprovementTask={() =>
                     dispatch({ type: "createImprovementTask" })
                   }

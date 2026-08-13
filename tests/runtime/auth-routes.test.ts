@@ -100,8 +100,17 @@ describe("built Next.js authentication routes", () => {
 
     expect(response.status).toBe(302);
     const errorLocation = new URL(response.headers.get("location")!);
-    expect(errorLocation.pathname).toBe("/login");
+    // A failed callback now lands on "/" with both auth_error and the
+    // auth=tried loop-guard marker (app/api/auth/feishu/callback/route.ts,
+    // commit 90e0b5e — "land logins on /"; see also that route's own
+    // route.test.ts, which already asserts this). This assertion used to say
+    // "/login" and had drifted out of sync with the actual implementation
+    // ever since — caught here, not by `vitest run`, because tests/runtime
+    // is the only suite that boots the real built server and follows the
+    // real redirect chain.
+    expect(errorLocation.pathname).toBe("/");
     expect(errorLocation.searchParams.get("auth_error")).toBe("invalid_state");
+    expect(errorLocation.searchParams.get("auth")).toBe("tried");
     expect(response.headers.get("set-cookie")).toContain(
       "auto_insight_oauth_state=;",
     );
@@ -137,6 +146,18 @@ describe("built Next.js authentication routes", () => {
       redirect: "manual",
     });
 
+    // `/dashboard` is now a route-level redirect (`redirects()` in
+    // next.config.ts), not a rendered page calling `redirect()`. Under
+    // `cacheComponents`, the old page-level version got prerendered as
+    // static output and its redirect was baked into the RSC payload as a
+    // client-side navigation instead of a real HTTP redirect — a non-JS
+    // caller (this fetch with `redirect: "manual"`, same as curl) saw 200,
+    // not 307. A config-level redirect resolves before any route matching or
+    // rendering, so it is unaffected by that and always answers with a real
+    // HTTP redirect. 307 (not 308) matches next.config.ts's `permanent:
+    // false`, chosen because this is a legacy compatibility path, not a
+    // permanent URL-scheme decision, and 308/301 would let clients and
+    // crawlers cache the redirect past the point it could be undone.
     expect(dashboard.status).toBe(307);
     expect(
       new URL(dashboard.headers.get("location")!, baseUrl).pathname,
@@ -146,6 +167,40 @@ describe("built Next.js authentication routes", () => {
     expect(logout.headers.get("set-cookie")).toContain(
       "auto_insight_session=;",
     );
+  });
+
+  it("retires the public VOC dashboard with a real HTTP redirect", async () => {
+    // This route used to be the one page a judge could verify unaided, and it
+    // answered 200. It is now a config-level redirect to `/`, which is where
+    // the same numbers live behind the session gate. Asserting the status and
+    // not just the destination is the point: a page-level redirect() under
+    // cacheComponents would answer 200 with a baked client-side navigation,
+    // which is the regression class /dashboard already hit once.
+    const response = await fetch(`${baseUrl}/dashboard/voc`, {
+      redirect: "manual",
+    });
+
+    expect(response.status).toBe(307);
+    expect(new URL(response.headers.get("location")!, baseUrl).pathname).toBe(
+      "/",
+    );
+  });
+
+  it("makes /enter a real dynamic redirect, not a prerendered 200", async () => {
+    // The exact regression class this project already hit once: a page whose
+    // body is a bare redirect() gets prerendered as static output under
+    // cacheComponents, and a non-JS caller sees 200 instead of a real HTTP
+    // redirect (see next.config.ts's comment on the old /dashboard page).
+    // /enter is a route handler specifically to avoid that, and this is the
+    // one check `vitest run` cannot perform — it never boots the built
+    // server. Anonymous, no cookies: the fresh visit falls through to
+    // starting authorization.
+    const response = await fetch(`${baseUrl}/enter`, { redirect: "manual" });
+
+    expect(response.status).toBe(302);
+    expect(
+      new URL(response.headers.get("location")!, baseUrl).pathname,
+    ).toBe("/api/auth/feishu/start");
   });
 
   it("answers Feishu URL verification in the built runtime", async () => {

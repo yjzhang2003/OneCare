@@ -1,4 +1,5 @@
 import type { AuthUser } from "../src/features/auth/types";
+import type { VocMetricsResult } from "../src/features/voc/metrics";
 import {
   architectureLayers,
   closedLoopSteps,
@@ -24,14 +25,32 @@ const errorMessages: Record<string, string> = {
   invalid_state: "登录请求已失效，请重新发起。",
   token_exchange_failed: "飞书登录暂时未完成，请重新尝试。",
   user_info_failed: "暂时无法读取飞书身份，请重新尝试。",
+  // Set by app/page.tsx when the /enter loop guard (shouldStartAuthorization)
+  // reports a prior attempt that did not produce a session, with no more
+  // specific auth_error code attached. Deliberately generic — this must never
+  // surface the underlying reason to the client.
+  tried: "工作台授权未成功，你可以点击下方「进入工作台」重新尝试，或继续浏览方案展示厅。",
 };
 
 type LandingContentProps = {
   user: AuthUser | null;
   authError?: string;
+  // Fetched by app/page.tsx (a sibling server component already awaiting
+  // getCurrentSession() there) and threaded through this component and
+  // PerspectiveTabs down to OperationsWorkspace, so the VOC showcase panel
+  // reflects the same real, cached aggregation the public dashboard shows
+  // rather than a second, independently-fabricated demo number set. Fetched
+  // one layer up instead of inside this component so LandingContent stays a
+  // plain synchronous component — landing-content.test.tsx renders it
+  // directly with @testing-library/react, which cannot render an async
+  // component. A `VocMetricsResult` (not a bare `VocMetrics`) because
+  // getVocDashboardMetrics() never throws — a failed read must not fail
+  // this page's render, so the "did it work" branch is a value every
+  // consumer down the chain has to handle explicitly.
+  metrics: VocMetricsResult;
 };
 
-export function LandingContent({ user, authError }: LandingContentProps) {
+export function LandingContent({ user, authError, metrics }: LandingContentProps) {
   const errorMessage = authError ? errorMessages[authError] : undefined;
 
   return (
@@ -63,6 +82,16 @@ export function LandingContent({ user, authError }: LandingContentProps) {
               <a className="secondary-action" href="/login">
                 使用飞书体验
               </a>
+              {user ? null : (
+                // Anonymous visitors (including a tenant member who opened
+                // this page from a shared link rather than the Feishu app
+                // icon) need a manual way to reach the workbench: opening the
+                // app icon lands on /enter without this link, but a shared
+                // /-link degrades to one click here instead.
+                <a className="secondary-action" href="/enter">
+                  进入工作台
+                </a>
+              )}
             </div>
           </div>
             </section>
@@ -76,7 +105,7 @@ export function LandingContent({ user, authError }: LandingContentProps) {
                 title="一次问题，四种角色，一条完整服务链"
                 titleId="perspectives-title"
               />
-          <PerspectiveTabs perspectives={perspectives} />
+          <PerspectiveTabs metrics={metrics} perspectives={perspectives} />
             </div>
           ),
           architecture: (

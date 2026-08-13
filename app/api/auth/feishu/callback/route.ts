@@ -19,8 +19,6 @@ import {
 import type { AuthEnv } from "../../../../../src/lib/env";
 import { readAuthEnv } from "../../../../../src/lib/env";
 
-export const runtime = "nodejs";
-
 type CallbackDependencies = {
   readEnv: () => AuthEnv;
   exchangeCode: (input: { code: string; env: AuthEnv }) => Promise<string>;
@@ -36,8 +34,16 @@ const defaultDependencies: CallbackDependencies = {
 };
 
 function errorResponse(request: Request, code: AuthErrorCode): NextResponse {
-  const errorUrl = new URL("/login", request.url);
+  const errorUrl = new URL("/", request.url);
   errorUrl.searchParams.set("auth_error", code);
+  // The landing page auto-attempts Feishu auth for a session-less visitor.
+  // Without this marker, a failed login lands back on "/" still session-less,
+  // which retries auth, which can fail again, which lands back on "/" —
+  // an infinite redirect loop that is far harder to diagnose inside the
+  // Feishu client's embedded browser than in a normal browser tab. This
+  // marker lets the landing page tell "never attempted" from "attempted and
+  // failed" so it only auto-attempts once.
+  errorUrl.searchParams.set("auth", "tried");
   const response = NextResponse.redirect(errorUrl, 302);
   response.cookies.delete(OAUTH_STATE_COOKIE);
   return response;
@@ -68,7 +74,11 @@ export function createCallbackHandler(
       const accessToken = await dependencies.exchangeCode({ code, env });
       const user = await dependencies.fetchUser(accessToken);
       const session = dependencies.makeSession(user, env.sessionSecret);
-      const successUrl = new URL("/login", request.url);
+      // Lands on the workbench ("/"), not the old dedicated experience-entry
+      // page: the workbench is where an identity-aware landing page shows a
+      // signed-in tenant member their real ticket detail, so that is where a
+      // successful login now belongs.
+      const successUrl = new URL("/", request.url);
       successUrl.searchParams.set("auth", "success");
       const response = NextResponse.redirect(successUrl, 302);
       response.cookies.set(SESSION_COOKIE, session, sessionCookieOptions());
