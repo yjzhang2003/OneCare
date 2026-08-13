@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { WorkbenchData, WorkbenchTicket } from "../../../../src/features/workbench/data";
+import type { WorkbenchTicket } from "../../../../src/features/workbench/data";
 
-const { getCurrentSession, readWorkbenchCached, refresh } = vi.hoisted(() => ({
+const { getCurrentSession, readTicketByNumber, refresh } = vi.hoisted(() => ({
   getCurrentSession: vi.fn(),
-  readWorkbenchCached: vi.fn(),
+  readTicketByNumber: vi.fn(),
   refresh: vi.fn(),
 }));
 
@@ -20,8 +20,10 @@ vi.mock("../../../../src/features/auth/current-session", () => ({
   getCurrentSession,
 }));
 
-vi.mock("../../../api/voc/dashboard/route", () => ({
-  readWorkbenchCached,
+// The page reads one record by its number now, instead of pulling all 3628 and
+// finding one of them. The seam moved; what these tests assert did not.
+vi.mock("../../../../src/features/store/workbench-query", () => ({
+  readTicketByNumber,
 }));
 
 import TicketDetailPage from "./page";
@@ -59,29 +61,6 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
   };
 }
 
-function workbenchData(tickets: readonly WorkbenchTicket[]): WorkbenchData {
-  return {
-    metrics: {
-      status: "ok",
-      metrics: {
-        total: tickets.length,
-        byPolarity: { 好评: 0, 中评: 0, 差评: tickets.length },
-        dimensionTop: [],
-        byChannel: [],
-        negativeShare: tickets.length === 0 ? 0 : 1,
-        ticketsOpened: tickets.length,
-        ticketsClosed: 0,
-        closureRate: 0,
-        averageClosureHours: 0,
-        taggingAttempted: tickets.length,
-        taggingSucceeded: tickets.length,
-        taggingFailed: 0,
-        taggingPending: 0,
-      },
-    },
-    tickets,
-  };
-}
 
 function renderPage(
   recordNumber: string,
@@ -100,7 +79,7 @@ describe("TicketDetailPage", () => {
       openId: "ou_operator",
       name: "运营",
     });
-    readWorkbenchCached.mockResolvedValue(workbenchData([]));
+    readTicketByNumber.mockResolvedValue(null);
   });
 
   it("redirects before reading VOC data", async () => {
@@ -109,11 +88,11 @@ describe("TicketDetailPage", () => {
     await expect(renderPage("VOC-SECRET", { queue: "all" })).rejects.toThrow(
       "NEXT_REDIRECT:/enter",
     );
-    expect(readWorkbenchCached).not.toHaveBeenCalled();
+    expect(readTicketByNumber).not.toHaveBeenCalled();
   });
 
   it("renders a ticket with a validated back link", async () => {
-    readWorkbenchCached.mockResolvedValue(workbenchData([ticket()]));
+    readTicketByNumber.mockResolvedValue(ticket());
 
     render(
       await renderPage("VOC-001", {
@@ -131,11 +110,10 @@ describe("TicketDetailPage", () => {
     expect(document.body.textContent).not.toContain("evil.example");
   });
 
+  // Unavailable is now a thrown query rather than an aggregation status: the page
+  // reads one record, so there is no metrics envelope to carry the failure.
   it("renders unavailable separately from not-found", async () => {
-    readWorkbenchCached.mockResolvedValue({
-      metrics: { status: "unavailable" },
-      tickets: [],
-    });
+    readTicketByNumber.mockRejectedValue(new Error("database unreachable"));
 
     render(await renderPage("VOC-001"));
 
@@ -144,7 +122,7 @@ describe("TicketDetailPage", () => {
   });
 
   it("renders not-found only after a successful read", async () => {
-    readWorkbenchCached.mockResolvedValue(workbenchData([]));
+    readTicketByNumber.mockResolvedValue(null);
 
     render(await renderPage("VOC-404"));
 

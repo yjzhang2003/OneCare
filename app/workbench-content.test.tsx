@@ -6,7 +6,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { VocMetrics } from "../src/features/voc/metrics";
 import type { WorkbenchData, WorkbenchTicket } from "../src/features/workbench/data";
-import { WorkbenchContent } from "./workbench-content";
+import {
+  applyWorkbenchQuery,
+  parseWorkbenchQuery,
+} from "../src/features/workbench/query";
+import {
+  deviceProfiles,
+  repeatOnly,
+  userProfiles,
+} from "../src/features/workbench/profiles";
+import { WorkbenchConsole } from "./workbench-console";
 
 // The console navigates with router.push instead of rendering every control as a
 // link, so useRouter has to exist. Assertions here are about what is rendered
@@ -77,6 +86,12 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
   };
 }
 
+// Renders the console directly, assembling its props with the same reference
+// functions the server component uses. These assertions always described the
+// console's rendering, not the fetching around it — WorkbenchContent was only ever
+// a convenient fixture builder, and now that it awaits SQL it cannot be one.
+// applyWorkbenchQuery stays in the loop here on purpose: it is where the triage
+// semantics are defined, and scripts/equiv holds the SQL implementation to it.
 function renderWorkbench(
   overrides: Partial<{
     tickets: readonly WorkbenchTicket[];
@@ -84,18 +99,46 @@ function renderWorkbench(
     searchParams: Record<string, string | string[] | undefined>;
   }> = {},
 ) {
+  const tickets = overrides.tickets ?? [ticket()];
+  const query = parseWorkbenchQuery(overrides.searchParams ?? {});
+  const users = userProfiles(tickets);
+  const devices = deviceProfiles(tickets);
+  const metrics = overrides.metrics ?? { status: "ok", metrics: emptyMetrics() };
+  const selectedProfile =
+    query.userRef !== null
+      ? (users.find((profile) => profile.id === query.userRef) ?? null)
+      : query.deviceRef !== null
+        ? (devices.find((profile) => profile.id === query.deviceRef) ?? null)
+        : null;
+
+  const distinct = (values: readonly string[]) =>
+    [...new Set(values.filter((value) => value.length > 0))].sort((a, b) =>
+      a.localeCompare(b, "zh-Hans-CN"),
+    );
+
   return render(
-    <WorkbenchContent
-      data={{
-        metrics: overrides.metrics ?? {
-          status: "ok",
-          metrics: emptyMetrics(),
-        },
-        tickets: overrides.tickets ?? [ticket()],
-      }}
+    <WorkbenchConsole
       user={{ openId: "ou_viewer", name: "张禹健" }}
+      metrics={metrics.status === "ok" ? metrics.metrics : null}
+      view={applyWorkbenchQuery(tickets, query, NOW)}
+      query={query}
       now={NOW}
-      searchParams={overrides.searchParams ?? {}}
+      options={{
+        channel: distinct(tickets.map((t) => t.channel)),
+        category: distinct(tickets.map((t) => t.category)),
+        polarity: distinct(tickets.map((t) => t.polarity ?? "")),
+        dimension: distinct(tickets.flatMap((t) => t.dimensions)),
+        severity: distinct(tickets.map((t) => t.severity ?? "")),
+        state: distinct(tickets.map((t) => t.state)),
+        owner: distinct(tickets.flatMap((t) => t.ownerNames)),
+        unit: distinct(tickets.map((t) => t.businessUnit)),
+        level1: distinct(tickets.map((t) => t.categoryLevel1)),
+      }}
+      users={repeatOnly(users)}
+      devices={repeatOnly(devices)}
+      userTotal={users.length}
+      deviceTotal={devices.length}
+      selectedProfile={selectedProfile}
     />,
   );
 }
@@ -203,12 +246,16 @@ describe("WorkbenchContent source", () => {
     "utf8",
   );
 
-  // Filtering and paging 3628 records stays on the server so only one page of
-  // rows crosses the wire. If this file ever became a client component, the
-  // whole table would ship to the browser on every load.
-  it("keeps query evaluation on the server", () => {
+  // Query evaluation stays on the server, and now stays in SQL: the ticket list is
+  // one page plus five counts rather than 3628 rows filtered in memory, which is
+  // what made a cold load cost 6–7 seconds. If this file became a client component
+  // the whole table would ship to the browser on every load.
+  it("keeps query evaluation on the server, in SQL", () => {
     expect(source).not.toContain("use client");
-    expect(source).toContain("applyWorkbenchQuery");
+    expect(source).toContain("readWorkbenchPage");
+    // The full-set read is still reachable for the profile and overview sections,
+    // but it must not be what the ticket list depends on.
+    expect(source).toContain("needsFullSet");
   });
 
   // The page shipped able to write while still telling the operator, in its own

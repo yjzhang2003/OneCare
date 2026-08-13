@@ -238,7 +238,22 @@ function feedbackRank(ticket: WorkbenchTicket): number {
   return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
 }
 
+// A final tiebreak on the record number, so the order is total rather than
+// merely sorted. Ties were previously left to Array.prototype.sort's stability,
+// which means "whatever order the source returned them in" — fine on its own, and
+// impossible to reproduce in SQL. With a deterministic last key, this function and
+// the Postgres ORDER BY that mirrors it can be compared row for row, which is how
+// the two are kept honest about agreeing.
 function compare(
+  a: WorkbenchTicket,
+  b: WorkbenchTicket,
+  sort: SortKey,
+  now: number,
+): number {
+  return rank(a, b, sort, now) || a.recordNumber.localeCompare(b.recordNumber);
+}
+
+function rank(
   a: WorkbenchTicket,
   b: WorkbenchTicket,
   sort: SortKey,

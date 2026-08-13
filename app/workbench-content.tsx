@@ -1,48 +1,33 @@
 import type { AuthUser } from "../src/features/auth/types";
-import type { WorkbenchData, WorkbenchTicket } from "../src/features/workbench/data";
 import type { StringFilterField } from "../src/features/workbench/href";
-import {
-  applyWorkbenchQuery,
-  parseWorkbenchQuery,
-} from "../src/features/workbench/query";
+import { parseWorkbenchQuery } from "../src/features/workbench/query";
 import {
   deviceProfiles,
   repeatOnly,
   userProfiles,
 } from "../src/features/workbench/profiles";
+import {
+  readFilterOptions,
+  readWorkbenchPage,
+} from "../src/features/store/workbench-query";
+import { readWorkbenchCached } from "./api/voc/dashboard/route";
 import { WorkbenchConsole } from "./workbench-console";
 
 type RawSearchParams = Readonly<Record<string, string | string[] | undefined>>;
 
-// Distinct values for one filter, taken from every record rather than from the
-// current page: a filter that only offers what happens to be on screen cannot
-// be used to find what is off it. Sorted so the list is stable between renders —
-// Bitable returns records in no guaranteed order, and an option list that
-// reshuffles on every load is unusable even when its contents are correct.
-function distinctValues(values: readonly string[]): readonly string[] {
-  return [...new Set(values.filter((value) => value.length > 0))].sort((a, b) =>
-    a.localeCompare(b, "zh-Hans-CN"),
-  );
-}
-
-function filterOptions(
-  tickets: readonly WorkbenchTicket[],
-): Readonly<Record<StringFilterField, readonly string[]>> {
-  return {
-    channel: distinctValues(tickets.map((ticket) => ticket.channel)),
-    category: distinctValues(tickets.map((ticket) => ticket.category)),
-    polarity: distinctValues(tickets.map((ticket) => ticket.polarity ?? "")),
-    dimension: distinctValues(tickets.flatMap((ticket) => ticket.dimensions)),
-    severity: distinctValues(tickets.map((ticket) => ticket.severity ?? "")),
-    state: distinctValues(tickets.map((ticket) => ticket.state)),
-    owner: distinctValues(tickets.flatMap((ticket) => ticket.ownerNames)),
-    unit: distinctValues(tickets.map((ticket) => ticket.businessUnit)),
-    level1: distinctValues(tickets.map((ticket) => ticket.categoryLevel1)),
-  };
-}
+const NO_OPTIONS: Readonly<Record<StringFilterField, readonly string[]>> = {
+  channel: [],
+  category: [],
+  polarity: [],
+  dimension: [],
+  severity: [],
+  state: [],
+  owner: [],
+  unit: [],
+  level1: [],
+};
 
 type WorkbenchContentProps = Readonly<{
-  data: WorkbenchData;
   user: AuthUser;
   // Passed in rather than read from Date.now() here: queues, the overdue marker
   // and dwell time all key off "now", and this app runs under Next's Cache
@@ -61,26 +46,33 @@ type WorkbenchContentProps = Readonly<{
 // The list query remains URL state rather than component state. The console
 // navigates by pushing the URLs that src/features/workbench/href.ts builds, so a
 // pasted list link still reproduces the exact view its sender was looking at.
-export function WorkbenchContent({
-  data,
+export async function WorkbenchContent({
   user,
   now,
   searchParams,
 }: WorkbenchContentProps) {
   const query = parseWorkbenchQuery(searchParams);
-  const view = applyWorkbenchQuery(data.tickets, query, now);
 
-  // Only the profiles that carry a pattern cross the wire. 2172 of 2772 users and
-  // 648 of 854 devices have a single record; sending all of them would bury the
-  // ones worth looking at and serialize ~3600 rows into the page for nothing.
-  // The totals travel alongside so the UI can say what it left out rather than
-  // presenting a filtered list as if it were complete.
-  const users = userProfiles(data.tickets);
-  const devices = deviceProfiles(data.tickets);
+  // Always: the sider's five queue counts, and — on the ticket section — one page of
+  // rows. Both come from aggregate SQL rather than from 3628 rows in memory, which
+  // is the whole point of having a database: a page is one query, the counts are one
+  // GROUP BY, and neither transfers rows nobody will read.
+  const view = await readWorkbenchPage(query, now);
+
+  // Everything below is fetched only for the section that needs it. The profile and
+  // overview sections still aggregate in JavaScript over the full set, so they still
+  // pay for reading it — but the ticket list, which is where an operator spends
+  // their time and which every navigation returns to, no longer does.
+  const needsFullSet = query.section !== "tickets";
+  const data = needsFullSet ? await readWorkbenchCached() : null;
+  const tickets = data?.tickets ?? [];
+
+  const users = needsFullSet ? userProfiles(tickets) : [];
+  const devices = needsFullSet ? deviceProfiles(tickets) : [];
 
   // The one profile a detail view needs, looked up across every record rather than
-  // taken from the lists above — those carry only the repeat profiles, so a
-  // single-record identity would open to an empty page.
+  // taken from the repeat-only lists the console receives — a single-record identity
+  // would otherwise open to an empty page.
   const selectedProfile =
     query.userRef !== null
       ? (users.find((profile) => profile.id === query.userRef) ?? null)
@@ -91,11 +83,19 @@ export function WorkbenchContent({
   return (
     <WorkbenchConsole
       user={user}
-      metrics={data.metrics.status === "ok" ? data.metrics.metrics : null}
+      metrics={
+        data === null
+          ? null
+          : data.metrics.status === "ok"
+            ? data.metrics.metrics
+            : null
+      }
       view={view}
       query={query}
       now={now}
-      options={filterOptions(data.tickets)}
+      options={
+        query.section === "tickets" ? await readFilterOptions() : NO_OPTIONS
+      }
       users={repeatOnly(users)}
       devices={repeatOnly(devices)}
       userTotal={users.length}

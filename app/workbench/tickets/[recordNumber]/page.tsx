@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentSession } from "../../../../src/features/auth/current-session";
 import { listHref, ticketDetailHref } from "../../../../src/features/workbench/href";
 import { parseWorkbenchQuery } from "../../../../src/features/workbench/query";
-import { readWorkbenchCached } from "../../../api/voc/dashboard/route";
+import { readTicketByNumber } from "../../../../src/features/store/workbench-query";
 import {
   TicketDetailPageView,
   TicketDetailState,
@@ -34,9 +34,20 @@ export default async function TicketDetailPage({
   const query = parseWorkbenchQuery(rawQuery);
   const backHref = listHref(query);
   const retryHref = ticketDetailHref(query, recordNumber);
-  const data = await readWorkbenchCached();
-
-  if (data.metrics.status === "unavailable") {
+  // One record by its number, not 3628 records filtered down to one. The read this
+  // replaces cost a measured 6–7 seconds to render a single ticket.
+  //
+  // A thrown query — the database unreachable — is the "unavailable" state this page
+  // already knows how to render, so it is caught rather than allowed to become an
+  // opaque 500.
+  let ticket: Awaited<ReturnType<typeof readTicketByNumber>>;
+  try {
+    ticket = await readTicketByNumber(recordNumber);
+  } catch (error) {
+    console.error(
+      "Ticket detail read failed:",
+      error instanceof Error ? error.message : String(error),
+    );
     return (
       <TicketDetailState
         user={user}
@@ -47,10 +58,6 @@ export default async function TicketDetailPage({
       />
     );
   }
-
-  const ticket = data.tickets.find(
-    (item) => item.recordNumber === recordNumber,
-  );
   if (!ticket) {
     return (
       <TicketDetailState

@@ -1,5 +1,5 @@
 import { getCurrentSession } from "../src/features/auth/current-session";
-import { getVocDashboardMetrics, readWorkbenchCached } from "./api/voc/dashboard/route";
+import { getVocDashboardMetrics } from "./api/voc/dashboard/route";
 import { LandingContent } from "./landing-content";
 import { WorkbenchContent } from "./workbench-content";
 
@@ -40,12 +40,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const wantsShowcase = first(parameters.view) === "showcase";
 
   if (user && !wantsShowcase) {
-    // readWorkbenchCached shares one cache entry with the public aggregation,
-    // so the tallies here and a direct curl of /api/voc/dashboard cannot drift
-    // apart. It never throws: a failed Bitable read arrives as an explicit
-    // unavailable status the workbench renders as such.
-    const data = await readWorkbenchCached();
-    // "now" is read here, once, rather than inside WorkbenchContent: the
+    // No data is fetched here any more. WorkbenchContent fetches what the URL's
+    // section actually needs — the ticket list is one page plus five counts, and
+    // pulling all 3628 records to render 50 of them is what made a cold load cost
+    // 6–7 seconds.
+    //
+    // "now" is still read here, once, rather than inside WorkbenchContent: the
     // component must stay a pure function of its props (queues, the overdue
     // marker and dwell time all key off "now"), and this app runs under
     // Next's Cache Components model, where a component that reaches for the
@@ -53,7 +53,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     // about than a page that decides "now" once and hands it down.
     return (
       <WorkbenchContent
-        data={data}
         user={user}
         now={currentTimestamp()}
         searchParams={parameters}
