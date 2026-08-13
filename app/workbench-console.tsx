@@ -13,7 +13,6 @@ import {
   Breadcrumb,
   Card,
   Descriptions,
-  Drawer,
   Input,
   Layout,
   Menu,
@@ -52,7 +51,7 @@ import {
 import {
   filterHref,
   pageHref,
-  ticketHref,
+  ticketDetailHref,
   toPatch,
   type StringFilterField,
 } from "../src/features/workbench/href";
@@ -66,8 +65,6 @@ import {
   type WorkbenchPage,
   type WorkbenchQuery,
 } from "../src/features/workbench/query";
-import { availableActions } from "../src/features/workbench/write-actions";
-import { WorkbenchActions } from "./workbench-actions";
 
 function percent(ratio: number): string {
   return `${Math.round(ratio * 100)}%`;
@@ -127,8 +124,6 @@ export function WorkbenchConsole({
     }
   }, [router, query]);
 
-  const selected = view.selected;
-
   const columns = [
     {
       title: "记录编号",
@@ -137,7 +132,7 @@ export function WorkbenchConsole({
       fixed: "left" as const,
       render: (_: unknown, row: WorkbenchTicket) => (
         <Link
-          href={ticketHref(query, row.recordNumber)}
+          href={ticketDetailHref(query, row.recordNumber)}
           title={row.recordNumber}
         >
           {shortRecordNumber(row.recordNumber)}
@@ -239,7 +234,11 @@ export function WorkbenchConsole({
     <Layout className="oc-console">
       <Layout.Sider width={200} className="oc-console__sider">
         <div className="oc-console__brand">万护 OneCare</div>
-        <Menu selectedKeys={[query.queue]} style={{ width: "100%" }}>
+        <Menu
+          key={query.queue}
+          defaultSelectedKeys={[query.queue]}
+          style={{ width: "100%" }}
+        >
           <Menu.ItemGroup title="工单队列">
             {QUEUES.map((queue) => (
               <Menu.Item
@@ -356,13 +355,11 @@ export function WorkbenchConsole({
                   data={[...view.rows]}
                   pagination={false}
                   scroll={{ x: 1200 }}
-                  // The whole row opens the drawer. A dedicated action column read
-                  // as bolted on, and every console this one is modelled on makes
-                  // the row itself the target — the record number stays a real
-                  // link so the row is still keyboard-reachable and its URL still
-                  // copyable.
+                  // The whole row opens the full ticket page. The record number
+                  // stays a real link so the row remains keyboard-reachable and
+                  // its URL remains copyable.
                   onRow={(row) => ({
-                    onClick: () => go(ticketHref(query, row.recordNumber)),
+                    onClick: () => go(ticketDetailHref(query, row.recordNumber)),
                     style: { cursor: "pointer" },
                   })}
                   border={{ wrapper: true, cell: true }}
@@ -403,17 +400,6 @@ export function WorkbenchConsole({
         </Layout.Footer>
       </Layout>
 
-      <Drawer
-        width={620}
-        visible={selected !== null}
-        title={selected ? `工单详情 · ${shortRecordNumber(selected.recordNumber)}` : ""}
-        footer={null}
-        onCancel={() => go(ticketHref(query, null))}
-      >
-        {selected && (
-          <TicketDrawer ticket={selected} query={query} now={now} />
-        )}
-      </Drawer>
     </Layout>
   );
 }
@@ -486,136 +472,6 @@ function MetricsPane({ metrics }: Readonly<{ metrics: VocMetrics }>) {
           {metrics.effort.manualMinutesPerRecord} 分钟/条。单条分钟数为假设基线，未经实测，因此不换算为金额。
         </Typography.Text>
       )}
-    </Space>
-  );
-}
-
-function TicketDrawer({
-  ticket,
-  query,
-  now,
-}: Readonly<{
-  ticket: WorkbenchTicket;
-  query: WorkbenchQuery;
-  now: number;
-}>) {
-  const dwell = dwellHours(ticket, now);
-  // Computed from the row the server already sent — the browser never decides
-  // which transitions are legal, and never sees an open_id in order to.
-  const actions = availableActions(ticket);
-  const canClaim = !ticket.hasOwner;
-
-  return (
-    <Space direction="vertical" size="medium" style={{ width: "100%" }}>
-      <Card size="small" title="可执行操作">
-        {actions.length === 0 && !canClaim ? (
-          <Typography.Text type="secondary">
-            {ticket.state === "已闭环" || ticket.state === "无需跟进"
-              ? `${ticket.state}是终态，没有后续动作。`
-              : `${ticket.state}下没有可由人执行的动作，等打标流水线处理。`}
-          </Typography.Text>
-        ) : (
-          <Space direction="vertical" size="small">
-            <WorkbenchActions
-              recordId={ticket.recordId}
-              seenState={ticket.state}
-              actions={actions}
-              canClaim={canClaim}
-            />
-            {/* Said plainly rather than implied. This component cannot know
-                whether the viewer is the owner — that is per-viewer, and the row
-                came from a cache entry every viewer shares — so the buttons are
-                offered to everyone and the server decides. */}
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              状态流转只有负责人本人能做，其他人点击会被服务端拒绝。改派负责人请在多维表格里操作。
-            </Typography.Text>
-          </Space>
-        )}
-      </Card>
-
-      <Descriptions
-        column={2}
-        size="small"
-        border
-        title="工单信息"
-        data={[
-          { label: "记录编号", value: ticket.recordNumber },
-          {
-            label: "渠道 / 品类",
-            value:
-              [ticket.channel, ticket.category].filter(Boolean).join(" / ") ||
-              ABSENT,
-          },
-          { label: "机型", value: ticket.model || ABSENT },
-          { label: "情绪极性", value: ticket.polarity ?? ABSENT },
-          {
-            label: "问题维度",
-            value:
-              ticket.dimensions.length === 0
-                ? ABSENT
-                : ticket.dimensions.join("、"),
-          },
-          { label: "严重度", value: ticket.severity ?? ABSENT },
-          { label: "流程状态", value: ticket.state },
-          {
-            label: "负责人",
-            value:
-              ticket.ownerNames.length === 0
-                ? "未分配"
-                : ticket.ownerNames.join("、"),
-          },
-          {
-            label: "停留时长",
-            value: dwell === null ? ABSENT : `${formatHours(dwell)} 小时`,
-          },
-          {
-            label: "反馈时间",
-            value: formatShanghaiTime(ticket.feedbackAt) ?? ABSENT,
-          },
-          {
-            label: "建单时间",
-            value: formatShanghaiTime(ticket.ticketOpenedAt) ?? ABSENT,
-          },
-          { label: "闭环时间", value: formatShanghaiTime(ticket.closedAt) ?? ABSENT },
-          {
-            label: "时长",
-            value:
-              ticket.durationHours === null
-                ? ABSENT
-                : `${formatHours(ticket.durationHours)} 小时`,
-          },
-        ]}
-      />
-
-      <Card size="small" title="完整原文">
-        <Typography.Paragraph style={{ margin: 0 }}>
-          {ticket.content}
-        </Typography.Paragraph>
-      </Card>
-
-      <Card size="small" title="AI 摘要">
-        <Typography.Paragraph style={{ margin: 0 }}>
-          {ticket.summary || ABSENT}
-        </Typography.Paragraph>
-      </Card>
-
-      <Card size="small" title="AI 回复话术">
-        {ticket.replies.length === 0 ? (
-          <Typography.Text type="secondary">{ABSENT}</Typography.Text>
-        ) : (
-          <Space direction="vertical" size="small">
-            {ticket.replies.map((reply, index) => (
-              // Tone plus position, not tone alone: two drafts sharing a tone is
-              // a shape parseReplyText really produces.
-              <div key={`${reply.tone}-${index}`}>
-                <Tag color="arcoblue">{reply.tone}</Tag> {reply.text}
-              </div>
-            ))}
-          </Space>
-        )}
-      </Card>
-
-      <Link href={ticketHref(query, null)}>收起详情</Link>
     </Space>
   );
 }

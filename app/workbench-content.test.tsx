@@ -122,25 +122,29 @@ describe("WorkbenchConsole", () => {
   // so what has to keep working is that clicking anywhere on a row opens it, and
   // that the record number is still a real link — otherwise the row is
   // unreachable by keyboard and its URL is not copyable.
-  it("makes the record number a link to that ticket", () => {
+  it("links the record to the independent detail route", () => {
     renderWorkbench({
-      tickets: [ticket({ state: "待跟进" })],
-      searchParams: { queue: "all" },
+      tickets: [ticket({ recordNumber: "R # 001" })],
+      searchParams: { queue: "overdue", severity: "高", page: "2" },
     });
 
-    const link = screen.getByRole("link", { name: "R-001" });
-    expect(link).toHaveAttribute("href", expect.stringContaining("ticket=R-001"));
+    expect(screen.getByRole("link", { name: "R # 001" })).toHaveAttribute(
+      "href",
+      "/workbench/tickets/R%20%23%20001?queue=overdue&severity=%E9%AB%98&sort=feedback_desc&page=2",
+    );
   });
 
-  it("opens the ticket when the row itself is clicked", () => {
+  it("opens that route from the whole row", () => {
     renderWorkbench({
-      tickets: [ticket({ state: "待跟进" })],
-      searchParams: { queue: "all" },
+      tickets: [ticket({ recordNumber: "R-001" })],
+      searchParams: { queue: "all", sort: "severity_desc" },
     });
 
     fireEvent.click(screen.getByRole("link", { name: "R-001" }).closest("tr")!);
 
-    expect(push).toHaveBeenCalledWith(expect.stringContaining("ticket=R-001"));
+    expect(push).toHaveBeenCalledWith(
+      "/workbench/tickets/R-001?queue=all&sort=severity_desc",
+    );
   });
 
   // Nothing on the table may name an action any more, so the operator is never
@@ -158,61 +162,14 @@ describe("WorkbenchConsole", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("opens the drawer for the ticket named in the URL", () => {
-    renderWorkbench({
-      tickets: [ticket({ recordNumber: "R-777", content: "冰箱异响" })],
+  it("ignores old ticket state and renders no drawer", () => {
+    const { container } = renderWorkbench({
+      tickets: [ticket({ recordNumber: "R-777" })],
       searchParams: { queue: "all", ticket: "R-777" },
     });
 
-    expect(
-      screen.getByText("工单详情 · R-777", { exact: false }),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText("冰箱异响").length).toBeGreaterThan(0);
-  });
-
-  // A ticket the current queue excludes must still open: a link to one ticket
-  // has to work for a recipient whose own filters exclude it.
-  it("opens a ticket the current queue would filter out", () => {
-    renderWorkbench({
-      tickets: [ticket({ recordNumber: "R-777", state: "已闭环" })],
-      searchParams: { queue: "open", ticket: "R-777" },
-    });
-
-    expect(
-      screen.getByText("工单详情 · R-777", { exact: false }),
-    ).toBeInTheDocument();
-  });
-
-  it("offers the transitions the drawer's ticket allows, and no others", () => {
-    renderWorkbench({
-      tickets: [ticket({ recordNumber: "R-777", state: "待跟进" })],
-      searchParams: { queue: "all", ticket: "R-777" },
-    });
-
-    expect(screen.getByRole("button", { name: "开始跟进" })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "确认闭环" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("says a terminal state is terminal rather than showing an empty toolbar", () => {
-    renderWorkbench({
-      tickets: [ticket({ recordNumber: "R-777", state: "已闭环" })],
-      searchParams: { queue: "all", ticket: "R-777" },
-    });
-
-    expect(screen.getByText(/已闭环是终态/)).toBeInTheDocument();
-  });
-
-  // The drawer cannot know whether the viewer is the owner, so it must not imply
-  // that every offered button will succeed.
-  it("warns that only the owner may transition", () => {
-    renderWorkbench({
-      tickets: [ticket({ recordNumber: "R-777", state: "待跟进" })],
-      searchParams: { queue: "all", ticket: "R-777" },
-    });
-
-    expect(screen.getByText(/只有负责人本人能做/)).toBeInTheDocument();
+    expect(container.querySelector(".arco-drawer")).toBeNull();
+    expect(screen.queryByText(/工单详情 ·/)).not.toBeInTheDocument();
   });
 
   it("reports an unavailable aggregation instead of rendering zeroes", () => {
@@ -263,6 +220,12 @@ describe("WorkbenchContent source", () => {
     const firstComponent = console.indexOf('from "@arco-design/web-react"');
     expect(adapter).toBeGreaterThan(-1);
     expect(adapter).toBeLessThan(firstComponent);
+  });
+
+  it("keeps drawer state and actions out of the list console", () => {
+    expect(console).not.toContain("Drawer");
+    expect(console).not.toContain("TicketDrawer");
+    expect(console).not.toContain("selected");
   });
 });
 
