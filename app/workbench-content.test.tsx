@@ -562,6 +562,58 @@ describe("WorkbenchContent", () => {
     expect(within(detail).queryAllByRole("button")).toHaveLength(0);
   });
 
+  // The column that makes the write actions discoverable at all. Without it the
+  // actions sit behind a click nothing invited, and the first screen reads as a
+  // report rather than a workbench.
+  it("names each row's next step and links it to the panel", () => {
+    renderWorkbench({
+      data: {
+        metrics: { status: "ok", metrics: emptyMetrics() },
+        tickets: [{ ...ticket, state: "待跟进", hasOwner: true }],
+      },
+      searchParams: { queue: "all" },
+    });
+
+    const link = screen.getByRole("link", { name: /开始跟进/ });
+    expect(hrefParams(link).get("ticket")).toBe(ticket.recordNumber);
+  });
+
+  it("offers claiming as the next step on an unassigned ticket", () => {
+    renderWorkbench({
+      data: {
+        metrics: { status: "ok", metrics: emptyMetrics() },
+        tickets: [{ ...ticket, state: "待跟进", hasOwner: false }],
+      },
+      searchParams: { queue: "all" },
+    });
+
+    // Claiming outranks the transition: nobody may perform 开始跟进 on a ticket
+    // with no owner, so offering it would be offering a refusal.
+    expect(screen.getByRole("link", { name: /我来跟进/ })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /开始跟进/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows no next step for a terminal ticket", () => {
+    renderWorkbench({
+      data: {
+        metrics: { status: "ok", metrics: emptyMetrics() },
+        tickets: [{ ...ticket, state: "已闭环", hasOwner: true }],
+      },
+      searchParams: { queue: "all" },
+    });
+
+    // Matched by action name rather than by the arrow glyph: pagination and the
+    // showcase link both end in →, so an arrow matcher passes or fails for
+    // reasons that have nothing to do with this column.
+    expect(
+      screen.queryByRole("link", {
+        name: /我来跟进|开始跟进|需建单|无需建单|提交跟进结果|确认闭环|重试/,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   // The panel cannot know whether the viewer is the owner, so it must not imply
   // that every offered button will succeed.
   it("warns that only the owner may transition", () => {
@@ -584,5 +636,13 @@ describe("WorkbenchContent source", () => {
 
   it("never hand-writes an internal <a> — every internal link goes through next/link", () => {
     expect(source).not.toMatch(/<a\s+href="\//);
+  });
+
+  // The page shipped able to write while still telling the operator, in its own
+  // subtitle and table heading, that it was read-only. They believed the copy
+  // over the feature — correctly, since the copy was the only thing on the first
+  // screen. Copy that describes a capability is part of the capability.
+  it("never claims to be read-only", () => {
+    expect(source).not.toContain("只读");
   });
 });

@@ -458,6 +458,16 @@ const workbenchStyles = `
     flex-direction: column;
     gap: 8px;
   }
+  /* The one cell in a dense table that is a call to action, so it carries the
+     accent rather than the same link colour as the record number beside it. */
+  .workbench__next-step {
+    white-space: nowrap;
+    font-weight: 600;
+    color: var(--signal, #e5670f);
+  }
+  .workbench__muted {
+    color: var(--muted);
+  }
   .workbench__hint {
     font-size: 12px;
     color: var(--muted);
@@ -813,6 +823,37 @@ function DwellCell({
   );
 }
 
+// What this row is waiting for, named, as a link into the panel that performs it.
+//
+// Without this column the write actions were invisible: they live in the detail
+// panel, the panel only opens once a row is clicked, and nothing on the row
+// suggested clicking would offer anything to do. A reviewer looking at the
+// first screen concluded — correctly, from what was on it — that the page was
+// still read-only.
+//
+// Deliberately a link rather than the button itself. Rendering the real control
+// per row would turn the whole table into client components and put one Arco
+// modal in the DOM per row, to save a click that also happens to be the click
+// that shows the operator the record's full text before they act on it.
+function NextStepCell({
+  ticket,
+  query,
+}: Readonly<{ ticket: WorkbenchTicket; query: WorkbenchQuery }>) {
+  // Claiming outranks any transition: an unowned ticket has nobody who may
+  // perform those transitions, so "someone take this" is genuinely the next step.
+  const label = !ticket.hasOwner ? "我来跟进" : availableActions(ticket)[0];
+
+  if (!label) {
+    return <span className="workbench__muted">{ABSENT}</span>;
+  }
+
+  return (
+    <Link className="workbench__next-step" href={ticketHref(query, ticket.recordNumber)}>
+      {label} →
+    </Link>
+  );
+}
+
 function TicketTable({
   tickets,
   query,
@@ -840,6 +881,7 @@ function TicketTable({
             <th>闭环时间</th>
             <th>时长</th>
             <th>停留时长</th>
+            <th>下一步</th>
           </tr>
         </thead>
         <tbody>
@@ -889,6 +931,9 @@ function TicketTable({
               </td>
               <td>
                 <DwellCell ticket={ticket} now={now} />
+              </td>
+              <td>
+                <NextStepCell ticket={ticket} query={query} />
               </td>
             </tr>
           ))}
@@ -1101,7 +1146,7 @@ export function WorkbenchContent({
               for that owner. */}
           <p className="workbench__identity">
             当前登录 {user.name} · 数据直连飞书多维表格，含真实用户原文与真实负责人姓名 ·
-            本页只读，改状态在飞书卡片里完成
+            点「下一步」列可展开工单详情，在网页上直接流转状态或认领
           </p>
         </div>
         <Link className="workbench__showcase-link" href="/?view=showcase">
@@ -1131,7 +1176,7 @@ export function WorkbenchContent({
       )}
 
       <section aria-labelledby="workbench-tickets">
-        <h2 id="workbench-tickets">工单列表（只读）</h2>
+        <h2 id="workbench-tickets">工单列表</h2>
         {data.tickets.length === 0 ? (
           <p>暂无工单记录。</p>
         ) : (
