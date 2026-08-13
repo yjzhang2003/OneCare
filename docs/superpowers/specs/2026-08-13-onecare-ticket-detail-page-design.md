@@ -265,15 +265,16 @@ git diff --check
 - `src/features/workbench/presentation.ts` 提供列表和详情共享的编号、时间、时长、颜色与标题展示规则；`src/features/workbench/data.ts` 只向浏览器模型暴露 `hasWarRoom`，不暴露真实群 ID。
 - `app/workbench-ticket-detail.tsx` 与 `app/globals.css` 实现章节导航、主要内容和处理上下文；宽于 1100px 为 `180px + minmax(0, 1fr) + 320px` 三栏，761–1100px 为顶部章节导航加正文/300px 右栏，760px 及以下为单栏且动作进入文档流。
 - `app/workbench/tickets/[recordNumber]/page.tsx` 在会话校验后复用 `readWorkbenchCached()`，按完整记录编号匹配，并区分 unavailable 与 not-found。
+- `vercel.json` 将上述详情页面固定到香港 `hkg1`，与其他直接或间接读取 Bitable 的入口保持一致；`vercel-config.test.ts` 会把 Windows 的反斜杠相对路径规范化为 `/` 后再检查该不变量。
 - `app/workbench-console.tsx` 和 `app/workbench-content.tsx` 已删除 Drawer 与选中工单状态；记录链接和整行导航均进入独立详情页。既有 `POST /api/voc/tickets/[recordId]/action`、负责人本人流转、仅填空认领、`seenState` 尽力冲突检测与无 CAS 限制保持不变。
 
-对应本地提交为 `8ab4f55`、`3e1167e`、`44ba151`、`b9af41e`、`2a5c947` 和测试补强 `4696244`。
+对应本地提交为 `8ab4f55`、`3e1167e`、`44ba151`、`b9af41e`、`2a5c947`、测试补强 `4696244`，以及 Windows 路径测试与详情页区域配置修正 `5c1aa4f`。
 
 ### 14.2 自动验证
 
 2026-08-13 的 Task 6 全量验证结果：
 
-- `npm test`：退出 1；68 个测试文件中 67 个通过，869 项测试中 868 项通过。唯一失败为 `vercel-config.test.ts`：`app/api/feishu/events/route.ts` 未在 `vercel.json` 中配置 `hkg1`。该配置不属于本文档任务的可修改范围，未越界修复。
+- `npm test`：初次退出 1；Windows 的 `path.relative()` 生成反斜杠路径，无法命中 `vercel.json` 的 `/` 键，因而错误报告已经固定到 `hkg1` 的飞书事件路由未配置。规范化分隔符后，测试继续发现新增详情页这个真实 Bitable 入口缺少区域配置；为该页面补充 `hkg1` 后，聚焦配置测试 3/3 通过，最终全量 `npm test` 退出 0（68/68 文件、869/869 测试）。生产事件路由配置从未缺失。
 - `npm run test:runtime`：退出 0；先完成生产构建，再通过 1 个运行时测试文件、6 项测试。
 - `npm run lint`：退出 0。
 - `npm run typecheck`：退出 0。
@@ -287,4 +288,4 @@ git diff --check
 
 本地浏览器在 1440×900、1024×768、390×844 三个视口直接访问详情 URL，均因缺少本地飞书认证配置而落到 `/login?auth_error=configuration_error`。三个视口的匿名页面均无横向溢出，浏览器控制台无 warning/error；这只验证了匿名门禁。没有可用测试会话或真实 VOC 数据，因此三/双/单栏详情视觉、返回列表现场、动作写后刷新、拒绝/冲突/非法状态错误和 missing/unavailable 的真实浏览器呈现未验证，不以单元测试冒充浏览器验收。
 
-当前 checkout 没有 `.vercel/project.json`，即未链接 Vercel 项目。按授权边界未选择或链接项目，也未运行会触发交互式选项的 `vercel deploy --yes`；没有 Preview URL、HTTP 200 或唯一标记验证。未执行 Production 部署、环境变量修改、push、PR 或 merge。验收标准第 10 项因此未满足，且第 2、5、6、7、8 项仍缺真实认证浏览器证据。
+当前 checkout 没有 `.vercel/project.json`，即未链接 Vercel 项目。按授权边界未选择或链接项目，也未运行会触发交互式选项的 `vercel deploy --yes`；没有 Preview URL、HTTP 200 或唯一标记验证。未执行 Production 部署、环境变量修改、push、PR 或 merge。验收标准第 10 项因此未满足；第 1、2、3、5、6、7、8 项已有自动化合同证据，但仍缺真实认证浏览器证据，不能据此宣称完成端到端视觉与写路径验收。

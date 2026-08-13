@@ -114,7 +114,7 @@ https://onecare.ohmyfeishu.top/api/auth/feishu/callback
 
 **飞书后台有一条反复踩中的规律：「做出某个能力」与「把该事件推给你」永远是两处独立配置，配了一处不等于通了。** 已经踩过两次：卡片按钮做好了但「回调配置」里没订阅 `card.action.trigger`，点击不会到达服务器；机器人自定义菜单三项都配好了但「事件配置」里没订阅 `application.bot.menu_v6`，点击同样不会到达。两次的症状都是「点了没反应、服务端零请求」，代码侧完全正常。新增任何交互入口后，务必回到「事件与回调」确认对应事件或回调已在订阅列表里，并重新发布版本——配置改动一律要发版本才生效。
 
-事件接口会验证请求签名、Verification Token、Encrypt Key、App ID 和非空 tenant context；卡片按钮还会校验 Card 2.0 规范化结果、固定演示案例号和 action 白名单。普通事件与导航按钮在三秒响应要求内先确认，再通过 Next.js `after()` 回复或主动发送 interactive 卡片；三个本地确定性状态动作在响应中返回完整替换卡片。已配置但未注册业务处理器的群事件返回 `200` 并忽略。为减少飞书中国侧到 Vercel 默认美国区域的跨境延迟，`vercel.json` 只将该事件函数部署到香港 `hkg1`；网站与 OAuth 函数不受此配置影响。Vercel Preview 受 Deployment Protection 保护，不能用作飞书事件或卡片回调地址；分享链接只用于页面确认。
+事件接口会验证请求签名、Verification Token、Encrypt Key、App ID 和非空 tenant context；卡片按钮还会校验 Card 2.0 规范化结果、固定演示案例号和 action 白名单。普通事件与导航按钮在三秒响应要求内先确认，再通过 Next.js `after()` 回复或主动发送 interactive 卡片；三个本地确定性状态动作在响应中返回完整替换卡片。已配置但未注册业务处理器的群事件返回 `200` 并忽略。为减少飞书中国侧到 Vercel 默认美国区域的跨境延迟，`vercel.json` 将飞书事件函数以及会直接或经共享缓存读取 Bitable 的页面与 API 部署到香港 `hkg1`；不接触 Bitable 的网站与 OAuth 函数不受此配置影响。Vercel Preview 受 Deployment Protection 保护，不能用作飞书事件或卡片回调地址；分享链接只用于页面确认。
 
 ## VOC 闭环配置
 

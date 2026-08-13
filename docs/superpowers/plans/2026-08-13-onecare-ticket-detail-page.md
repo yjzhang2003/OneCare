@@ -662,7 +662,7 @@ vercel deploy --yes
 
 不得使用 `--prod`。项目未链接时只在用户授权后链接既有项目，不修改 Production 环境变量。Protection 开启时创建限时 Share Link，不保存 bypass。验证 HTTP 200 和独立详情构建；若 Preview 无认证变量，明确其限制。
 
-- [ ] **Step 6: 提交文档与记录**
+- [x] **Step 6: 提交文档与记录**
 
 ```bash
 git add README.md docs/TECH_STACK.md docs/superpowers/specs/2026-08-13-onecare-ticket-detail-page-design.md docs/superpowers/plans/2026-08-13-onecare-ticket-detail-page.md
@@ -672,7 +672,7 @@ git commit -m "docs: verify the full-page ticket workflow"
 
 确认暂存区仅含这四个文档，`next-env.d.ts` 未暂存。
 
-- [ ] **Step 7: 最终状态与 Harness Reflection**
+- [x] **Step 7: 最终状态与 Harness Reflection**
 
 ```bash
 git status --short --branch
@@ -688,13 +688,14 @@ git diff --check
 
 - 文档已更新为独立详情页、隐藏队列侧栏、章节导航/主要内容/处理上下文布局，以及返回恢复列表现场；既有动作 API、负责人本人流转、填空认领和无 CAS 限制未改写。
 - 实际实现文件与断点：`app/workbench-ticket-detail.tsx`、`app/workbench/tickets/[recordNumber]/page.tsx`、`app/workbench-console.tsx`、`src/features/workbench/{href,query,presentation,data}.ts`；CSS 在 `>1100px` 为三栏、`761–1100px` 为顶部导航加双栏、`≤760px` 为单栏。
-- `npm test` 退出 1：67/68 文件、868/869 测试通过；唯一失败是 `vercel-config.test.ts` 报 `app/api/feishu/events/route.ts` 未固定 `hkg1`。这是 Task 6 文档边界之外的现有配置失败，未修改。
+- `npm test` 初次退出 1：Windows 反斜杠路径无法命中 `vercel.json` 的 `/` 键，错误地把已固定 `hkg1` 的飞书事件路由报为未配置。`vercel-config.test.ts` 规范化分隔符后，又准确发现新增详情页直接调用 `readWorkbenchCached()` 却未固定区域；`vercel.json` 已只为 `app/workbench/tickets/[recordNumber]/page.tsx` 补 `hkg1`。聚焦配置测试最终 3/3 通过，全量 `npm test` 最终退出 0（68/68 文件、869/869 测试）。
 - `npm run test:runtime` 退出 0（1 文件、6 测试）；`npm run lint`、`npm run typecheck`、`npm run build`、`git diff --check` 均退出 0。构建产物包含 `/workbench/tickets/[recordNumber]`。
 - `npm audit --omit=dev` 首次受沙箱 registry/cache 限制退出 1；获准重跑后仍退出 1，实际报告 4 个漏洞（1 moderate、3 high，涉及 `nanoid`、`next`、`postcss`、`sharp`）。未运行 `audit fix` 或升级依赖。此前 `npm ci` 的 7 个漏洞仅作为历史安装结果保留。
 - 浏览器在 1440×900、1024×768、390×844 访问详情 URL 均落到 `/login?auth_error=configuration_error`；三个匿名页面无横向溢出，控制台无 warning/error。因无本地飞书配置、测试会话和真实 VOC 数据，认证详情布局、返回现场、写操作/刷新/错误以及 missing/unavailable 未做真实浏览器验收。
 - Preview 仍阻塞：checkout 没有 `.vercel/project.json`。未擅自链接或选择项目，因此没有执行会进入项目选择的 `vercel deploy --yes`，也没有 Preview URL、HTTP 200 或唯一标记证据。
 - `next-env.d.ts` 被构建覆盖后已恢复为任务开始时的 `.next/dev/types/routes.d.ts` 差异，并保持未暂存。
 - 未执行 push、PR、merge、Production deploy 或环境变量修改。仓库指令没有产生需要持久化修正的新歧义，因此不修改 `AGENTS.md` 或 `docs/HARNESS_REFLECTIONS.md`。
+- Windows 分隔符测试修复与详情页区域配置提交为 `5c1aa4f fix: pin the ticket detail route to Hong Kong`；生产飞书事件路由原本已正确配置，先前文档的缺失诊断已撤回。
 
 ---
 
