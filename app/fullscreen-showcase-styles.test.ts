@@ -6,6 +6,12 @@ import { describe, expect, it } from "vitest";
 const css = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 
 describe("fullscreen showcase stylesheet", () => {
+  it("lays out ticket detail across desktop, tablet and mobile", () => {
+    expect(css).toMatch(/\.oc-ticket-detail__grid\s*\{[^}]*grid-template-columns:\s*180px\s+minmax\(0,\s*1fr\)\s+320px/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*1100px\)[\s\S]*?\.oc-ticket-detail__grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+300px/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.oc-ticket-detail__grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  });
+
   it("defines an isolated viewport and all three horizontal page states", () => {
     expect(css).toContain(".showcase-viewport {");
     expect(css).toContain("height: calc(100dvh - 64px);");

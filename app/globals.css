@@ -5659,3 +5659,230 @@ a {
   display: flex;
   align-items: center;
 }
+
+/* Full-page ticket workspace: navigation, reading surface, and action context. */
+.oc-ticket-detail__content {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+}
+
+.oc-ticket-detail__grid {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: start;
+}
+
+.oc-ticket-detail__nav,
+.oc-ticket-detail__aside {
+  position: sticky;
+  top: 76px;
+}
+
+.oc-ticket-detail__nav,
+.oc-ticket-detail__main,
+.oc-ticket-detail__aside {
+  min-width: 0;
+}
+
+.oc-ticket-detail__header-context {
+  min-width: 0;
+}
+
+.oc-ticket-detail__header .oc-console__brand {
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.oc-ticket-detail__nav {
+  display: grid;
+  gap: 12px;
+}
+
+.oc-ticket-detail__back,
+.oc-ticket-detail__anchors a,
+.oc-ticket-detail__state-action {
+  color: rgb(var(--primary-7));
+  font-weight: 600;
+}
+
+.oc-ticket-detail__anchors {
+  display: grid;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--color-border-2, #e5e6eb);
+  border-radius: 4px;
+}
+
+.oc-ticket-detail__anchors a {
+  padding: 11px 14px;
+  color: var(--color-text-2, #4e5969);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.oc-ticket-detail__anchors a + a {
+  border-top: 1px solid var(--color-border-2, #e5e6eb);
+}
+
+.oc-ticket-detail__anchors a:hover,
+.oc-ticket-detail__anchors a:focus-visible {
+  color: rgb(var(--primary-7));
+  background: rgb(var(--primary-1));
+}
+
+.oc-ticket-detail__main,
+.oc-ticket-detail__aside {
+  display: grid;
+  gap: 16px;
+}
+
+.oc-ticket-detail__section {
+  scroll-margin-top: 76px;
+  overflow-wrap: anywhere;
+}
+
+.oc-ticket-detail__title {
+  margin: 6px 0 12px !important;
+  overflow-wrap: anywhere;
+}
+
+.oc-ticket-detail__prose {
+  margin: 0 0 20px !important;
+  color: var(--color-text-1, #1d2129);
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.oc-ticket-detail__replies {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.oc-ticket-detail__reply {
+  min-width: 0;
+  padding: 14px;
+  background: var(--color-fill-1, #f7f8fa);
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+
+.oc-ticket-detail__reply .arco-typography {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+}
+
+.oc-ticket-detail__status-grid {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+  gap: 12px 14px;
+  align-items: start;
+  overflow-wrap: anywhere;
+}
+
+.oc-ticket-detail__status-grid > span {
+  color: var(--color-text-3, #86909c);
+  font-size: 12px;
+}
+
+.oc-ticket-detail__status-grid > strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.oc-ticket-detail .arco-card,
+.oc-ticket-detail .arco-descriptions,
+.oc-ticket-detail .arco-space,
+.oc-ticket-detail .arco-typography {
+  max-width: 100%;
+}
+
+.oc-ticket-detail .arco-descriptions-item-value,
+.oc-ticket-detail .arco-descriptions-item-label,
+.oc-ticket-detail code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.oc-ticket-detail__state {
+  max-width: 720px !important;
+  margin: clamp(48px, 10vh, 120px) auto 0;
+  text-align: center;
+}
+
+.oc-ticket-detail__state-action {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  padding: 0 16px;
+  border: 1px solid rgb(var(--primary-6));
+  border-radius: 4px;
+}
+
+@media (max-width: 1100px) {
+  .oc-ticket-detail__grid {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+
+  .oc-ticket-detail__nav {
+    position: static;
+    grid-column: 1 / -1;
+  }
+
+  .oc-ticket-detail__anchors {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .oc-ticket-detail__anchors a {
+    min-width: max-content;
+  }
+
+  .oc-ticket-detail__anchors a + a {
+    border-top: 0;
+    border-left: 1px solid var(--color-border-2, #e5e6eb);
+  }
+}
+
+@media (max-width: 760px) {
+  .oc-ticket-detail__header {
+    height: auto;
+    min-height: 56px;
+    align-items: flex-start;
+    padding: 10px 12px;
+  }
+
+  .oc-ticket-detail__header-context {
+    align-items: flex-start !important;
+    flex-direction: column;
+    gap: 4px !important;
+  }
+
+  .oc-ticket-detail__header .oc-console__user {
+    display: none;
+  }
+
+  .oc-ticket-detail__content {
+    padding: 12px 12px 28px;
+  }
+
+  .oc-ticket-detail__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .oc-ticket-detail__aside {
+    position: static;
+    grid-row: 2;
+  }
+
+  .oc-ticket-detail__main {
+    grid-row: 3;
+  }
+
+  .oc-ticket-detail .arco-descriptions-body {
+    overflow-x: auto;
+  }
+}
