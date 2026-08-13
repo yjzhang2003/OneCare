@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 // Must precede every Arco import: Arco reads createRoot off the "react-dom" root
 // export, where React 19 no longer puts it, and silently falls back to the
@@ -13,7 +13,6 @@ import {
   Breadcrumb,
   Card,
   Descriptions,
-  Drawer,
   Input,
   Layout,
   Menu,
@@ -48,7 +47,7 @@ import type { WorkbenchTicket } from "../src/features/workbench/data";
 import {
   filterHref,
   pageHref,
-  ticketHref,
+  ticketDetailHref,
   toPatch,
   type StringFilterField,
 } from "../src/features/workbench/href";
@@ -63,8 +62,6 @@ import {
   type WorkbenchQuery,
 } from "../src/features/workbench/query";
 import type { IdentityProfile } from "../src/features/workbench/profiles";
-import { availableActions } from "../src/features/workbench/write-actions";
-import { WorkbenchActions } from "./workbench-actions";
 
 const ABSENT = "—";
 
@@ -262,8 +259,6 @@ export function WorkbenchConsole({
     }
   }, [router, query]);
 
-  const selected = view.selected;
-
   const columns = [
     {
       title: "记录编号",
@@ -272,7 +267,7 @@ export function WorkbenchConsole({
       fixed: "left" as const,
       render: (_: unknown, row: WorkbenchTicket) => (
         <Link
-          href={ticketHref(query, row.recordNumber)}
+          href={ticketDetailHref(query, row.recordNumber)}
           title={row.recordNumber}
         >
           {shortNumber(row.recordNumber)}
@@ -577,7 +572,7 @@ export function WorkbenchConsole({
                       loading={pending}
                       noDataElement="这个队列现在是空的"
                       onRow={(row) => ({
-                        onClick: () => go(ticketHref(query, row.recordNumber)),
+                        onClick: () => go(ticketDetailHref(query, row.recordNumber)),
                         style: { cursor: "pointer" },
                       })}
                     />
@@ -648,24 +643,6 @@ export function WorkbenchConsole({
         </Layout.Content>
       </Layout>
 
-      <Drawer
-        width={620}
-        visible={selected !== null}
-        title={
-          selected ? `工单详情 · ${shortNumber(selected.recordNumber)}` : ""
-        }
-        footer={null}
-        onCancel={() => go(ticketHref(query, null))}
-      >
-        {selected && (
-          <TicketDrawer
-            ticket={selected}
-            query={query}
-            now={now}
-            related={view.selectedRelated}
-          />
-        )}
-      </Drawer>
     </Layout>
   );
 }
@@ -781,7 +758,6 @@ function ProfilePane({
                 // queue=all so the detail page shows every record for this
                 // identity rather than only those the current queue admits.
                 queue: "all",
-                ticket: null,
               }),
             ),
           style: { cursor: "pointer" },
@@ -810,7 +786,7 @@ function ProfileDetail({
   go: (href: string) => void;
 }>) {
   const isUser = kind === "user";
-  const back = filterHref(query, { user: null, device: null, ticket: null });
+  const back = filterHref(query, { user: null, device: null });
 
   if (!profile) {
     return (
@@ -868,7 +844,7 @@ function ProfileDetail({
             width: 96,
             render: (_: unknown, row: WorkbenchTicket) => (
               <Link
-                href={ticketHref(query, row.recordNumber)}
+                href={ticketDetailHref(query, row.recordNumber)}
                 title={row.recordNumber}
               >
                 {shortNumber(row.recordNumber)}
@@ -940,7 +916,7 @@ function ProfileDetail({
         size="small"
         noDataElement="没有记录"
         onRow={(row) => ({
-          onClick: () => go(ticketHref(query, row.recordNumber)),
+          onClick: () => go(ticketDetailHref(query, row.recordNumber)),
           style: { cursor: "pointer" },
         })}
       />
@@ -1027,200 +1003,4 @@ function MetricsPane({ metrics }: Readonly<{ metrics: VocMetrics }>) {
   );
 }
 
-function TicketDrawer({
-  ticket,
-  query,
-  now,
-  related,
-}: Readonly<{
-  ticket: WorkbenchTicket;
-  query: WorkbenchQuery;
-  now: number;
-  related: number;
-}>) {
-  const dwell = dwellHours(ticket, now);
-  // Computed from the row the server already sent — the browser never decides
-  // which transitions are legal, and never sees an open_id in order to.
-  const actions = availableActions(ticket);
-  const canClaim = !ticket.hasOwner;
 
-  return (
-    <Space direction="vertical" size="medium" style={{ width: "100%" }}>
-      <Card size="small" title="可执行操作">
-        {actions.length === 0 && !canClaim ? (
-          <Typography.Text type="secondary">
-            {ticket.state === "已闭环" || ticket.state === "无需跟进"
-              ? `${ticket.state}是终态，没有后续动作。`
-              : `${ticket.state}下没有可由人执行的动作，等打标流水线处理。`}
-          </Typography.Text>
-        ) : (
-          <WorkbenchActions
-            recordId={ticket.recordId}
-            seenState={ticket.state}
-            actions={actions}
-            canClaim={canClaim}
-          />
-        )}
-      </Card>
-
-      <Descriptions
-        column={2}
-        size="small"
-        border
-        title="工单信息"
-        data={[
-          { label: "记录编号", value: ticket.recordNumber },
-          {
-            label: "来源单号",
-            value:
-              ticket.sourceTicketNo.length === 0 ? (
-                ABSENT
-              ) : related > 0 ? (
-                // The number itself is the link: following it lists every record
-                // logged under the same 400 case or the same review, which is the
-                // capability the recovered column bought.
-                <Link
-                  href={filterHref(query, {
-                    ticketNo: ticket.sourceTicketNo,
-                    ticket: null,
-                  })}
-                >
-                  {ticket.sourceTicketNo}（另有 {related} 条同单号）
-                </Link>
-              ) : (
-                ticket.sourceTicketNo
-              ),
-          },
-          {
-            label: "来源",
-            value:
-              ticket.sourceDetail.length === 0 ? ABSENT : ticket.sourceDetail,
-          },
-          {
-            label: "用户标识",
-            value:
-              ticket.userRef.length === 0 ? (
-                ABSENT
-              ) : (
-                <Link
-                  href={filterHref(query, {
-                    section: "users",
-                    user: ticket.userRef,
-                    queue: "all",
-                    ticket: null,
-                  })}
-                >
-                  {ticket.userRef}
-                </Link>
-              ),
-          },
-          {
-            label: "设备标识",
-            value:
-              ticket.deviceRef.length === 0 ? (
-                ABSENT
-              ) : (
-                <Link
-                  href={filterHref(query, {
-                    section: "devices",
-                    device: ticket.deviceRef,
-                    queue: "all",
-                    ticket: null,
-                  })}
-                >
-                  {ticket.deviceRef}
-                </Link>
-              ),
-          },
-          { label: "事业部", value: ticket.businessUnit || ABSENT },
-          { label: "问题分类", value: ticket.categoryLevel1 || ABSENT },
-          {
-            label: "原始出处",
-            value:
-              ticket.sourceUrl.length === 0 ? (
-                ABSENT
-              ) : (
-                <a href={ticket.sourceUrl} target="_blank" rel="noreferrer">
-                  打开原始页面
-                </a>
-              ),
-          },
-          {
-            label: "渠道 / 品类",
-            value:
-              [ticket.channel, ticket.category].filter(Boolean).join(" / ") ||
-              ABSENT,
-          },
-          { label: "机型", value: ticket.model || ABSENT },
-          { label: "情绪极性", value: ticket.polarity ?? ABSENT },
-          {
-            label: "问题维度",
-            value:
-              ticket.dimensions.length === 0
-                ? ABSENT
-                : ticket.dimensions.join("、"),
-          },
-          { label: "严重度", value: ticket.severity ?? ABSENT },
-          { label: "流程状态", value: ticket.state },
-          {
-            label: "负责人",
-            value:
-              ticket.ownerNames.length === 0
-                ? "未分配"
-                : ticket.ownerNames.join("、"),
-          },
-          {
-            label: "停留时长",
-            value: dwell === null ? ABSENT : `${hours(dwell)} 小时`,
-          },
-          {
-            label: "反馈时间",
-            value: shanghaiTime(ticket.feedbackAt) ?? ABSENT,
-          },
-          {
-            label: "建单时间",
-            value: shanghaiTime(ticket.ticketOpenedAt) ?? ABSENT,
-          },
-          { label: "闭环时间", value: shanghaiTime(ticket.closedAt) ?? ABSENT },
-          {
-            label: "时长",
-            value:
-              ticket.durationHours === null
-                ? ABSENT
-                : `${hours(ticket.durationHours)} 小时`,
-          },
-        ]}
-      />
-
-      <Card size="small" title="完整原文">
-        <Typography.Paragraph style={{ margin: 0 }}>
-          {ticket.content}
-        </Typography.Paragraph>
-      </Card>
-
-      <Card size="small" title="AI 摘要">
-        <Typography.Paragraph style={{ margin: 0 }}>
-          {ticket.summary || ABSENT}
-        </Typography.Paragraph>
-      </Card>
-
-      <Card size="small" title="AI 回复话术">
-        {ticket.replies.length === 0 ? (
-          <Typography.Text type="secondary">{ABSENT}</Typography.Text>
-        ) : (
-          <Space direction="vertical" size="small">
-            {ticket.replies.map((reply, index) => (
-              // Tone plus position, not tone alone: two drafts sharing a tone is
-              // a shape parseReplyText really produces.
-              <div key={`${reply.tone}-${index}`}>
-                <Tag color="arcoblue">{reply.tone}</Tag> {reply.text}
-              </div>
-            ))}
-          </Space>
-        )}
-      </Card>
-
-      <Link href={ticketHref(query, null)}>收起详情</Link>
-    </Space>
-  );
-}

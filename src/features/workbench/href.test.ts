@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 
-import { filterHref, pageHref, ticketHref, toPatch } from "./href";
+import {
+  filterHref,
+  listHref,
+  pageHref,
+  ticketDetailHref,
+  toPatch,
+} from "./href";
 import { parseWorkbenchQuery, type WorkbenchQuery } from "./query";
 
 // Round-tripping through parseWorkbenchQuery rather than asserting on raw query
@@ -33,7 +39,6 @@ function query(overrides: Partial<WorkbenchQuery> = {}): WorkbenchQuery {
     search: "",
     sort: "feedback_desc",
     page: 1,
-    ticket: null,
     ...overrides,
   };
 }
@@ -46,7 +51,6 @@ describe("filterHref", () => {
       severity: "高",
       search: "制冷",
       sort: "dwell_desc",
-      ticket: "VOC-000001",
     });
 
     const after = parse(filterHref(before, toPatch("category", "冰箱")));
@@ -56,7 +60,6 @@ describe("filterHref", () => {
     expect(after.severity).toBe("高");
     expect(after.search).toBe("制冷");
     expect(after.sort).toBe("dwell_desc");
-    expect(after.ticket).toBe("VOC-000001");
     expect(after.category).toBe("冰箱");
   });
 
@@ -101,27 +104,29 @@ describe("pageHref", () => {
   });
 });
 
-describe("ticketHref", () => {
-  // Opening a ticket is orthogonal to browsing: it must not reset the page or
-  // drop a filter, or closing the drawer would land the operator somewhere else
-  // than where they opened it from.
-  test("opening a ticket preserves the page and the filters", () => {
-    const before = query({ page: 5, queue: "overdue", severity: "高" });
-    const after = parse(ticketHref(before, "VOC-000042"));
+describe("ticket detail links", () => {
+  test("opens a ticket on an independent route and preserves list state", () => {
+    const before = query({
+      queue: "overdue",
+      severity: "高",
+      search: "冰箱",
+      sort: "dwell_desc",
+      page: 2,
+    });
 
-    expect(after.ticket).toBe("VOC-000042");
-    expect(after.page).toBe(5);
-    expect(after.queue).toBe("overdue");
-    expect(after.severity).toBe("高");
+    expect(ticketDetailHref(before, "VOC # 001")).toBe(
+      "/workbench/tickets/VOC%20%23%20001?queue=overdue&severity=%E9%AB%98&search=%E5%86%B0%E7%AE%B1&sort=dwell_desc&page=2",
+    );
   });
 
-  test("closing a ticket removes only the ticket", () => {
-    const before = query({ page: 5, ticket: "VOC-000042", severity: "高" });
-    const after = parse(ticketHref(before, null));
+  test("builds only an internal return link", () => {
+    expect(listHref(query({ queue: "failed", owner: "张敏", page: 3 }))).toBe(
+      "/?queue=failed&owner=%E5%BC%A0%E6%95%8F&sort=feedback_desc&page=3",
+    );
+  });
 
-    expect(after.ticket).toBeNull();
-    expect(after.page).toBe(5);
-    expect(after.severity).toBe("高");
+  test("never emits the retired ticket parameter", () => {
+    expect(ticketDetailHref(query(), "R-1")).not.toContain("ticket=");
   });
 });
 

@@ -25,8 +25,7 @@ export type QueryPatch = Readonly<
       | "device"
       | "search"
       | "sort"
-      | "page"
-      | "ticket",
+      | "page",
       string | null
     >
   >
@@ -62,7 +61,6 @@ function baseParams(query: WorkbenchQuery): Record<string, string | null> {
     search: query.search.length > 0 ? query.search : null,
     sort: query.sort,
     page: query.page > 1 ? String(query.page) : null,
-    ticket: query.ticket,
   };
 }
 
@@ -86,15 +84,20 @@ export function pageHref(query: WorkbenchQuery, page: number): string {
   return toHref({ ...baseParams(query), page: page > 1 ? String(page) : null });
 }
 
-// Opening or closing the detail drawer never touches the queue, the filters, the
-// search term, the sort or which page they were browsing — it is orthogonal
-// state, which is also why applyWorkbenchQuery resolves `selected` against every
-// record rather than only the current page's rows.
-export function ticketHref(
+// Rebuild the allowlisted list view so returning from a detail page preserves
+// its queue, filters, search, sort and page.
+export function listHref(query: WorkbenchQuery): string {
+  return toHref(baseParams(query));
+}
+
+export function ticketDetailHref(
   query: WorkbenchQuery,
-  ticket: string | null,
+  recordNumber: string,
 ): string {
-  return toHref({ ...baseParams(query), ticket });
+  const list = new URL(listHref(query), "https://onecare.invalid");
+  const search = list.searchParams.toString();
+  const path = `/workbench/tickets/${encodeURIComponent(recordNumber)}`;
+  return search ? `${path}?${search}` : path;
 }
 
 // A computed property key needs an assertion because TypeScript cannot see that

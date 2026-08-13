@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildWorkbench, toWorkbenchTicket } from "./data";
 import type { VocRecord } from "../bitable/field-map";
+import { DECLINED_MARKER } from "../warroom/naming";
 
 function record(over: Partial<VocRecord> = {}): VocRecord {
   return {
@@ -35,6 +36,7 @@ describe("toWorkbenchTicket", () => {
       recordId: "rec1",
       retryCount: 0,
       hasOwner: true,
+      hasWarRoom: false,
       recordNumber: "R-001",
       feedbackAt: "2026-01-23T02:00:00.000Z",
       channel: "电商评价",
@@ -100,6 +102,29 @@ describe("toWorkbenchTicket", () => {
     expect(toWorkbenchTicket(record({ ownerOpenIds: ["ou_a"] })).hasOwner).toBe(
       true,
     );
+  });
+
+  it.each([
+    { label: "a real group id", warRoomChatId: "oc_group", expected: true },
+    { label: "the declined marker", warRoomChatId: DECLINED_MARKER, expected: false },
+    { label: "an empty decision", warRoomChatId: "", expected: false },
+  ] as const)("projects $label to hasWarRoom=$expected", ({ warRoomChatId, expected }) => {
+    expect(toWorkbenchTicket(record({ warRoomChatId })).hasWarRoom).toBe(expected);
+  });
+
+  it("never serializes the real group id or the declined marker field", () => {
+    const tickets = [
+      toWorkbenchTicket(record({ warRoomChatId: "oc_group" })),
+      toWorkbenchTicket(record({ warRoomChatId: DECLINED_MARKER })),
+    ];
+    const serialized = JSON.stringify(tickets);
+
+    for (const ticket of tickets) {
+      expect(ticket).not.toHaveProperty("warRoomChatId");
+    }
+    expect(serialized).not.toContain("warRoomChatId");
+    expect(serialized).not.toContain("oc_group");
+    expect(serialized).not.toContain(DECLINED_MARKER);
   });
 });
 

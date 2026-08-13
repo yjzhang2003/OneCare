@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --ink: #1b1b18;
   --ink-soft: #2a2a25;
   --paper: #f3efe5;
@@ -5573,18 +5573,18 @@ a {
 }
 
 /* ---------------------------------------------------------------------------
-   Arco 运营控制台外壳
+   Arco 杩愯惀鎺у埗鍙板澹?
 
    The site body is near-black with a grid, which every other page paints over
    with its own paper surface. The console is full-bleed rather than a floating
-   card — an operations console occupies the window, it does not sit in it — so
+   card 鈥?an operations console occupies the window, it does not sit in it 鈥?so
    it has to paint that surface itself. The first version of the old workbench
    shipped with no background at all and rendered dark-on-dark; jsdom computes
    no contrast, so no assertion in this repo can catch a repeat. Hence explicit
    backgrounds on every surface below.
 --------------------------------------------------------------------------- */
 /* The console owns the viewport: the sider and the top bar stay put and only the
-   middle scrolls, which is what makes a long queue navigable — scrolling the
+   middle scrolls, which is what makes a long queue navigable 鈥?scrolling the
    whole document takes the queue list and the breadcrumb off screen exactly when
    an operator deep in a list needs them. overflow:hidden is scoped to this class
    rather than put on body, because every other page on this site scrolls
@@ -5690,12 +5690,12 @@ a {
 /* Pushes the count tag to the right edge of the menu item so the five counts
    line up in a column instead of floating after labels of different widths. */
 /* The item is Arco's own display:block, and with no ItemGroup wrapping it the
-   icon, label and count are its direct children — there is no
+   icon, label and count are its direct children 鈥?there is no
    .arco-menu-item-inner in this configuration, only in the indented one. Making
    the item itself the flex row is therefore the only place this can go. */
 /* No gap: Arco already puts margin-right:16px on the icon, and inside a submenu
-   header the icon and label sit in a wrapper span that a gap here cannot reach —
-   which is precisely why 工单's label landed 8px left of the other top-level items.
+   header the icon and label sit in a wrapper span that a gap here cannot reach 鈥?
+   which is precisely why 宸ュ崟's label landed 8px left of the other top-level items.
    Letting Arco's own margin do the spacing puts every level-one label on the same
    line. */
 .oc-console__sider .arco-menu .arco-menu-item {
@@ -5703,12 +5703,276 @@ a {
   align-items: center;
 }
 
+/* Full-page ticket workspace: navigation, reading surface, and action context. */
+.oc-ticket-detail__content {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+}
+
+.oc-ticket-detail__grid {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: start;
+}
+
+.oc-ticket-detail__nav,
+.oc-ticket-detail__aside {
+  position: sticky;
+  top: 76px;
+}
+
+.oc-ticket-detail__nav,
+.oc-ticket-detail__main,
+.oc-ticket-detail__aside {
+  min-width: 0;
+}
+
+.oc-ticket-detail__header-context {
+  min-width: 0;
+}
+
+.oc-ticket-detail__header .oc-console__brand {
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.oc-ticket-detail__nav {
+  display: grid;
+  gap: 12px;
+}
+
+.oc-ticket-detail__back,
+.oc-ticket-detail__anchors a,
+.oc-ticket-detail__state-action {
+  color: rgb(var(--primary-7));
+  font-weight: 600;
+}
+
+.oc-ticket-detail__anchors {
+  display: grid;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--color-border-2, #e5e6eb);
+  border-radius: 4px;
+}
+
+.oc-ticket-detail__anchors a {
+  padding: 11px 14px;
+  color: var(--color-text-2, #4e5969);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.oc-ticket-detail__anchors a + a {
+  border-top: 1px solid var(--color-border-2, #e5e6eb);
+}
+
+.oc-ticket-detail__anchors a:hover,
+.oc-ticket-detail__anchors a:focus-visible {
+  color: rgb(var(--primary-7));
+  background: rgb(var(--primary-1));
+}
+
+.oc-ticket-detail__main,
+.oc-ticket-detail__aside {
+  display: grid;
+  gap: 16px;
+}
+
+.oc-ticket-detail__body,
+.oc-ticket-detail__actions,
+.oc-ticket-detail__overview,
+.oc-ticket-detail__key-fields {
+  min-width: 0;
+}
+
+.oc-ticket-detail__body,
+.oc-ticket-detail__actions {
+  display: grid;
+  gap: 16px;
+}
+
+.oc-ticket-detail__section {
+  scroll-margin-top: 76px;
+  overflow-wrap: anywhere;
+}
+
+.oc-ticket-detail__title {
+  margin: 6px 0 12px !important;
+  overflow-wrap: anywhere;
+}
+
+.oc-ticket-detail__prose {
+  margin: 0 0 20px !important;
+  color: var(--color-text-1, #1d2129);
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.oc-ticket-detail__replies {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.oc-ticket-detail__reply {
+  min-width: 0;
+  padding: 14px;
+  background: var(--color-fill-1, #f7f8fa);
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+
+.oc-ticket-detail__reply .arco-typography {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+}
+
+.oc-ticket-detail__status-grid {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+  gap: 12px 14px;
+  align-items: start;
+  overflow-wrap: anywhere;
+}
+
+.oc-ticket-detail__status-grid > span {
+  color: var(--color-text-3, #86909c);
+  font-size: 12px;
+}
+
+.oc-ticket-detail__status-grid > strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.oc-ticket-detail .arco-card,
+.oc-ticket-detail .arco-descriptions,
+.oc-ticket-detail .arco-space,
+.oc-ticket-detail .arco-typography {
+  max-width: 100%;
+}
+
+.oc-ticket-detail .arco-descriptions-item-value,
+.oc-ticket-detail .arco-descriptions-item-label,
+.oc-ticket-detail code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.oc-ticket-detail__state {
+  max-width: 720px !important;
+  margin: clamp(48px, 10vh, 120px) auto 0;
+  text-align: center;
+}
+
+.oc-ticket-detail__state-action {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  padding: 0 16px;
+  border: 1px solid rgb(var(--primary-6));
+  border-radius: 4px;
+}
+
+@media (max-width: 1100px) {
+  .oc-ticket-detail__grid {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+
+  .oc-ticket-detail__nav {
+    position: static;
+    grid-column: 1 / -1;
+  }
+
+  .oc-ticket-detail__anchors {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .oc-ticket-detail__anchors a {
+    min-width: max-content;
+  }
+
+  .oc-ticket-detail__anchors a + a {
+    border-top: 0;
+    border-left: 1px solid var(--color-border-2, #e5e6eb);
+  }
+}
+
+@media (max-width: 760px) {
+  .oc-ticket-detail__header {
+    height: auto;
+    min-height: 56px;
+    align-items: flex-start;
+    padding: 10px 12px;
+  }
+
+  .oc-ticket-detail__header-context {
+    align-items: flex-start !important;
+    flex-direction: column;
+    gap: 4px !important;
+  }
+
+  .oc-ticket-detail__header .oc-console__user {
+    display: none;
+  }
+
+  .oc-ticket-detail__content {
+    padding: 12px 12px 28px;
+  }
+
+  .oc-ticket-detail__grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "nav"
+      "overview"
+      "actions"
+      "body"
+      "key-fields";
+  }
+
+  .oc-ticket-detail__main,
+  .oc-ticket-detail__aside {
+    display: contents;
+  }
+
+  .oc-ticket-detail__nav {
+    grid-area: nav;
+  }
+
+  .oc-ticket-detail__overview {
+    grid-area: overview;
+  }
+
+  .oc-ticket-detail__actions {
+    grid-area: actions;
+  }
+
+  .oc-ticket-detail__body {
+    grid-area: body;
+  }
+
+  .oc-ticket-detail__key-fields {
+    grid-area: key-fields;
+  }
+
+  .oc-ticket-detail__aside {
+    position: static;
+  }
+
+  .oc-ticket-detail .arco-descriptions-body {
+    overflow-x: auto;
+  }
 .oc-console__sider .arco-menu .arco-menu-item .arco-tag {
   margin-left: 8px;
 }
 
 /* Level-two items are indented, and Arco wraps an indented item's contents in this
-   span with an inline display:block — so the flex row above lands on the item and
+   span with an inline display:block 鈥?so the flex row above lands on the item and
    never reaches the icon, label and count inside. Inline styles cannot be beaten by
    specificity, hence !important on the one declaration that must win.
    flex:1 as well, because the item is itself a flex container and this span would
@@ -5722,7 +5986,7 @@ a {
 }
 
 /* Takes the slack, so the label stays left and the count is pushed to the item's
-   right edge — which is what turns ragged counts into a column. */
+   right edge 鈥?which is what turns ragged counts into a column. */
 .oc-console__nav-label {
   flex: 1 1 auto;
   min-width: 0;
@@ -5732,3 +5996,4 @@ a {
 .oc-console__sider .arco-menu .arco-menu-item .arco-tag {
   flex: 0 0 auto;
 }
+

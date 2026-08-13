@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 
 import { expect, it } from "vitest";
 
@@ -23,7 +23,7 @@ function entryPoints(dir: string): string[] {
     if (statSync(path).isDirectory()) {
       found.push(...entryPoints(path));
     } else if (/^(route|page)\.tsx?$/.test(name)) {
-      found.push(relative(ROOT, path));
+      found.push(relative(ROOT, path).split(sep).join("/"));
     }
   }
   return found;

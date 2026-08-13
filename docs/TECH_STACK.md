@@ -6,6 +6,12 @@ The 万护 OneCare TypeScript web baseline and Feishu custom-app login were impl
 
 The production deployment is available at `https://onecare-loop.vercel.app`. The canonical OAuth callback is `https://onecare-loop.vercel.app/api/auth/feishu/callback`, and the verified bot event callback is `https://onecare.ohmyfeishu.top/api/feishu/events`. URL Verification, permissions, event subscriptions and custom menus have been configured externally; the employee-bot branch is not considered active until its code is deployed to Production, the application version is published, and a real enterprise member completes acceptance testing.
 
+### Operations workbench ticket detail
+
+The member-only workbench opens each ticket at `/workbench/tickets/[recordNumber]` instead of keeping detail state in a list-page drawer. The list page and detail route share the same `readWorkbenchCached()` cache entry so the two surfaces read one consistent snapshot. The detail route checks the website session before any VOC read; anonymous requests redirect to `/enter` without revealing whether a record number exists.
+
+Detail links carry only the allowlisted `WorkbenchQuery` list fields. The return link is rebuilt as an internal `/` URL after parsing those fields; arbitrary `returnTo` values, unknown keys, invalid enums and the retired `ticket` parameter are ignored. Browser-facing `WorkbenchTicket` data exposes only `hasWarRoom: boolean`, which is true only when the shared tri-state `warRoomDecision()` reports `"exists"`; both an empty decision and the declined marker project to false. Neither the real Feishu group ID nor the marker is included in the ticket view model or client payload.
+
 ## Implemented Baseline
 
 万护 OneCare uses one TypeScript modular monolith:
@@ -57,7 +63,7 @@ Feishu's one-click agent-application SDK remains outside the intended product fl
 
 Vercel is the selected host for the Next.js application and Node.js Route Handlers. Production secrets are configured as Vercel environment variables and are never passed as public `NEXT_PUBLIC_*` values.
 
-The Feishu event callback has a stricter network placement requirement than the rest of the site. `vercel.json` deploys only `app/api/feishu/events/route.ts` to Hong Kong (`hkg1`) so Feishu's China-side verification and event delivery do not traverse to Vercel's default Washington, D.C. (`iad1`) compute region. Other Node.js routes retain the project default. Deployment inspection must confirm the emitted `api/feishu/events` function region before production callback validation.
+Feishu callbacks and Bitable reads have a stricter network placement requirement than the rest of the site. `vercel.json` deploys `app/api/feishu/events/route.ts` and every page or API entry point that directly or through a shared reader reaches Bitable to Hong Kong (`hkg1`), including `/` and `/workbench/tickets/[recordNumber]`; unrelated Node.js routes retain the project default. `vercel-config.test.ts` derives this set from source markers and normalizes platform-specific relative paths to `/` before looking up Vercel function keys, so the invariant works on Windows as well as POSIX. Deployment inspection must confirm the emitted functions' regions before production callback and workbench validation.
 
 The first production deployment establishes the canonical domain. The exact `/api/auth/feishu/callback` URL on that domain must then be added to the Feishu developer console and stored as `FEISHU_REDIRECT_URI` before the final production deployment.
 

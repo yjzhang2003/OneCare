@@ -58,11 +58,9 @@ type WorkbenchContentProps = Readonly<{
 // the URL, filtering and paging 3628 records so only 50 cross the wire, and
 // deriving the filter option lists from the full set.
 //
-// The query itself remains URL state rather than component state. The console
+// The list query remains URL state rather than component state. The console
 // navigates by pushing the URLs that src/features/workbench/href.ts builds, so a
-// pasted link still reproduces the exact view its sender was looking at — the
-// property that made this design worth keeping when the presentation moved to a
-// component library.
+// pasted list link still reproduces the exact view its sender was looking at.
 export function WorkbenchContent({
   data,
   user,

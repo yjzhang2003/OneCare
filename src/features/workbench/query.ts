@@ -85,7 +85,6 @@ export type WorkbenchQuery = Readonly<{
   search: string;
   sort: SortKey;
   page: number;
-  ticket: string | null;
 }>;
 
 type RawParams = Readonly<Record<string, string | string[] | undefined>>;
@@ -132,7 +131,6 @@ export function parseWorkbenchQuery(params: RawParams): WorkbenchQuery {
     search: first(params.search) ?? "",
     sort: (oneOf(params.sort, sortKeys) ?? "feedback_desc") as SortKey,
     page: Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1,
-    ticket: first(params.ticket),
   };
 }
 
@@ -274,11 +272,6 @@ export type WorkbenchPage = Readonly<{
   page: number;
   pageCount: number;
   queueCounts: Readonly<Record<QueueKey, number>>;
-  selected: WorkbenchTicket | null;
-  // How many OTHER records share the selected ticket's source case number.
-  // Computed here rather than in the browser because it needs every record, and
-  // the browser only ever receives the current page.
-  selectedRelated: number;
 }>;
 
 export function applyWorkbenchQuery(
@@ -303,13 +296,6 @@ export function applyWorkbenchQuery(
     .slice()
     .sort((a, b) => compare(a, b, query.sort, now));
 
-  // Looked up across every record rather than within the current page: a link to
-  // one ticket has to open it even when the recipient's filters exclude it.
-  const selected =
-    query.ticket === null
-      ? null
-      : (tickets.find((ticket) => ticket.recordNumber === query.ticket) ?? null);
-
   const pageCount = Math.max(1, Math.ceil(matchedRows.length / PAGE_SIZE));
   const page = Math.min(query.page, pageCount);
   const start = (page - 1) * PAGE_SIZE;
@@ -320,16 +306,5 @@ export function applyWorkbenchQuery(
     page,
     pageCount,
     queueCounts,
-    // Looked up across every record rather than within the current page: a link
-    // to one ticket has to open it even when the recipient's filters exclude it.
-    selected,
-    selectedRelated:
-      selected === null || selected.sourceTicketNo.length === 0
-        ? 0
-        : tickets.filter(
-            (ticket) =>
-              ticket.sourceTicketNo === selected.sourceTicketNo &&
-              ticket.recordNumber !== selected.recordNumber,
-          ).length,
   };
 }

@@ -7,6 +7,7 @@ import {
 } from "../voc/metrics";
 import type { VocDimension, VocPolarity, VocSeverity } from "../voc/triage";
 import type { VocState } from "../voc/service-event";
+import { warRoomDecision } from "../warroom/naming";
 
 // Still deliberately omits ownerOpenIds: an open_id names a person, the row
 // objects are serialized into the page payload, and nothing an operator reads
@@ -50,6 +51,7 @@ export type WorkbenchTicket = Readonly<{
   // is therefore left to the route handler to answer.
   retryCount: number;
   hasOwner: boolean;
+  hasWarRoom: boolean;
   // Recovered from the source export. sourceTicketNo is the one that adds a
   // capability rather than a column: ~856 of the 3628 rows share a source case
   // number with another row, so "the other records from this same 400 case" is a
@@ -101,6 +103,7 @@ export function toWorkbenchTicket(record: VocRecord): WorkbenchTicket {
     ownerNames: record.ownerNames,
     retryCount: record.retryCount,
     hasOwner: record.ownerOpenIds.length > 0,
+    hasWarRoom: warRoomDecision(record.warRoomChatId) === "exists",
     userRef: record.userRef,
     deviceRef: record.deviceRef,
     sourceTicketNo: record.sourceTicketNo,

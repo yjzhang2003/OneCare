@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+﻿import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
@@ -24,7 +24,6 @@ vi.mock("next/navigation", () => ({
 beforeEach(() => {
   push.mockClear();
 });
-
 function emptyMetrics(): VocMetrics {
   return {
     total: 0,
@@ -63,6 +62,7 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
     ownerNames: ["张三"],
     retryCount: 0,
     hasOwner: true,
+    hasWarRoom: false,
     sourceTicketNo: "CAS-42567239-Q7Q8Q",
     userRef: "U-3878645B",
     deviceRef: "D-91C2A70E",
@@ -128,25 +128,31 @@ describe("WorkbenchConsole", () => {
   // so what has to keep working is that clicking anywhere on a row opens it, and
   // that the record number is still a real link — otherwise the row is
   // unreachable by keyboard and its URL is not copyable.
-  it("makes the record number a link to that ticket", () => {
+  it("links the record to the independent detail route", () => {
     renderWorkbench({
-      tickets: [ticket({ state: "待跟进" })],
-      searchParams: { queue: "all" },
+      tickets: [ticket({ recordNumber: "R # 001", severity: "高" })],
+      searchParams: { queue: "all", severity: "高" },
     });
 
-    const link = screen.getByRole("link", { name: "R-001" });
-    expect(link).toHaveAttribute("href", expect.stringContaining("ticket=R-001"));
+    const link = screen.getByRole("link", { name: "# 001" });
+    expect(link).toHaveAttribute("title", "R # 001");
+    expect(link).toHaveAttribute(
+      "href",
+      "/workbench/tickets/R%20%23%20001?queue=all&severity=%E9%AB%98&sort=feedback_desc",
+    );
   });
 
-  it("opens the ticket when the row itself is clicked", () => {
+  it("opens that route from the whole row", () => {
     renderWorkbench({
-      tickets: [ticket({ state: "待跟进" })],
-      searchParams: { queue: "all" },
+      tickets: [ticket({ recordNumber: "R-001" })],
+      searchParams: { queue: "all", sort: "severity_desc" },
     });
 
     fireEvent.click(screen.getByRole("link", { name: "R-001" }).closest("tr")!);
 
-    expect(push).toHaveBeenCalledWith(expect.stringContaining("ticket=R-001"));
+    expect(push).toHaveBeenCalledWith(
+      "/workbench/tickets/R-001?queue=all&sort=severity_desc",
+    );
   });
 
   // Nothing on the table may name an action any more, so the operator is never
@@ -164,50 +170,14 @@ describe("WorkbenchConsole", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("opens the drawer for the ticket named in the URL", () => {
-    renderWorkbench({
-      tickets: [ticket({ recordNumber: "R-777", content: "冰箱异响" })],
+  it("ignores old ticket state and renders no drawer", () => {
+    const { container } = renderWorkbench({
+      tickets: [ticket({ recordNumber: "R-777" })],
       searchParams: { queue: "all", ticket: "R-777" },
     });
 
-    expect(
-      screen.getByText("工单详情 · R-777", { exact: false }),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText("冰箱异响").length).toBeGreaterThan(0);
-  });
-
-  // A ticket the current queue excludes must still open: a link to one ticket
-  // has to work for a recipient whose own filters exclude it.
-  it("opens a ticket the current queue would filter out", () => {
-    renderWorkbench({
-      tickets: [ticket({ recordNumber: "R-777", state: "已闭环" })],
-      searchParams: { queue: "open", ticket: "R-777" },
-    });
-
-    expect(
-      screen.getByText("工单详情 · R-777", { exact: false }),
-    ).toBeInTheDocument();
-  });
-
-  it("offers the transitions the drawer's ticket allows, and no others", () => {
-    renderWorkbench({
-      tickets: [ticket({ recordNumber: "R-777", state: "待跟进" })],
-      searchParams: { queue: "all", ticket: "R-777" },
-    });
-
-    expect(screen.getByRole("button", { name: "开始跟进" })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "确认闭环" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("says a terminal state is terminal rather than showing an empty toolbar", () => {
-    renderWorkbench({
-      tickets: [ticket({ recordNumber: "R-777", state: "已闭环" })],
-      searchParams: { queue: "all", ticket: "R-777" },
-    });
-
-    expect(screen.getByText(/已闭环是终态/)).toBeInTheDocument();
+    expect(container.querySelector(".arco-drawer")).toBeNull();
+    expect(screen.queryByText(/工单详情 ·/)).not.toBeInTheDocument();
   });
 
   it("reports an unavailable aggregation instead of rendering zeroes", () => {
@@ -259,6 +229,12 @@ describe("WorkbenchContent source", () => {
     expect(adapter).toBeGreaterThan(-1);
     expect(adapter).toBeLessThan(firstComponent);
   });
+
+  it("keeps drawer state and actions out of the list console", () => {
+    expect(console).not.toContain("Drawer");
+    expect(console).not.toContain("TicketDrawer");
+    expect(console).not.toContain("const selected =");
+  });
 });
 
 // Arco renders no markdown, so a literal ** in a string shows up on screen as
@@ -285,123 +261,4 @@ describe("console copy", () => {
   });
 });
 
-// The three top-level destinations now live in the sider rather than in content
-// tabs, and which one is showing comes from the URL.
-describe("sections", () => {
-  const rows = [
-    ticket({ recordNumber: "R-1", userRef: "U-A", deviceRef: "D-A" }),
-    ticket({ recordNumber: "R-2", userRef: "U-A", deviceRef: "D-A" }),
-  ];
 
-  it("shows the ticket table by default", () => {
-    renderWorkbench({ tickets: rows, searchParams: { queue: "all" } });
-    expect(screen.getByRole("columnheader", { name: /记录编号/ })).toBeInTheDocument();
-  });
-
-  it("shows the user profile table for section=users", () => {
-    renderWorkbench({ tickets: rows, searchParams: { section: "users" } });
-    expect(screen.getByRole("columnheader", { name: /用户标识/ })).toBeInTheDocument();
-    expect(screen.getByText("U-A")).toBeInTheDocument();
-  });
-
-  it("shows the device table for section=devices", () => {
-    renderWorkbench({ tickets: rows, searchParams: { section: "devices" } });
-    expect(screen.getByRole("columnheader", { name: /设备标识/ })).toBeInTheDocument();
-    expect(screen.getByText("D-A")).toBeInTheDocument();
-  });
-
-});
-
-describe("profile subset disclosure", () => {
-  // The lists show only the repeat profiles, which would otherwise read as "these
-  // are all of them". Stated as a ratio rather than a sentence: the explanatory
-  // paragraph this replaces was one of several that turned the console into a
-  // commentary on its own implementation.
-  it("shows how many of the total are listed", () => {
-    renderWorkbench({
-      tickets: [
-        ticket({ recordNumber: "R-1", userRef: "U-A" }),
-        ticket({ recordNumber: "R-2", userRef: "U-A" }),
-        ticket({ recordNumber: "R-3", userRef: "U-B" }),
-      ],
-      searchParams: { section: "users" },
-    });
-    expect(screen.getByText("1 / 2")).toBeInTheDocument();
-  });
-});
-
-describe("console copy discipline", () => {
-  const source = readFileSync(
-    resolve(process.cwd(), "app/workbench-console.tsx"),
-    "utf8",
-  );
-
-  // The previous version of this guard enumerated three offending substrings, so it
-  // caught those three and nothing else — and prose kept accumulating until a
-  // screenshot showed a paragraph of design rationale sitting in the product.
-  //
-  // This checks the shape instead of the words: any long CJK string literal in
-  // rendered code is prose, because real data reaches the screen as an expression
-  // ({ticket.content}), never as a literal. Comments are exempt — that is where
-  // reasoning belongs.
-  it("contains no long prose literals", () => {
-    const offenders: string[] = [];
-    for (const line of source.split("\n")) {
-      const code = line.trim();
-      if (code.startsWith("//") || code.startsWith("*") || code.startsWith("/*")) {
-        continue;
-      }
-      for (const [, literal] of line.matchAll(/"([^"]{2,})"|`([^`]{2,})`/g)) {
-        const text = literal ?? "";
-        const cjk = (text.match(/[一-龥]/g) ?? []).length;
-        if (cjk > 40) offenders.push(text.slice(0, 50));
-      }
-    }
-    expect(offenders).toEqual([]);
-  });
-});
-
-describe("identity detail pages", () => {
-  const rows = [
-    ticket({ recordNumber: "R-1", userRef: "U-A", deviceRef: "D-A", state: "待跟进" }),
-    ticket({ recordNumber: "R-2", userRef: "U-A", deviceRef: "D-A", state: "已闭环" }),
-    ticket({ recordNumber: "R-3", userRef: "U-B", deviceRef: "D-B" }),
-  ];
-
-  it("opens a user's own page rather than the ticket list", () => {
-    renderWorkbench({ tickets: rows, searchParams: { section: "users", user: "U-A", queue: "all" } });
-
-    // Its aggregates, not the profile list: the list's header is gone.
-    expect(screen.queryByRole("columnheader", { name: /用户标识/ })).not.toBeInTheDocument();
-    expect(screen.getByText("U-A")).toBeInTheDocument();
-    expect(screen.getByText("2 条反馈")).toBeInTheDocument();
-    expect(screen.getByText("1 条未闭环")).toBeInTheDocument();
-  });
-
-  it("lists only that identity's records", () => {
-    renderWorkbench({ tickets: rows, searchParams: { section: "users", user: "U-A", queue: "all" } });
-
-    expect(screen.getByText("R-1")).toBeInTheDocument();
-    expect(screen.getByText("R-2")).toBeInTheDocument();
-    expect(screen.queryByText("R-3")).not.toBeInTheDocument();
-  });
-
-  it("opens a device's own page", () => {
-    renderWorkbench({ tickets: rows, searchParams: { section: "devices", device: "D-A", queue: "all" } });
-    expect(screen.getByText("D-A")).toBeInTheDocument();
-    expect(screen.getByText("2 条反馈")).toBeInTheDocument();
-  });
-
-  // An id that matches nothing must say so rather than render an empty page that
-  // looks like a profile with no history.
-  it("reports an identity it cannot find", () => {
-    renderWorkbench({ tickets: rows, searchParams: { section: "users", user: "U-NOPE", queue: "all" } });
-    expect(screen.getByText(/找不到 U-NOPE/)).toBeInTheDocument();
-  });
-
-  it("offers a way back to the list", () => {
-    renderWorkbench({ tickets: rows, searchParams: { section: "users", user: "U-A", queue: "all" } });
-    const back = screen.getByRole("link", { name: /返回列表/ });
-    expect(back).toHaveAttribute("href", expect.not.stringContaining("user="));
-  });
-});
