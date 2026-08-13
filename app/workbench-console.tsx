@@ -20,6 +20,7 @@ import {
   Pagination,
   Select,
   Space,
+  Spin,
   Statistic,
   Table,
   Tag,
@@ -166,6 +167,7 @@ export type WorkbenchConsoleProps = Readonly<{
   devices: readonly IdentityProfile[];
   userTotal: number;
   deviceTotal: number;
+  selectedProfile: IdentityProfile | null;
 }>;
 
 export function WorkbenchConsole({
@@ -179,6 +181,7 @@ export function WorkbenchConsole({
   devices,
   userTotal,
   deviceTotal,
+  selectedProfile,
 }: WorkbenchConsoleProps) {
   const router = useRouter();
   const [search, setSearch] = useState(query.search);
@@ -498,149 +501,169 @@ export function WorkbenchConsole({
               </Space>
             }
           >
-            {query.section === "tickets" && (
-              <Typography.Paragraph style={{ marginTop: 0 }} type="secondary">
-                {QUEUES.find((q) => q.key === query.queue)?.hint}
-              </Typography.Paragraph>
-            )}
+            <Spin loading={pending} style={{ display: "block", width: "100%" }}>
+              {(query.userRef !== null || query.deviceRef !== null) && (
+                <Alert
+                  type="info"
+                  style={{ marginBottom: 12 }}
+                  content={
+                    query.userRef !== null
+                      ? `只显示用户 ${query.userRef} 的记录`
+                      : `只显示设备 ${query.deviceRef} 的记录`
+                  }
+                  action={
+                    <Link
+                      href={filterHref(query, { user: null, device: null })}
+                    >
+                      清除
+                    </Link>
+                  }
+                />
+              )}
 
-            {(query.userRef !== null || query.deviceRef !== null) && (
-              <Alert
-                type="info"
-                style={{ marginBottom: 12 }}
-                content={
-                  query.userRef !== null
-                    ? `只显示用户 ${query.userRef} 的记录`
-                    : `只显示设备 ${query.deviceRef} 的记录`
-                }
-                action={
-                  <Link href={filterHref(query, { user: null, device: null })}>
-                    清除
-                  </Link>
-                }
-              />
-            )}
+              {query.sourceTicketNo !== null && (
+                <Alert
+                  type="info"
+                  style={{ marginBottom: 12 }}
+                  content={`只显示来源单号 ${query.sourceTicketNo} 的记录`}
+                  action={
+                    <Link href={filterHref(query, { ticketNo: null })}>
+                      清除
+                    </Link>
+                  }
+                />
+              )}
 
-            {query.sourceTicketNo !== null && (
-              <Alert
-                type="info"
-                style={{ marginBottom: 12 }}
-                content={`只显示来源单号 ${query.sourceTicketNo} 的记录`}
-                action={
-                  <Link href={filterHref(query, { ticketNo: null })}>清除</Link>
-                }
-              />
-            )}
+              {metrics === null && (
+                // Raised out of the 数据概览 tab and onto the main view. A failed
+                // Bitable read empties `tickets` as well as the aggregates, and an
+                // empty table reads as "no work here" — indistinguishable from a
+                // genuinely empty queue. The operator has to be told the
+                // difference without going looking for it.
+                <Alert
+                  type="warning"
+                  style={{ marginBottom: 12 }}
+                  content="读取多维表格失败，当前页面的数字和列表都不完整，请稍后重试。"
+                />
+              )}
 
-            {metrics === null && (
-              // Raised out of the 数据概览 tab and onto the main view. A failed
-              // Bitable read empties `tickets` as well as the aggregates, and an
-              // empty table reads as "no work here" — indistinguishable from a
-              // genuinely empty queue. The operator has to be told the
-              // difference without going looking for it.
-              <Alert
-                type="warning"
-                style={{ marginBottom: 12 }}
-                content="读取多维表格失败，当前页面的数字和列表都不完整，请稍后重试。"
-              />
-            )}
-
-            {query.section === "tickets" && (
-              <>
-                <Space wrap style={{ marginBottom: 12 }}>
-                  {filterSelect("state", "流程状态")}
-                  {filterSelect("severity", "严重度")}
-                  {filterSelect("channel", "渠道")}
-                  {filterSelect("category", "品类")}
-                  {filterSelect("polarity", "情绪极性")}
-                  {filterSelect("dimension", "问题维度")}
-                  {filterSelect("owner", "负责人")}
-                  {filterSelect("unit", "事业部")}
-                  {filterSelect("level1", "问题分类")}
-                  <Input.Search
-                    allowClear
-                    placeholder="搜原文 / 编号 / 机型 / 来源单号"
-                    value={search}
-                    style={{ width: 240 }}
-                    onChange={setSearch}
-                    onSearch={(value) =>
-                      go(filterHref(query, { search: value || null }))
-                    }
-                  />
-                  <Select
-                    value={query.sort}
-                    style={{ width: 176 }}
-                    options={SORTS.map((sort) => ({
-                      label: sort.label,
-                      value: sort.key,
-                    }))}
-                    onChange={(value) =>
-                      go(filterHref(query, { sort: value as string }))
-                    }
-                  />
-                </Space>
-
-                <div ref={tableWrapRef}>
-                  <Table
-                    rowKey="recordNumber"
-                    columns={columns}
-                    data={[...view.rows]}
-                    pagination={false}
-                    scroll={{
-                      x: 1200,
-                      ...(tableHeight ? { y: tableHeight } : {}),
-                    }}
-                    border={{ wrapper: true, cell: true }}
-                    size="small"
-                    loading={pending}
-                    noDataElement="这个队列现在是空的"
-                    onRow={(row) => ({
-                      onClick: () => go(ticketHref(query, row.recordNumber)),
-                      style: { cursor: "pointer" },
-                    })}
-                  />
-
-                  <div className="oc-console__pager">
-                    <Pagination
-                      current={view.page}
-                      total={view.matched}
-                      pageSize={PAGE_SIZE}
-                      showTotal={(total) => `共 ${total} 条`}
-                      onChange={(page) => go(pageHref(query, page))}
+              {query.section === "tickets" && (
+                <>
+                  <Space wrap style={{ marginBottom: 12 }}>
+                    {filterSelect("state", "流程状态")}
+                    {filterSelect("severity", "严重度")}
+                    {filterSelect("channel", "渠道")}
+                    {filterSelect("category", "品类")}
+                    {filterSelect("polarity", "情绪极性")}
+                    {filterSelect("dimension", "问题维度")}
+                    {filterSelect("owner", "负责人")}
+                    {filterSelect("unit", "事业部")}
+                    {filterSelect("level1", "问题分类")}
+                    <Input.Search
+                      allowClear
+                      placeholder="搜原文 / 编号 / 机型 / 来源单号"
+                      value={search}
+                      style={{ width: 240 }}
+                      onChange={setSearch}
+                      onSearch={(value) =>
+                        go(filterHref(query, { search: value || null }))
+                      }
                     />
+                    <Select
+                      value={query.sort}
+                      style={{ width: 176 }}
+                      options={SORTS.map((sort) => ({
+                        label: sort.label,
+                        value: sort.key,
+                      }))}
+                      onChange={(value) =>
+                        go(filterHref(query, { sort: value as string }))
+                      }
+                    />
+                  </Space>
+
+                  <div ref={tableWrapRef}>
+                    <Table
+                      rowKey="recordNumber"
+                      columns={columns}
+                      data={[...view.rows]}
+                      pagination={false}
+                      scroll={{
+                        x: 1200,
+                        ...(tableHeight ? { y: tableHeight } : {}),
+                      }}
+                      border={{ wrapper: true, cell: true }}
+                      size="small"
+                      loading={pending}
+                      noDataElement="这个队列现在是空的"
+                      onRow={(row) => ({
+                        onClick: () => go(ticketHref(query, row.recordNumber)),
+                        style: { cursor: "pointer" },
+                      })}
+                    />
+
+                    <div className="oc-console__pager">
+                      <Pagination
+                        current={view.page}
+                        total={view.matched}
+                        pageSize={PAGE_SIZE}
+                        showTotal={(total) => `共 ${total} 条`}
+                        onChange={(page) => go(pageHref(query, page))}
+                      />
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
+                </>
+              )}
 
-            {query.section === "users" && (
-              <ProfilePane
-                kind="user"
-                profiles={users}
-                total={userTotal}
-                query={query}
-                go={go}
-              />
-            )}
+              {query.section === "users" &&
+                (query.userRef === null ? (
+                  <ProfilePane
+                    kind="user"
+                    profiles={users}
+                    total={userTotal}
+                    query={query}
+                    go={go}
+                  />
+                ) : (
+                  <ProfileDetail
+                    kind="user"
+                    id={query.userRef}
+                    profile={selectedProfile}
+                    records={view.rows}
+                    query={query}
+                    now={now}
+                    go={go}
+                  />
+                ))}
 
-            {query.section === "devices" && (
-              <ProfilePane
-                kind="device"
-                profiles={devices}
-                total={deviceTotal}
-                query={query}
-                go={go}
-              />
-            )}
+              {query.section === "devices" &&
+                (query.deviceRef === null ? (
+                  <ProfilePane
+                    kind="device"
+                    profiles={devices}
+                    total={deviceTotal}
+                    query={query}
+                    go={go}
+                  />
+                ) : (
+                  <ProfileDetail
+                    kind="device"
+                    id={query.deviceRef}
+                    profile={selectedProfile}
+                    records={view.rows}
+                    query={query}
+                    now={now}
+                    go={go}
+                  />
+                ))}
 
-            {query.section === "metrics" &&
-              (metrics ? (
-                <MetricsPane metrics={metrics} />
-              ) : (
-                <Typography.Paragraph>
-                  指标暂不可用，读取多维表格失败，请稍后重试。
-                </Typography.Paragraph>
-              ))}
+              {query.section === "metrics" &&
+                (metrics ? (
+                  <MetricsPane metrics={metrics} />
+                ) : (
+                  <Alert type="warning" content="指标暂不可用，请稍后重试。" />
+                ))}
+            </Spin>
           </Card>
         </Layout.Content>
       </Layout>
@@ -753,18 +776,10 @@ function ProfilePane({
 
   return (
     <>
-      <Typography.Paragraph style={{ marginTop: 0 }} type="secondary">
-        {isUser
-          ? "同一来源工单的记录属于同一个人，据此重建了被脱敏抹掉的用户标识。列表只显示有多条反馈的用户。"
-          : "同一用户的同一机型算一台设备。重复报修是批次问题线索，列表只显示报修超过一次的设备。"}
-        {/* Stated, not implied. A list that silently shows 600 of 2772 rows reads
-            as "these are all of them", and the single-record majority is exactly
-            what makes the shown rows meaningful. */}
-        {` 共 ${total} 个，其中 ${profiles.length} 个有多条记录，另 ${total - profiles.length} 个仅一条未列出。`}
-        {isUser
-          ? " 这份数据里没有跨品类的用户——一个来源工单只涉及一个产品，所以这更接近工单画像而非终身客户画像。"
-          : ""}
-      </Typography.Paragraph>
+      <Space style={{ marginBottom: 12 }}>
+        <Tag>{`${profiles.length} / ${total}`}</Tag>
+        <Tag color="arcoblue">{isUser ? "多条反馈" : "重复报修"}</Tag>
+      </Space>
 
       <Table
         rowKey="id"
@@ -783,6 +798,8 @@ function ProfilePane({
             go(
               filterHref(query, {
                 ...(isUser ? { user: row.id } : { device: row.id }),
+                // queue=all so the detail page shows every record for this
+                // identity rather than only those the current queue admits.
                 queue: "all",
                 ticket: null,
               }),
@@ -791,6 +808,163 @@ function ProfilePane({
         })}
       />
     </>
+  );
+}
+
+// One identity's page: what we know about it, then every record behind it.
+function ProfileDetail({
+  kind,
+  id,
+  profile,
+  records,
+  query,
+  now,
+  go,
+}: Readonly<{
+  kind: "user" | "device";
+  id: string;
+  profile: IdentityProfile | null;
+  records: readonly WorkbenchTicket[];
+  query: WorkbenchQuery;
+  now: number;
+  go: (href: string) => void;
+}>) {
+  const isUser = kind === "user";
+  const back = filterHref(query, { user: null, device: null, ticket: null });
+
+  if (!profile) {
+    return (
+      <Space direction="vertical" size="medium">
+        <Alert type="warning" content={`找不到 ${id}`} />
+        <Link href={back}>返回列表</Link>
+      </Space>
+    );
+  }
+
+  const span =
+    profile.firstFeedbackAt === null
+      ? ABSENT
+      : `${shanghaiTime(profile.firstFeedbackAt)} → ${shanghaiTime(profile.lastFeedbackAt)}`;
+
+  return (
+    <Space direction="vertical" size="medium" style={{ width: "100%" }}>
+      <Space align="center">
+        <Link href={back}>← 返回列表</Link>
+        <Typography.Text style={{ fontFamily: "ui-monospace, monospace" }}>
+          {id}
+        </Typography.Text>
+        <Tag color="arcoblue">{profile.records} 条反馈</Tag>
+        {profile.open > 0 && <Tag color="orange">{profile.open} 条未闭环</Tag>}
+        {profile.severityHigh > 0 && (
+          <Tag color="red">{profile.severityHigh} 条高严重度</Tag>
+        )}
+      </Space>
+
+      <Descriptions
+        column={3}
+        size="small"
+        border
+        data={[
+          {
+            label: isUser ? "涉及品类" : "机型",
+            value:
+              (isUser ? profile.categories : profile.models).join("、") ||
+              ABSENT,
+          },
+          { label: "反馈渠道", value: profile.channels.join("、") || ABSENT },
+          { label: "问题维度", value: profile.dimensions.join("、") || ABSENT },
+          { label: "反馈区间", value: span },
+          { label: "已闭环", value: profile.closed },
+          { label: "未闭环", value: profile.open },
+        ]}
+      />
+
+      <Table
+        rowKey="recordNumber"
+        columns={[
+          {
+            title: "记录编号",
+            dataIndex: "recordNumber",
+            width: 96,
+            render: (_: unknown, row: WorkbenchTicket) => (
+              <Link
+                href={ticketHref(query, row.recordNumber)}
+                title={row.recordNumber}
+              >
+                {shortNumber(row.recordNumber)}
+              </Link>
+            ),
+          },
+          {
+            title: "反馈时间",
+            dataIndex: "feedbackAt",
+            width: 140,
+            render: (_: unknown, row: WorkbenchTicket) =>
+              shanghaiTime(row.feedbackAt) ?? ABSENT,
+          },
+          {
+            title: "原始内容",
+            dataIndex: "content",
+            ellipsis: true,
+            width: 320,
+          },
+          {
+            title: "严重度",
+            dataIndex: "severity",
+            width: 88,
+            render: (_: unknown, row: WorkbenchTicket) =>
+              row.severity ? (
+                <Tag color={SEVERITY_COLOR[row.severity]}>{row.severity}</Tag>
+              ) : (
+                ABSENT
+              ),
+          },
+          {
+            title: "流程状态",
+            dataIndex: "state",
+            width: 104,
+            render: (_: unknown, row: WorkbenchTicket) => (
+              <Tag color={STATE_COLOR[row.state]}>{row.state}</Tag>
+            ),
+          },
+          {
+            title: (
+              <Tooltip
+                content={`超时判据为假设 SLA ${ASSUMED_SLA_HOURS} 小时，非合同约定值`}
+              >
+                <span>停留时长</span>
+              </Tooltip>
+            ),
+            dataIndex: "dwell",
+            width: 122,
+            render: (_: unknown, row: WorkbenchTicket) => {
+              const dwell = dwellHours(row, now);
+              if (dwell === null) return ABSENT;
+              return (
+                <Space size={4}>
+                  <span>{hours(dwell)} 小时</span>
+                  {isOverdue(row, now) && (
+                    <Tag color="red" size="small">
+                      超时
+                    </Tag>
+                  )}
+                </Space>
+              );
+            },
+          },
+        ]}
+        data={[...records]}
+        pagination={false}
+        scroll={{ x: 900, y: 380 }}
+        border={{ wrapper: true, cell: true }}
+        size="small"
+        noDataElement="没有记录"
+        onRow={(row) => ({
+          onClick: () => go(ticketHref(query, row.recordNumber)),
+          style: { cursor: "pointer" },
+        })}
+      />
+    </Space>
   );
 }
 
@@ -869,15 +1043,6 @@ function MetricsPane({ metrics }: Readonly<{ metrics: VocMetrics }>) {
           />
         </Card>
       </Space>
-
-      {metrics.effort && (
-        <Typography.Text type="secondary">
-          折算节省工时 {hours(metrics.effort.savedHours)} 小时 ={" "}
-          {metrics.effort.taggedRecords} 条已打标 ×{" "}
-          {metrics.effort.manualMinutesPerRecord}{" "}
-          分钟/条。单条分钟数为假设基线，未经实测，因此不换算为金额。
-        </Typography.Text>
-      )}
     </Space>
   );
 }
@@ -909,21 +1074,12 @@ function TicketDrawer({
               : `${ticket.state}下没有可由人执行的动作，等打标流水线处理。`}
           </Typography.Text>
         ) : (
-          <Space direction="vertical" size="small">
-            <WorkbenchActions
-              recordId={ticket.recordId}
-              seenState={ticket.state}
-              actions={actions}
-              canClaim={canClaim}
-            />
-            {/* Said plainly rather than implied. This component cannot know
-                whether the viewer is the owner — that is per-viewer, and the row
-                came from a cache entry every viewer shares — so the buttons are
-                offered to everyone and the server decides. */}
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              状态流转只有负责人本人能做，其他人点击会被服务端拒绝。改派负责人请在多维表格里操作。
-            </Typography.Text>
-          </Space>
+          <WorkbenchActions
+            recordId={ticket.recordId}
+            seenState={ticket.state}
+            actions={actions}
+            canClaim={canClaim}
+          />
         )}
       </Card>
 

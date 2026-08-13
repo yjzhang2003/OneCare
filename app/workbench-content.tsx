@@ -80,6 +80,16 @@ export function WorkbenchContent({
   const users = userProfiles(data.tickets);
   const devices = deviceProfiles(data.tickets);
 
+  // The one profile a detail view needs, looked up across every record rather than
+  // taken from the lists above — those carry only the repeat profiles, so a
+  // single-record identity would open to an empty page.
+  const selectedProfile =
+    query.userRef !== null
+      ? (users.find((profile) => profile.id === query.userRef) ?? null)
+      : query.deviceRef !== null
+        ? (devices.find((profile) => profile.id === query.deviceRef) ?? null)
+        : null;
+
   return (
     <WorkbenchConsole
       user={user}
@@ -92,6 +102,7 @@ export function WorkbenchContent({
       devices={repeatOnly(devices)}
       userTotal={users.length}
       deviceTotal={devices.length}
+      selectedProfile={selectedProfile}
     />
   );
 }

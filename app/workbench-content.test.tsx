@@ -210,17 +210,6 @@ describe("WorkbenchConsole", () => {
     expect(screen.getByText(/已闭环是终态/)).toBeInTheDocument();
   });
 
-  // The drawer cannot know whether the viewer is the owner, so it must not imply
-  // that every offered button will succeed.
-  it("warns that only the owner may transition", () => {
-    renderWorkbench({
-      tickets: [ticket({ recordNumber: "R-777", state: "待跟进" })],
-      searchParams: { queue: "all", ticket: "R-777" },
-    });
-
-    expect(screen.getByText(/只有负责人本人能做/)).toBeInTheDocument();
-  });
-
   it("reports an unavailable aggregation instead of rendering zeroes", () => {
     renderWorkbench({
       metrics: { status: "unavailable" },
@@ -321,19 +310,98 @@ describe("sections", () => {
     expect(screen.getByText("D-A")).toBeInTheDocument();
   });
 
-  // A list that silently shows the repeat profiles only would read as "these are
-  // all of them".
-  it("states how many profiles it left out", () => {
+});
+
+describe("profile subset disclosure", () => {
+  // The lists show only the repeat profiles, which would otherwise read as "these
+  // are all of them". Stated as a ratio rather than a sentence: the explanatory
+  // paragraph this replaces was one of several that turned the console into a
+  // commentary on its own implementation.
+  it("shows how many of the total are listed", () => {
     renderWorkbench({
-      tickets: [...rows, ticket({ recordNumber: "R-3", userRef: "U-B" })],
+      tickets: [
+        ticket({ recordNumber: "R-1", userRef: "U-A" }),
+        ticket({ recordNumber: "R-2", userRef: "U-A" }),
+        ticket({ recordNumber: "R-3", userRef: "U-B" }),
+      ],
       searchParams: { section: "users" },
     });
-    expect(screen.getByText(/仅一条未列出/)).toBeInTheDocument();
+    expect(screen.getByText("1 / 2")).toBeInTheDocument();
+  });
+});
+
+describe("console copy discipline", () => {
+  const source = readFileSync(
+    resolve(process.cwd(), "app/workbench-console.tsx"),
+    "utf8",
+  );
+
+  // The previous version of this guard enumerated three offending substrings, so it
+  // caught those three and nothing else — and prose kept accumulating until a
+  // screenshot showed a paragraph of design rationale sitting in the product.
+  //
+  // This checks the shape instead of the words: any long CJK string literal in
+  // rendered code is prose, because real data reaches the screen as an expression
+  // ({ticket.content}), never as a literal. Comments are exempt — that is where
+  // reasoning belongs.
+  it("contains no long prose literals", () => {
+    const offenders: string[] = [];
+    for (const line of source.split("\n")) {
+      const code = line.trim();
+      if (code.startsWith("//") || code.startsWith("*") || code.startsWith("/*")) {
+        continue;
+      }
+      for (const [, literal] of line.matchAll(/"([^"]{2,})"|`([^`]{2,})`/g)) {
+        const text = literal ?? "";
+        const cjk = (text.match(/[一-龥]/g) ?? []).length;
+        if (cjk > 40) offenders.push(text.slice(0, 50));
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("identity detail pages", () => {
+  const rows = [
+    ticket({ recordNumber: "R-1", userRef: "U-A", deviceRef: "D-A", state: "待跟进" }),
+    ticket({ recordNumber: "R-2", userRef: "U-A", deviceRef: "D-A", state: "已闭环" }),
+    ticket({ recordNumber: "R-3", userRef: "U-B", deviceRef: "D-B" }),
+  ];
+
+  it("opens a user's own page rather than the ticket list", () => {
+    renderWorkbench({ tickets: rows, searchParams: { section: "users", user: "U-A", queue: "all" } });
+
+    // Its aggregates, not the profile list: the list's header is gone.
+    expect(screen.queryByRole("columnheader", { name: /用户标识/ })).not.toBeInTheDocument();
+    expect(screen.getByText("U-A")).toBeInTheDocument();
+    expect(screen.getByText("2 条反馈")).toBeInTheDocument();
+    expect(screen.getByText("1 条未闭环")).toBeInTheDocument();
   });
 
-  // The word 画像 must not imply cross-category history this data cannot carry.
-  it("says a user here is closer to a case than a lifetime customer", () => {
-    renderWorkbench({ tickets: rows, searchParams: { section: "users" } });
-    expect(screen.getByText(/更接近工单画像/)).toBeInTheDocument();
+  it("lists only that identity's records", () => {
+    renderWorkbench({ tickets: rows, searchParams: { section: "users", user: "U-A", queue: "all" } });
+
+    expect(screen.getByText("R-1")).toBeInTheDocument();
+    expect(screen.getByText("R-2")).toBeInTheDocument();
+    expect(screen.queryByText("R-3")).not.toBeInTheDocument();
+  });
+
+  it("opens a device's own page", () => {
+    renderWorkbench({ tickets: rows, searchParams: { section: "devices", device: "D-A", queue: "all" } });
+    expect(screen.getByText("D-A")).toBeInTheDocument();
+    expect(screen.getByText("2 条反馈")).toBeInTheDocument();
+  });
+
+  // An id that matches nothing must say so rather than render an empty page that
+  // looks like a profile with no history.
+  it("reports an identity it cannot find", () => {
+    renderWorkbench({ tickets: rows, searchParams: { section: "users", user: "U-NOPE", queue: "all" } });
+    expect(screen.getByText(/找不到 U-NOPE/)).toBeInTheDocument();
+  });
+
+  it("offers a way back to the list", () => {
+    renderWorkbench({ tickets: rows, searchParams: { section: "users", user: "U-A", queue: "all" } });
+    const back = screen.getByRole("link", { name: /返回列表/ });
+    expect(back).toHaveAttribute("href", expect.not.stringContaining("user="));
   });
 });
