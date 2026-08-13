@@ -650,6 +650,13 @@ function vocRecord(overrides: Partial<VocRecord> = {}): VocRecord {
     ticketOpenedAt: "2026-01-23T02:00:00.000Z",
     closedAt: null,
     warRoomChatId: "",
+    sourceTicketNo: "CAS-42567239-Q7Q8Q",
+    userRef: "U-3878645B",
+    deviceRef: "D-91C2A70E",
+    sourceUrl: "",
+    sourceDetail: "400投诉",
+    businessUnit: "冰冷事业部",
+    categoryLevel1: "安装调试",
     ...overrides,
   };
 }
@@ -1273,6 +1280,13 @@ describe("POST /api/feishu/events — VOC war room actions, wired for real", () 
         state: "待跟进",
         ownerOpenIds: ["ou_owner"],
         warRoomChatId: "",
+        sourceTicketNo: "CAS-42567239-Q7Q8Q",
+        userRef: "U-3878645B",
+        deviceRef: "D-91C2A70E",
+        sourceUrl: "",
+        sourceDetail: "400投诉",
+        businessUnit: "冰冷事业部",
+        categoryLevel1: "安装调试",
       }),
     );
     const createChat = vi.fn(
@@ -1451,6 +1465,13 @@ function groupTicket(overrides: Partial<VocRecord> = {}): VocRecord {
     ticketOpenedAt: "2026-08-09T02:00:00.000Z",
     closedAt: null,
     warRoomChatId: "oc_group_chat",
+    sourceTicketNo: "CAS-42567239-Q7Q8Q",
+    userRef: "U-3878645B",
+    deviceRef: "D-91C2A70E",
+    sourceUrl: "",
+    sourceDetail: "400投诉",
+    businessUnit: "冰冷事业部",
+    categoryLevel1: "安装调试",
     ...overrides,
   };
 }

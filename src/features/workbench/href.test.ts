@@ -22,6 +22,7 @@ function parse(href: string): WorkbenchQuery {
 
 function query(overrides: Partial<WorkbenchQuery> = {}): WorkbenchQuery {
   return {
+    section: "tickets",
     queue: "open",
     channel: null,
     category: null,
@@ -30,6 +31,11 @@ function query(overrides: Partial<WorkbenchQuery> = {}): WorkbenchQuery {
     severity: null,
     state: null,
     owner: null,
+    unit: null,
+    level1: null,
+    sourceTicketNo: null,
+    userRef: null,
+    deviceRef: null,
     search: "",
     sort: "feedback_desc",
     page: 1,
@@ -129,5 +135,38 @@ describe("the default view", () => {
   // operator bookmarks and the thing a shared link degrades to.
   test("a query with no choices in it produces a bare path", () => {
     expect(filterHref(query(), {})).toBe("/?queue=open&sort=feedback_desc");
+  });
+});
+
+describe("section navigation", () => {
+  // Section lives in the URL, so a link can point at 设备追踪. While these were
+  // content tabs the active one was component state: any navigation bounced back
+  // to the ticket list and no link could address them.
+  test("a section survives a round trip through the URL", () => {
+    for (const section of ["users", "devices", "metrics"] as const) {
+      expect(parse(filterHref(query(), { section })).section).toBe(section);
+    }
+  });
+
+  test("the default section is not written into the URL", () => {
+    expect(filterHref(query({ section: "tickets" }), {})).not.toContain(
+      "section",
+    );
+  });
+
+  test("an unknown section falls back to the ticket list", () => {
+    expect(parse("/?section=nonsense").section).toBe("tickets");
+  });
+
+  // Switching to a profile view and back must not lose the filters that were
+  // narrowing the ticket list.
+  test("switching sections keeps the ticket filters", () => {
+    const before = query({ severity: "高", queue: "overdue", search: "制冷" });
+    const onDevices = parse(filterHref(before, { section: "devices" }));
+
+    expect(onDevices.section).toBe("devices");
+    expect(onDevices.severity).toBe("高");
+    expect(onDevices.queue).toBe("overdue");
+    expect(onDevices.search).toBe("制冷");
   });
 });

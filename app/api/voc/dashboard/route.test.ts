@@ -33,6 +33,13 @@ const records: readonly VocRecord[] = [
     ticketOpenedAt: "2026-01-23T02:00:00.000Z",
     closedAt: "2026-01-24T02:00:00.000Z",
     warRoomChatId: "",
+    sourceTicketNo: "CAS-42567239-Q7Q8Q",
+    userRef: "U-3878645B",
+    deviceRef: "D-91C2A70E",
+    sourceUrl: "",
+    sourceDetail: "400投诉",
+    businessUnit: "冰冷事业部",
+    categoryLevel1: "安装调试",
   },
 ];
 

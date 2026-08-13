@@ -9,6 +9,7 @@ import type { WorkbenchQuery } from "./query";
 export type QueryPatch = Readonly<
   Partial<
     Record<
+      | "section"
       | "queue"
       | "channel"
       | "category"
@@ -17,6 +18,11 @@ export type QueryPatch = Readonly<
       | "severity"
       | "state"
       | "owner"
+      | "unit"
+      | "level1"
+      | "ticketNo"
+      | "user"
+      | "device"
       | "search"
       | "sort"
       | "page",
@@ -32,10 +38,13 @@ export type StringFilterField =
   | "dimension"
   | "severity"
   | "state"
-  | "owner";
+  | "owner"
+  | "unit"
+  | "level1";
 
 function baseParams(query: WorkbenchQuery): Record<string, string | null> {
   return {
+    section: query.section === "tickets" ? null : query.section,
     queue: query.queue,
     channel: query.channel,
     category: query.category,
@@ -44,6 +53,11 @@ function baseParams(query: WorkbenchQuery): Record<string, string | null> {
     severity: query.severity,
     state: query.state,
     owner: query.owner,
+    unit: query.unit,
+    level1: query.level1,
+    ticketNo: query.sourceTicketNo,
+    user: query.userRef,
+    device: query.deviceRef,
     search: query.search.length > 0 ? query.search : null,
     sort: query.sort,
     page: query.page > 1 ? String(query.page) : null,

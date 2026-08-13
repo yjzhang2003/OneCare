@@ -55,9 +55,17 @@ export const SORTS = [
 
 export type SortKey = (typeof SORTS)[number]["key"];
 
+// The console's top-level navigation. Lives in the URL rather than in component
+// state so a link can point at 设备追踪 — while these were content tabs, any
+// navigation bounced back to the ticket list and no link could address them.
+export const SECTIONS = ["tickets", "users", "devices", "metrics"] as const;
+
+export type SectionKey = (typeof SECTIONS)[number];
+
 export const PAGE_SIZE = 50;
 
 export type WorkbenchQuery = Readonly<{
+  section: SectionKey;
   queue: QueueKey;
   channel: string | null;
   category: string | null;
@@ -66,6 +74,14 @@ export type WorkbenchQuery = Readonly<{
   severity: string | null;
   state: string | null;
   owner: string | null;
+  unit: string | null;
+  level1: string | null;
+  // An exact source case number, not a search term: the drawer links here to show
+  // every record that came from the same 400 case or the same review.
+  sourceTicketNo: string | null;
+  // Exact identity filters, set by clicking a row in the profile tabs.
+  userRef: string | null;
+  deviceRef: string | null;
   search: string;
   sort: SortKey;
   page: number;
@@ -98,6 +114,7 @@ export function parseWorkbenchQuery(params: RawParams): WorkbenchQuery {
   const rawPage = Number(first(params.page) ?? "1");
 
   return {
+    section: (oneOf(params.section, SECTIONS) ?? "tickets") as SectionKey,
     queue: (oneOf(params.queue, queueKeys) ?? "open") as QueueKey,
     channel: first(params.channel),
     category: first(params.category),
@@ -106,6 +123,11 @@ export function parseWorkbenchQuery(params: RawParams): WorkbenchQuery {
     severity: oneOf(params.severity, VOC_SEVERITIES),
     state: oneOf(params.state, VOC_STATES),
     owner: first(params.owner),
+    unit: first(params.unit),
+    level1: first(params.level1),
+    sourceTicketNo: first(params.ticketNo),
+    userRef: first(params.user),
+    deviceRef: first(params.device),
     search: first(params.search) ?? "",
     sort: (oneOf(params.sort, sortKeys) ?? "feedback_desc") as SortKey,
     page: Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1,
@@ -164,7 +186,11 @@ function matchesSearch(ticket: WorkbenchTicket, search: string): boolean {
   return (
     ticket.content.toLowerCase().includes(needle) ||
     ticket.model.toLowerCase().includes(needle) ||
-    ticket.recordNumber.toLowerCase().includes(needle)
+    ticket.recordNumber.toLowerCase().includes(needle) ||
+    // An operator handed a 400 case number in chat pastes it here, and it is not
+    // the record number — it is the number the customer's own call was logged
+    // under, which is what anyone outside this system will quote.
+    ticket.sourceTicketNo.toLowerCase().includes(needle)
   );
 }
 
@@ -181,6 +207,20 @@ function matchesFilters(ticket: WorkbenchTicket, query: WorkbenchQuery): boolean
     return false;
   }
   if (query.owner !== null && !ticket.ownerNames.includes(query.owner)) {
+    return false;
+  }
+  if (query.unit !== null && ticket.businessUnit !== query.unit) return false;
+  if (query.level1 !== null && ticket.categoryLevel1 !== query.level1) {
+    return false;
+  }
+  if (
+    query.sourceTicketNo !== null &&
+    ticket.sourceTicketNo !== query.sourceTicketNo
+  ) {
+    return false;
+  }
+  if (query.userRef !== null && ticket.userRef !== query.userRef) return false;
+  if (query.deviceRef !== null && ticket.deviceRef !== query.deviceRef) {
     return false;
   }
   return matchesSearch(ticket, query.search);

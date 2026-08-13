@@ -19,7 +19,6 @@ export const VOC_FIELD_NAMES = {
   model: "机型",
   content: "原始内容",
   rating: "原始评分",
-  userRef: "用户标识",
   sentiment: "情绪标签",
   polarity: "情绪极性",
   dimensions: "问题维度",
@@ -37,6 +36,31 @@ export const VOC_FIELD_NAMES = {
   closedAt: "闭环时间",
   closingNote: "闭环结论",
   warRoomChatId: "协同群 ID",
+  // Recovered from the source export, which carried them all along: the original
+  // import mapped five of its twenty columns and dropped these. 来源单号 is the
+  // interesting one — 3629 rows carry only 2773 distinct values, so ~856 of them
+  // share a source case with another row, which is a real grouping key rather
+  // than a derived or simulated one.
+  // Reinstated with a defensible source. The previous commit removed this mapping
+  // because the column was permanently empty — the export is desensitised and
+  // carries no user identity. It is now populated with an id derived from
+  // 来源单号: records sharing a support case are the same person, which is true for
+  // 1456 of 3628 rows, so the grouping is real and only the id string stands in
+  // for the phone number or account that was stripped.
+  //
+  // The ceiling of that derivation, measured: 0 users span more than one product
+  // category, because one case concerns one product. A "user" here is closer to a
+  // case than to a lifetime customer, and any copy or analysis built on it has to
+  // say so.
+  userRef: "用户标识",
+  // (来源单号, 机型) — a device instance rather than a model. 854 of them, 206 with
+  // more than one report, which is the repeat-failure signal the tab exists for.
+  deviceRef: "设备标识",
+  sourceTicketNo: "来源单号",
+  sourceUrl: "来源链接",
+  sourceDetail: "来源明细",
+  businessUnit: "事业部",
+  categoryLevel1: "问题分类一级",
 } as const;
 
 export type BitableFields = Record<string, unknown>;
@@ -77,6 +101,19 @@ export type VocRecord = Readonly<{
   // no group yet — the same missing-column-reads-as-"" convention text()
   // already gives every other plain-text field in this record.
   warRoomChatId: string;
+  // The source system's own case or review number (a 400 工单号 like
+  // CAS-42567239-Q7Q8Q, or an e-commerce review id). Not a user and not a device:
+  // the export contains no user identity of any kind, so this is the only
+  // real correlation key it offers beyond the record's own number.
+  userRef: string;
+  deviceRef: string;
+  sourceTicketNo: string;
+  sourceUrl: string;
+  // The channel at full granularity — 68 distinct values in the export, against
+  // the 3 the 渠道 enum collapses them to.
+  sourceDetail: string;
+  businessUnit: string;
+  categoryLevel1: string;
 }>;
 
 // Card rendering (createVocTicketCard) and any other consumer that needs a
@@ -234,6 +271,13 @@ export function toVocRecord(
     ticketOpenedAt: isoDate(safeFields[VOC_FIELD_NAMES.ticketOpenedAt]),
     closedAt: isoDate(safeFields[VOC_FIELD_NAMES.closedAt]),
     warRoomChatId: text(safeFields[VOC_FIELD_NAMES.warRoomChatId]),
+    userRef: text(safeFields[VOC_FIELD_NAMES.userRef]),
+    deviceRef: text(safeFields[VOC_FIELD_NAMES.deviceRef]),
+    sourceTicketNo: text(safeFields[VOC_FIELD_NAMES.sourceTicketNo]),
+    sourceUrl: text(safeFields[VOC_FIELD_NAMES.sourceUrl]),
+    sourceDetail: text(safeFields[VOC_FIELD_NAMES.sourceDetail]),
+    businessUnit: text(safeFields[VOC_FIELD_NAMES.businessUnit]),
+    categoryLevel1: text(safeFields[VOC_FIELD_NAMES.categoryLevel1]),
   };
 }
 

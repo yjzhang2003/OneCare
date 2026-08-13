@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 
 import type { WorkbenchTicket } from "./data";
 import {
@@ -19,6 +19,13 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
     retryCount: 0,
     hasOwner: true,
     hasWarRoom: false,
+    sourceTicketNo: "CAS-42567239-Q7Q8Q",
+    userRef: "U-3878645B",
+    deviceRef: "D-91C2A70E",
+    sourceUrl: "",
+    sourceDetail: "400投诉",
+    businessUnit: "冰冷事业部",
+    categoryLevel1: "安装调试",
     recordNumber: "R-001",
     feedbackAt: "2026-02-09T00:00:00.000Z",
     channel: "电商评价",
@@ -106,7 +113,6 @@ describe("parseWorkbenchQuery", () => {
     expect(query.page).toBe(2);
   });
 });
-
 describe("dwellHours", () => {
   it("measures from the ticket open time when there is one", () => {
     expect(dwellHours(ticket(), NOW)).toBe(24);
@@ -374,3 +380,5 @@ describe("applyWorkbenchQuery", () => {
     expect(pool[0]?.recordNumber).toBe("A");
   });
 });
+
+

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+﻿import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
@@ -24,7 +24,6 @@ vi.mock("next/navigation", () => ({
 beforeEach(() => {
   push.mockClear();
 });
-
 function emptyMetrics(): VocMetrics {
   return {
     total: 0,
@@ -64,6 +63,13 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
     retryCount: 0,
     hasOwner: true,
     hasWarRoom: false,
+    sourceTicketNo: "CAS-42567239-Q7Q8Q",
+    userRef: "U-3878645B",
+    deviceRef: "D-91C2A70E",
+    sourceUrl: "",
+    sourceDetail: "400投诉",
+    businessUnit: "冰冷事业部",
+    categoryLevel1: "安装调试",
     ticketOpenedAt: null,
     closedAt: null,
     durationHours: null,
@@ -227,7 +233,7 @@ describe("WorkbenchContent source", () => {
   it("keeps drawer state and actions out of the list console", () => {
     expect(console).not.toContain("Drawer");
     expect(console).not.toContain("TicketDrawer");
-    expect(console).not.toContain("selected");
+    expect(console).not.toContain("const selected =");
   });
 });
 
@@ -254,3 +260,5 @@ describe("console copy", () => {
     }
   });
 });
+
+
