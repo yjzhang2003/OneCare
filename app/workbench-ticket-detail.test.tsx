@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { WorkbenchTicket } from "../src/features/workbench/data";
@@ -63,6 +63,34 @@ describe("TicketDetailPageView", () => {
     expect(container.querySelector(".oc-console__sider")).toBeNull();
   });
 
+  it("exposes independently placeable overview, actions, body and key-field regions", () => {
+    const { container } = renderDetail({ state: "待跟进", hasOwner: true });
+    const selectors = [
+      ".oc-ticket-detail__overview",
+      ".oc-ticket-detail__actions",
+      ".oc-ticket-detail__body",
+      ".oc-ticket-detail__key-fields",
+    ] as const;
+
+    for (const selector of selectors) {
+      expect(container.querySelectorAll(selector)).toHaveLength(1);
+    }
+
+    const overview = container.querySelector<HTMLElement>(selectors[0])!;
+    const actions = container.querySelector<HTMLElement>(selectors[1])!;
+    const body = container.querySelector<HTMLElement>(selectors[2])!;
+    const keyFields = container.querySelector<HTMLElement>(selectors[3])!;
+
+    expect(within(overview).getByText(/工单主题/)).toBeInTheDocument();
+    expect(within(actions).getByText("当前处理")).toBeInTheDocument();
+    expect(within(actions).getByRole("button", { name: "开始跟进" })).toBeInTheDocument();
+    for (const heading of ["用户反馈", "AI 分析", "回复话术", "处理信息"]) {
+      expect(within(body).getByText(heading)).toBeInTheDocument();
+    }
+    expect(within(keyFields).getByText("关键字段")).toBeInTheDocument();
+    expect(within(keyFields).getByText("VOC-20260813-001")).toBeInTheDocument();
+  });
+
   it("shows facts but not a group id", () => {
     renderDetail({
       content: "冷藏室温度持续偏高",
@@ -116,6 +144,21 @@ describe("TicketDetailPageView", () => {
   it("offers claiming only with no owner", () => {
     renderDetail({ hasOwner: false, ownerNames: [] });
     expect(screen.getByRole("button", { name: "我来跟进" })).toBeInTheDocument();
+  });
+
+  it("shows absent dwell and overdue values when no start time can be calculated", () => {
+    const { container } = renderDetail({
+      feedbackAt: "not a date",
+      ticketOpenedAt: null,
+    });
+    const status = container.querySelector<HTMLElement>(
+      ".oc-ticket-detail__status-grid",
+    )!;
+
+    expect(within(status).getByText("停留时长").nextElementSibling).toHaveTextContent("—");
+    expect(within(status).getByText("超时标记").nextElementSibling).toHaveTextContent("—");
+    expect(within(status).queryByText("未超时")).not.toBeInTheDocument();
+    expect(within(status).queryByText(/已超时/)).not.toBeInTheDocument();
   });
 
   it.each(["已闭环", "无需跟进"] as const)(

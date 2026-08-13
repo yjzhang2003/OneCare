@@ -70,7 +70,8 @@ export function pageHref(query: WorkbenchQuery, page: number): string {
   return toHref({ ...baseParams(query), page: page > 1 ? String(page) : null });
 }
 
-// search term, the sort or which page they were browsing — it is orthogonal
+// Rebuild the allowlisted list view so returning from a detail page preserves
+// its queue, filters, search, sort and page.
 export function listHref(query: WorkbenchQuery): string {
   return toHref(baseParams(query));
 }

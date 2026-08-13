@@ -5739,6 +5739,19 @@ a {
   gap: 16px;
 }
 
+.oc-ticket-detail__body,
+.oc-ticket-detail__actions,
+.oc-ticket-detail__overview,
+.oc-ticket-detail__key-fields {
+  min-width: 0;
+}
+
+.oc-ticket-detail__body,
+.oc-ticket-detail__actions {
+  display: grid;
+  gap: 16px;
+}
+
 .oc-ticket-detail__section {
   scroll-margin-top: 76px;
   overflow-wrap: anywhere;
@@ -5871,15 +5884,41 @@ a {
 
   .oc-ticket-detail__grid {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "nav"
+      "overview"
+      "actions"
+      "body"
+      "key-fields";
+  }
+
+  .oc-ticket-detail__main,
+  .oc-ticket-detail__aside {
+    display: contents;
+  }
+
+  .oc-ticket-detail__nav {
+    grid-area: nav;
+  }
+
+  .oc-ticket-detail__overview {
+    grid-area: overview;
+  }
+
+  .oc-ticket-detail__actions {
+    grid-area: actions;
+  }
+
+  .oc-ticket-detail__body {
+    grid-area: body;
+  }
+
+  .oc-ticket-detail__key-fields {
+    grid-area: key-fields;
   }
 
   .oc-ticket-detail__aside {
     position: static;
-    grid-row: 2;
-  }
-
-  .oc-ticket-detail__main {
-    grid-row: 3;
   }
 
   .oc-ticket-detail .arco-descriptions-body {

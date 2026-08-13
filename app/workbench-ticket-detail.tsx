@@ -173,7 +173,10 @@ export function TicketDetailPageView({
           </nav>
 
           <main className="oc-ticket-detail__main">
-            <section id="overview" className="oc-ticket-detail__section">
+            <section
+              id="overview"
+              className="oc-ticket-detail__section oc-ticket-detail__overview"
+            >
               <Card bordered={false}>
                 <Space direction="vertical" size="medium" style={{ width: "100%" }}>
                   <Space wrap>
@@ -196,118 +199,151 @@ export function TicketDetailPageView({
               </Card>
             </section>
 
-            <section id="feedback" className="oc-ticket-detail__section">
-              <Card title="用户反馈">
-                <Typography.Paragraph className="oc-ticket-detail__prose">
-                  {ticket.content || ABSENT}
-                </Typography.Paragraph>
-                <Descriptions
-                  column={2}
-                  size="small"
-                  data={[
-                    { label: "反馈时间", value: formatShanghaiTime(ticket.feedbackAt) ?? ABSENT },
-                    { label: "机型", value: ticket.model || ABSENT },
-                  ]}
-                />
-              </Card>
-            </section>
+            <div className="oc-ticket-detail__body">
+              <section id="feedback" className="oc-ticket-detail__section">
+                <Card title="用户反馈">
+                  <Typography.Paragraph className="oc-ticket-detail__prose">
+                    {ticket.content || ABSENT}
+                  </Typography.Paragraph>
+                  <Descriptions
+                    column={2}
+                    size="small"
+                    data={[
+                      {
+                        label: "反馈时间",
+                        value: formatShanghaiTime(ticket.feedbackAt) ?? ABSENT,
+                      },
+                      { label: "机型", value: ticket.model || ABSENT },
+                    ]}
+                  />
+                </Card>
+              </section>
 
-            <section id="analysis" className="oc-ticket-detail__section">
-              <Card title="AI 分析">
-                <Typography.Text type="secondary">AI 摘要</Typography.Text>
-                <Typography.Paragraph className="oc-ticket-detail__prose">
-                  {ticket.summary || ABSENT}
-                </Typography.Paragraph>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  data={[
-                    { label: "情绪极性", value: ticket.polarity ?? ABSENT },
-                    {
-                      label: "问题维度",
-                      value: ticket.dimensions.length === 0 ? ABSENT : ticket.dimensions.join("、"),
-                    },
-                    { label: "严重度", value: ticket.severity ?? ABSENT },
-                  ]}
-                />
-              </Card>
-            </section>
+              <section id="analysis" className="oc-ticket-detail__section">
+                <Card title="AI 分析">
+                  <Typography.Text type="secondary">AI 摘要</Typography.Text>
+                  <Typography.Paragraph className="oc-ticket-detail__prose">
+                    {ticket.summary || ABSENT}
+                  </Typography.Paragraph>
+                  <Descriptions
+                    column={3}
+                    size="small"
+                    data={[
+                      { label: "情绪极性", value: ticket.polarity ?? ABSENT },
+                      {
+                        label: "问题维度",
+                        value:
+                          ticket.dimensions.length === 0
+                            ? ABSENT
+                            : ticket.dimensions.join("、"),
+                      },
+                      { label: "严重度", value: ticket.severity ?? ABSENT },
+                    ]}
+                  />
+                </Card>
+              </section>
 
-            <section id="replies" className="oc-ticket-detail__section">
-              <Card title="回复话术">
-                <Typography.Text type="secondary">AI 回复话术</Typography.Text>
-                {ticket.replies.length === 0 ? (
-                  <Typography.Paragraph>{ABSENT}</Typography.Paragraph>
-                ) : (
-                  <div className="oc-ticket-detail__replies">
-                    {ticket.replies.map((reply, index) => (
-                      <div className="oc-ticket-detail__reply" key={`${reply.tone}-${index}`}>
-                        <Tag color="arcoblue">{reply.tone}</Tag>
-                        <Typography.Paragraph>{reply.text}</Typography.Paragraph>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-            </section>
+              <section id="replies" className="oc-ticket-detail__section">
+                <Card title="回复话术">
+                  <Typography.Text type="secondary">AI 回复话术</Typography.Text>
+                  {ticket.replies.length === 0 ? (
+                    <Typography.Paragraph>{ABSENT}</Typography.Paragraph>
+                  ) : (
+                    <div className="oc-ticket-detail__replies">
+                      {ticket.replies.map((reply, index) => (
+                        <div className="oc-ticket-detail__reply" key={`${reply.tone}-${index}`}>
+                          <Tag color="arcoblue">{reply.tone}</Tag>
+                          <Typography.Paragraph>{reply.text}</Typography.Paragraph>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              </section>
 
-            <section id="handling" className="oc-ticket-detail__section">
-              <Card title="处理信息">
-                <Descriptions
-                  column={2}
-                  size="small"
-                  data={[
-                    { label: "建单时间", value: formatShanghaiTime(ticket.ticketOpenedAt) ?? ABSENT },
-                    { label: "闭环时间", value: formatShanghaiTime(ticket.closedAt) ?? ABSENT },
-                    {
-                      label: "闭环时长",
-                      value:
-                        ticket.durationHours === null
-                          ? ABSENT
-                          : `${formatHours(ticket.durationHours)} 小时`,
-                    },
-                    { label: "协同群", value: ticket.hasWarRoom ? "已建立" : "未建立" },
-                  ]}
-                />
-              </Card>
-            </section>
+              <section id="handling" className="oc-ticket-detail__section">
+                <Card title="处理信息">
+                  <Descriptions
+                    column={2}
+                    size="small"
+                    data={[
+                      {
+                        label: "建单时间",
+                        value: formatShanghaiTime(ticket.ticketOpenedAt) ?? ABSENT,
+                      },
+                      {
+                        label: "闭环时间",
+                        value: formatShanghaiTime(ticket.closedAt) ?? ABSENT,
+                      },
+                      {
+                        label: "闭环时长",
+                        value:
+                          ticket.durationHours === null
+                            ? ABSENT
+                            : `${formatHours(ticket.durationHours)} 小时`,
+                      },
+                      { label: "协同群", value: ticket.hasWarRoom ? "已建立" : "未建立" },
+                    ]}
+                  />
+                </Card>
+              </section>
+            </div>
           </main>
 
           <aside className="oc-ticket-detail__aside">
-            <Card size="small" title="当前处理">
-              <div className="oc-ticket-detail__status-grid">
-                <span>流程状态</span>
-                <Tag color={STATE_COLOR[ticket.state]}>{ticket.state}</Tag>
-                <span>负责人</span>
-                <strong>{owner}</strong>
-                <span>严重度</span>
-                <Tag color={ticket.severity ? SEVERITY_COLOR[ticket.severity] : "gray"}>
-                  {ticket.severity ?? ABSENT}
-                </Tag>
-                <span>停留时长</span>
-                <strong>{dwell === null ? ABSENT : `${formatHours(dwell)} 小时`}</strong>
-                <span>超时标记</span>
-                <strong>{overdue ? "已超时（按假设 SLA 72 小时）" : "未超时"}</strong>
-              </div>
-            </Card>
+            <div className="oc-ticket-detail__actions">
+              <Card size="small" title="当前处理">
+                <div className="oc-ticket-detail__status-grid">
+                  <span>流程状态</span>
+                  <Tag color={STATE_COLOR[ticket.state]}>{ticket.state}</Tag>
+                  <span>负责人</span>
+                  <strong>{owner}</strong>
+                  <span>严重度</span>
+                  <Tag color={ticket.severity ? SEVERITY_COLOR[ticket.severity] : "gray"}>
+                    {ticket.severity ?? ABSENT}
+                  </Tag>
+                  <span>停留时长</span>
+                  <strong>{dwell === null ? ABSENT : `${formatHours(dwell)} 小时`}</strong>
+                  <span>超时标记</span>
+                  <strong>
+                    {dwell === null
+                      ? ABSENT
+                      : overdue
+                        ? "已超时（按假设 SLA 72 小时）"
+                        : "未超时"}
+                  </strong>
+                </div>
+              </Card>
 
-            <ActionPanel ticket={ticket} />
+              <ActionPanel ticket={ticket} />
+            </div>
 
-            <Card size="small" title="关键字段">
-              <Descriptions
-                column={1}
-                size="small"
-                data={[
-                  { label: "记录编号", value: ticket.recordNumber },
-                  { label: "渠道", value: ticket.channel || ABSENT },
-                  { label: "品类", value: ticket.category || ABSENT },
-                  { label: "机型", value: ticket.model || ABSENT },
-                  { label: "反馈时间", value: formatShanghaiTime(ticket.feedbackAt) ?? ABSENT },
-                  { label: "建单时间", value: formatShanghaiTime(ticket.ticketOpenedAt) ?? ABSENT },
-                  { label: "闭环时间", value: formatShanghaiTime(ticket.closedAt) ?? ABSENT },
-                ]}
-              />
-            </Card>
+            <div className="oc-ticket-detail__key-fields">
+              <Card size="small" title="关键字段">
+                <Descriptions
+                  column={1}
+                  size="small"
+                  data={[
+                    { label: "记录编号", value: ticket.recordNumber },
+                    { label: "渠道", value: ticket.channel || ABSENT },
+                    { label: "品类", value: ticket.category || ABSENT },
+                    { label: "机型", value: ticket.model || ABSENT },
+                    {
+                      label: "反馈时间",
+                      value: formatShanghaiTime(ticket.feedbackAt) ?? ABSENT,
+                    },
+                    {
+                      label: "建单时间",
+                      value: formatShanghaiTime(ticket.ticketOpenedAt) ?? ABSENT,
+                    },
+                    {
+                      label: "闭环时间",
+                      value: formatShanghaiTime(ticket.closedAt) ?? ABSENT,
+                    },
+                  ]}
+                />
+              </Card>
+            </div>
           </aside>
         </div>
       </Layout.Content>

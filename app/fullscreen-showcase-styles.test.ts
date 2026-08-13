@@ -9,7 +9,28 @@ describe("fullscreen showcase stylesheet", () => {
   it("lays out ticket detail across desktop, tablet and mobile", () => {
     expect(css).toMatch(/\.oc-ticket-detail__grid\s*\{[^}]*grid-template-columns:\s*180px\s+minmax\(0,\s*1fr\)\s+320px/);
     expect(css).toMatch(/@media\s*\(max-width:\s*1100px\)[\s\S]*?\.oc-ticket-detail__grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+300px/);
-    expect(css).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.oc-ticket-detail__grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+    const mobileTicketStart = css.lastIndexOf("@media (max-width: 760px)");
+    expect(mobileTicketStart).toBeGreaterThan(-1);
+    const mobileTicketStyles = css.slice(mobileTicketStart);
+
+    expect(mobileTicketStyles).toMatch(/\.oc-ticket-detail__grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+    expect(mobileTicketStyles).toMatch(
+      /grid-template-areas:\s*"nav"\s*"overview"\s*"actions"\s*"body"\s*"key-fields"/,
+    );
+    expect(mobileTicketStyles).toMatch(
+      /\.oc-ticket-detail__main,\s*\.oc-ticket-detail__aside\s*\{[^}]*display:\s*contents/,
+    );
+    for (const [className, area] of [
+      ["nav", "nav"],
+      ["overview", "overview"],
+      ["actions", "actions"],
+      ["body", "body"],
+      ["key-fields", "key-fields"],
+    ] as const) {
+      expect(mobileTicketStyles).toMatch(
+        new RegExp(`\\.oc-ticket-detail__${className}\\s*\\{[^}]*grid-area:\\s*${area}`),
+      );
+    }
   });
 
   it("defines an isolated viewport and all three horizontal page states", () => {

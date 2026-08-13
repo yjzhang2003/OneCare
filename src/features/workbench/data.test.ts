@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildWorkbench, toWorkbenchTicket } from "./data";
 import type { VocRecord } from "../bitable/field-map";
+import { DECLINED_MARKER } from "../warroom/naming";
 
 function record(over: Partial<VocRecord> = {}): VocRecord {
   return {
@@ -103,12 +104,27 @@ describe("toWorkbenchTicket", () => {
     );
   });
 
-  it("exposes only whether a war room exists", () => {
-    const ticket = toWorkbenchTicket(record({ warRoomChatId: "oc_secret" }));
+  it.each([
+    { label: "a real group id", warRoomChatId: "oc_group", expected: true },
+    { label: "the declined marker", warRoomChatId: DECLINED_MARKER, expected: false },
+    { label: "an empty decision", warRoomChatId: "", expected: false },
+  ] as const)("projects $label to hasWarRoom=$expected", ({ warRoomChatId, expected }) => {
+    expect(toWorkbenchTicket(record({ warRoomChatId })).hasWarRoom).toBe(expected);
+  });
 
-    expect(ticket.hasWarRoom).toBe(true);
-    expect(ticket).not.toHaveProperty("warRoomChatId");
-    expect(JSON.stringify(ticket)).not.toContain("oc_secret");
+  it("never serializes the real group id or the declined marker field", () => {
+    const tickets = [
+      toWorkbenchTicket(record({ warRoomChatId: "oc_group" })),
+      toWorkbenchTicket(record({ warRoomChatId: DECLINED_MARKER })),
+    ];
+    const serialized = JSON.stringify(tickets);
+
+    for (const ticket of tickets) {
+      expect(ticket).not.toHaveProperty("warRoomChatId");
+    }
+    expect(serialized).not.toContain("warRoomChatId");
+    expect(serialized).not.toContain("oc_group");
+    expect(serialized).not.toContain(DECLINED_MARKER);
   });
 });
 

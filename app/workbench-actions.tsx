@@ -18,12 +18,10 @@ import {
   type WorkbenchAction,
 } from "../src/features/workbench/write-actions";
 
-// The only client component in this app. Everything else — queues, filters,
-// search, sorting, pagination, the detail panel — is server-rendered and driven
-// by URL parameters, which is why a shared link reproduces a colleague's exact
-// view. This island exists because the three things it does (collect a note
-// before submitting, report an outcome, refresh the page underneath) cannot be
-// expressed as navigation.
+// A focused client action component reused by the full client-side ticket
+// detail presentation. URL parsing, filtering, sorting and paging remain
+// server-derived. This component only collects a note, reports the outcome and
+// refreshes the page after a write.
 export type WorkbenchActionsProps = Readonly<{
   recordId: string;
   // The state the server rendered. Sent back with every request so the handler

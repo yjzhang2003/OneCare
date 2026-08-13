@@ -7,6 +7,7 @@ import {
 } from "../voc/metrics";
 import type { VocDimension, VocPolarity, VocSeverity } from "../voc/triage";
 import type { VocState } from "../voc/service-event";
+import { warRoomDecision } from "../warroom/naming";
 
 // Still deliberately omits ownerOpenIds: an open_id names a person, the row
 // objects are serialized into the page payload, and nothing an operator reads
@@ -91,7 +92,7 @@ export function toWorkbenchTicket(record: VocRecord): WorkbenchTicket {
     ownerNames: record.ownerNames,
     retryCount: record.retryCount,
     hasOwner: record.ownerOpenIds.length > 0,
-    hasWarRoom: record.warRoomChatId.trim().length > 0,
+    hasWarRoom: warRoomDecision(record.warRoomChatId) === "exists",
     ticketOpenedAt: record.ticketOpenedAt,
     closedAt: record.closedAt,
     durationHours: hours(record.ticketOpenedAt, record.closedAt),
