@@ -24,6 +24,7 @@ import {
   Table,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
 } from "@arco-design/web-react";
 import {
@@ -237,7 +238,11 @@ export function WorkbenchConsole({
         ),
     },
     {
-      title: "停留时长",
+      title: (
+        <Tooltip content={`超时判据为假设 SLA ${ASSUMED_SLA_HOURS} 小时，非合同约定值`}>
+          <span>停留时长</span>
+        </Tooltip>
+      ),
       dataIndex: "dwell",
       width: 122,
       render: (_: unknown, row: WorkbenchTicket) => {
@@ -252,22 +257,6 @@ export function WorkbenchConsole({
               </Tag>
             )}
           </Space>
-        );
-      },
-    },
-    {
-      title: "下一步",
-      dataIndex: "next",
-      width: 128,
-      fixed: "right" as const,
-      render: (_: unknown, row: WorkbenchTicket) => {
-        // Claiming outranks any transition: nobody may perform a transition on a
-        // ticket with no owner, so offering one would be offering a refusal.
-        const label = !row.hasOwner ? "我来跟进" : availableActions(row)[0];
-        return label ? (
-          <Link href={ticketHref(query, row.recordNumber)}>{label} →</Link>
-        ) : (
-          <span style={{ color: "var(--color-text-3)" }}>{ABSENT}</span>
         );
       },
     },
@@ -356,7 +345,6 @@ export function WorkbenchConsole({
           >
             <Typography.Paragraph style={{ marginTop: 0 }} type="secondary">
               {QUEUES.find((q) => q.key === query.queue)?.hint}
-              　超时判据是**假设 SLA {ASSUMED_SLA_HOURS} 小时**，不是海信给的合同值。
             </Typography.Paragraph>
 
             {metrics === null && (
@@ -368,7 +356,7 @@ export function WorkbenchConsole({
               <Alert
                 type="warning"
                 style={{ marginBottom: 12 }}
-                content="读取多维表格失败，指标与工单列表都可能不完整。这里不渲染任何数字，以免把读取失败显示成 0。"
+                content="读取多维表格失败，当前页面的数字和列表都不完整，请稍后重试。"
               />
             )}
 
@@ -410,7 +398,16 @@ export function WorkbenchConsole({
                   columns={columns}
                   data={[...view.rows]}
                   pagination={false}
-                  scroll={{ x: 1400 }}
+                  scroll={{ x: 1200 }}
+                  // The whole row opens the drawer. A dedicated action column read
+                  // as bolted on, and every console this one is modelled on makes
+                  // the row itself the target — the record number stays a real
+                  // link so the row is still keyboard-reachable and its URL still
+                  // copyable.
+                  onRow={(row) => ({
+                    onClick: () => go(ticketHref(query, row.recordNumber)),
+                    style: { cursor: "pointer" },
+                  })}
                   border={{ wrapper: true, cell: true }}
                   size="small"
                   loading={pending}
@@ -433,7 +430,7 @@ export function WorkbenchConsole({
                   <MetricsPane metrics={metrics} />
                 ) : (
                   <Typography.Paragraph>
-                    指标暂不可用——读取多维表格失败，这里不渲染任何数字，以免把读取失败显示成“0”。
+                    指标暂不可用，读取多维表格失败，请稍后重试。
                   </Typography.Paragraph>
                 )}
               </Tabs.TabPane>
@@ -529,8 +526,7 @@ function MetricsPane({ metrics }: Readonly<{ metrics: VocMetrics }>) {
         <Typography.Text type="secondary">
           折算节省工时 {hours(metrics.effort.savedHours)} 小时 ={" "}
           {metrics.effort.taggedRecords} 条已打标 ×{" "}
-          {metrics.effort.manualMinutesPerRecord} 分钟/条。
-          **这个单条分钟数是假设值，没有海信的实测工时做基线**，所以不换算成年化金额。
+          {metrics.effort.manualMinutesPerRecord} 分钟/条。单条分钟数为假设基线，未经实测，因此不换算为金额。
         </Typography.Text>
       )}
     </Space>

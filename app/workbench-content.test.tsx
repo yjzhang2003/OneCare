@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { VocMetrics } from "../src/features/voc/metrics";
 import type { WorkbenchData, WorkbenchTicket } from "../src/features/workbench/data";
@@ -13,12 +13,17 @@ import { WorkbenchContent } from "./workbench-content";
 // and what each control points at, never about navigation actually happening —
 // href.test.ts owns the URLs those controls carry.
 const push = vi.fn();
+
 vi.mock("next/navigation", () => ({
   // prefetch is part of the surface the console uses: it warms all five queue
   // routes on mount. A mock missing it fails every test in this file with
   // "router.prefetch is not a function".
   useRouter: () => ({ push, refresh: () => {}, prefetch: () => {} }),
 }));
+
+beforeEach(() => {
+  push.mockClear();
+});
 
 function emptyMetrics(): VocMetrics {
   return {
@@ -112,35 +117,36 @@ describe("WorkbenchConsole", () => {
     expect(screen.getByText("报修后等了三天没人上门")).toBeInTheDocument();
   });
 
-  // The column that makes the write actions discoverable. Without it they sit
-  // behind a click nothing invited, and the first screen reads as a report.
-  it("names each row's next step and links it to the drawer", () => {
+  // The row is the affordance now. A dedicated action column read as bolted on,
+  // so what has to keep working is that clicking anywhere on a row opens it, and
+  // that the record number is still a real link — otherwise the row is
+  // unreachable by keyboard and its URL is not copyable.
+  it("makes the record number a link to that ticket", () => {
     renderWorkbench({
-      tickets: [ticket({ state: "待跟进", hasOwner: true })],
+      tickets: [ticket({ state: "待跟进" })],
       searchParams: { queue: "all" },
     });
 
-    const link = screen.getByRole("link", { name: /开始跟进/ });
+    const link = screen.getByRole("link", { name: "R-001" });
     expect(link).toHaveAttribute("href", expect.stringContaining("ticket=R-001"));
   });
 
-  it("offers claiming as the next step on an unassigned ticket", () => {
+  it("opens the ticket when the row itself is clicked", () => {
     renderWorkbench({
-      tickets: [ticket({ state: "待跟进", hasOwner: false, ownerNames: [] })],
+      tickets: [ticket({ state: "待跟进" })],
       searchParams: { queue: "all" },
     });
 
-    // Nobody may perform 开始跟进 on a ticket with no owner, so offering it would
-    // be offering a refusal.
-    expect(screen.getByRole("link", { name: /我来跟进/ })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: /开始跟进/ }),
-    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "R-001" }).closest("tr")!);
+
+    expect(push).toHaveBeenCalledWith(expect.stringContaining("ticket=R-001"));
   });
 
-  it("shows no next step for a terminal ticket", () => {
+  // Nothing on the table may name an action any more, so the operator is never
+  // shown a control whose only outcome would be a refusal.
+  it("names no action in the table itself", () => {
     renderWorkbench({
-      tickets: [ticket({ state: "已闭环" })],
+      tickets: [ticket({ state: "待跟进", hasOwner: false, ownerNames: [] })],
       searchParams: { queue: "all" },
     });
 
@@ -256,5 +262,29 @@ describe("WorkbenchContent source", () => {
     const firstComponent = console.indexOf('from "@arco-design/web-react"');
     expect(adapter).toBeGreaterThan(-1);
     expect(adapter).toBeLessThan(firstComponent);
+  });
+});
+
+// Arco renders no markdown, so a literal ** in a string shows up on screen as
+// asterisks — which it did, in two places, until a screenshot caught it. This
+// also catches the broader habit those strings came from: explaining the
+// implementation's reasoning to whoever is using the product.
+describe("console copy", () => {
+  const source = readFileSync(
+    resolve(process.cwd(), "app/workbench-console.tsx"),
+    "utf8",
+  );
+  const rendered = source
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("//") && !line.trim().startsWith("*"));
+
+  it("never emits literal markdown emphasis", () => {
+    expect(rendered.filter((line) => line.includes("**"))).toEqual([]);
+  });
+
+  it("does not explain its own implementation to the operator", () => {
+    for (const leak of ["不渲染", "以免把", "免把读取"]) {
+      expect(rendered.filter((line) => line.includes(leak))).toEqual([]);
+    }
   });
 });
