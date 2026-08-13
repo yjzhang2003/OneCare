@@ -23,6 +23,22 @@ afterEach(cleanup);
 // breakpoint. That is the right default here: these tests assert content and
 // behaviour, and a component that silently rendered its narrow variant would
 // hide columns the assertions are looking for.
+// jsdom implements no ResizeObserver either. The console measures its table's
+// available height with one, so without this stub every test that renders the
+// console dies with "ResizeObserver is not defined".
+//
+// A no-op that never fires: jsdom lays nothing out, so every measurement it could
+// report would be zero, and a zero-height table would only make assertions fail
+// for a reason unrelated to what they check. The real behaviour is verified in a
+// browser instead, where there are real boxes to measure.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
+
 if (typeof window !== "undefined" && !window.matchMedia) {
   window.matchMedia = (query: string): MediaQueryList =>
     ({

@@ -36,7 +36,7 @@ import {
 } from "@arco-design/web-react/icon";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import type { AuthUser } from "../src/features/auth/types";
 import type { VocMetrics } from "../src/features/voc/metrics";
@@ -62,6 +62,17 @@ import { availableActions } from "../src/features/workbench/write-actions";
 import { WorkbenchActions } from "./workbench-actions";
 
 const ABSENT = "—";
+
+// The table wrapper's own 1px top and bottom border, which the geometry below
+// cannot see: measured as a constant 2px of residual overflow at 1440×800,
+// 1680×1050, 1100×760 and 1280×900.
+//
+// A constant, deliberately, after a self-correcting version of this went wrong:
+// folding the observed overflow back into the height on every measurement pass is
+// a feedback loop — changing the height retriggers the observer, the overflow is
+// re-added, and the table collapses to its floor. A wrong constant costs at most a
+// two-pixel scrollbar; a wrong feedback loop cost the whole table.
+const TABLE_WRAPPER_BORDERS = 2;
 
 // The Base's 记录编号 is a 36-character UUID, so the full value is unreadable in
 // a table column and useless as a title. The last six characters are the same
@@ -156,6 +167,62 @@ export function WorkbenchConsole({
   // of it.
   const [pending, startTransition] = useTransition();
 
+  // The table body's height is measured rather than computed from a constant.
+  // A constant has to encode how tall the chrome above the table is, and that
+  // changes with the window: the filter row wraps to two lines or three depending
+  // on width. Measuring the wrapper's actual position makes the table fill
+  // whatever is left, so there is exactly one scrollbar — the table's — at any
+  // viewport.
+  const tableWrapRef = useRef<HTMLDivElement | null>(null);
+  const [tableHeight, setTableHeight] = useState<number | null>(null);
+
+
+  useEffect(() => {
+    const wrap = tableWrapRef.current;
+    if (!wrap) return;
+    const content = wrap.closest(".oc-console__content");
+    if (!content) return;
+
+    function measure() {
+      if (!wrap || !content) return;
+      const pager = wrap.querySelector<HTMLElement>(".oc-console__pager");
+      const head = wrap.querySelector<HTMLElement>(".arco-table-header");
+
+      // getBoundingClientRect().bottom sits at the outer edge of the padding, so
+      // using it hands the table the space the padding needs and produces a
+      // second scrollbar of exactly that many pixels. Both paddings are read
+      // rather than assumed, so changing them in CSS cannot silently reintroduce
+      // the overflow.
+      const padBottom =
+        parseFloat(getComputedStyle(content).paddingBottom) || 0;
+      const cardBody = wrap.closest(".arco-card-body");
+      const cardPadBottom = cardBody
+        ? parseFloat(getComputedStyle(cardBody).paddingBottom) || 0
+        : 0;
+
+      const available =
+        content.getBoundingClientRect().top +
+        content.clientHeight -
+        padBottom -
+        cardPadBottom -
+        wrap.getBoundingClientRect().top -
+        (pager?.offsetHeight ?? 0) -
+        (head?.offsetHeight ?? 0);
+      // A floor rather than an unbounded shrink: below this the table stops being
+      // usable and the content area should scroll instead, which is the honest
+      // degradation on a short window.
+      setTableHeight(
+        Math.max(180, Math.floor(available) - TABLE_WRAPPER_BORDERS),
+      );
+    }
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    observer.observe(wrap);
+    return () => observer.disconnect();
+  }, [view.rows.length, query.queue]);
+
   function go(href: string) {
     startTransition(() => router.push(href));
   }
@@ -239,7 +306,9 @@ export function WorkbenchConsole({
     },
     {
       title: (
-        <Tooltip content={`超时判据为假设 SLA ${ASSUMED_SLA_HOURS} 小时，非合同约定值`}>
+        <Tooltip
+          content={`超时判据为假设 SLA ${ASSUMED_SLA_HOURS} 小时，非合同约定值`}
+        >
           <span>停留时长</span>
         </Tooltip>
       ),
@@ -296,6 +365,14 @@ export function WorkbenchConsole({
             ))}
           </Menu.ItemGroup>
         </Menu>
+
+        {/* Pinned to the bottom of the sider by the flex rule on
+            .arco-layout-sider-children: it is navigation, so it belongs in the
+            navigation column, and it is the one destination that leaves the
+            workbench, so it belongs at the far end of it. */}
+        <div className="oc-console__sider-footer">
+          <Link href="/?view=showcase">方案展示厅 →</Link>
+        </div>
       </Layout.Sider>
 
       <Layout className="oc-console__main">
@@ -314,7 +391,10 @@ export function WorkbenchConsole({
             {/* avatarUrl is optional on AuthUser — Feishu does not always return
                 one — so the fallback is the name's first character rather than a
                 broken image. */}
-            <Avatar size={30} style={{ backgroundColor: "rgb(var(--primary-6))" }}>
+            <Avatar
+              size={30}
+              style={{ backgroundColor: "rgb(var(--primary-6))" }}
+            >
               {user.avatarUrl ? (
                 // A plain <img>, not next/image: the avatar host is whatever
                 // Feishu's OAuth user-info returned, so it cannot be declared in
@@ -393,35 +473,42 @@ export function WorkbenchConsole({
                   />
                 </Space>
 
-                <Table
-                  rowKey="recordNumber"
-                  columns={columns}
-                  data={[...view.rows]}
-                  pagination={false}
-                  scroll={{ x: 1200 }}
-                  // The whole row opens the drawer. A dedicated action column read
-                  // as bolted on, and every console this one is modelled on makes
-                  // the row itself the target — the record number stays a real
-                  // link so the row is still keyboard-reachable and its URL still
-                  // copyable.
-                  onRow={(row) => ({
-                    onClick: () => go(ticketHref(query, row.recordNumber)),
-                    style: { cursor: "pointer" },
-                  })}
-                  border={{ wrapper: true, cell: true }}
-                  size="small"
-                  loading={pending}
-                  noDataElement="这个队列现在是空的"
-                />
-
-                <div className="oc-console__pager">
-                  <Pagination
-                    current={view.page}
-                    total={view.matched}
-                    pageSize={PAGE_SIZE}
-                    showTotal={(total) => `共 ${total} 条`}
-                    onChange={(page) => go(pageHref(query, page))}
+                <div ref={tableWrapRef}>
+                  <Table
+                    rowKey="recordNumber"
+                    columns={columns}
+                    data={[...view.rows]}
+                    pagination={false}
+                    // Measured above, so the tbody is what scrolls and the column
+                    // headers stay put while an operator works down 50 rows.
+                    scroll={{
+                      x: 1200,
+                      ...(tableHeight ? { y: tableHeight } : {}),
+                    }}
+                    // The whole row opens the drawer. A dedicated action column read
+                    // as bolted on, and every console this one is modelled on makes
+                    // the row itself the target — the record number stays a real
+                    // link so the row is still keyboard-reachable and its URL still
+                    // copyable.
+                    onRow={(row) => ({
+                      onClick: () => go(ticketHref(query, row.recordNumber)),
+                      style: { cursor: "pointer" },
+                    })}
+                    border={{ wrapper: true, cell: true }}
+                    size="small"
+                    loading={pending}
+                    noDataElement="这个队列现在是空的"
                   />
+
+                  <div className="oc-console__pager">
+                    <Pagination
+                      current={view.page}
+                      total={view.matched}
+                      pageSize={PAGE_SIZE}
+                      showTotal={(total) => `共 ${total} 条`}
+                      onChange={(page) => go(pageHref(query, page))}
+                    />
+                  </div>
                 </div>
               </Tabs.TabPane>
 
@@ -437,25 +524,18 @@ export function WorkbenchConsole({
             </Tabs>
           </Card>
         </Layout.Content>
-
-        {/* Bottom-right, out of the way of the work. It is the one link on this
-            page that leaves the workbench, and a pitch page has no business
-            sharing the top bar with an operator's own identity. */}
-        <Layout.Footer className="oc-console__footer">
-          <Link href="/?view=showcase">方案展示厅 →</Link>
-        </Layout.Footer>
       </Layout>
 
       <Drawer
         width={620}
         visible={selected !== null}
-        title={selected ? `工单详情 · ${shortNumber(selected.recordNumber)}` : ""}
+        title={
+          selected ? `工单详情 · ${shortNumber(selected.recordNumber)}` : ""
+        }
         footer={null}
         onCancel={() => go(ticketHref(query, null))}
       >
-        {selected && (
-          <TicketDrawer ticket={selected} query={query} now={now} />
-        )}
+        {selected && <TicketDrawer ticket={selected} query={query} now={now} />}
       </Drawer>
     </Layout>
   );
@@ -476,16 +556,31 @@ function MetricsPane({ metrics }: Readonly<{ metrics: VocMetrics }>) {
           title="负向占比（中评+差评 / 已打标）"
           value={percent(metrics.negativeShare)}
         />
-        <Statistic title="已建单" value={metrics.ticketsOpened} groupSeparator />
-        <Statistic title="已闭环" value={metrics.ticketsClosed} groupSeparator />
-        <Statistic title="闭环率（已闭环 / 已建单）" value={percent(metrics.closureRate)} />
+        <Statistic
+          title="已建单"
+          value={metrics.ticketsOpened}
+          groupSeparator
+        />
+        <Statistic
+          title="已闭环"
+          value={metrics.ticketsClosed}
+          groupSeparator
+        />
+        <Statistic
+          title="闭环率（已闭环 / 已建单）"
+          value={percent(metrics.closureRate)}
+        />
         <Statistic
           title="平均闭环时长"
           value={`${hours(metrics.averageClosureHours)} 小时`}
         />
         <Statistic
           title="打标成功率（成功 / 成功+失败）"
-          value={attempted === 0 ? ABSENT : percent(metrics.taggingSucceeded / attempted)}
+          value={
+            attempted === 0
+              ? ABSENT
+              : percent(metrics.taggingSucceeded / attempted)
+          }
         />
       </Space>
 
@@ -526,7 +621,8 @@ function MetricsPane({ metrics }: Readonly<{ metrics: VocMetrics }>) {
         <Typography.Text type="secondary">
           折算节省工时 {hours(metrics.effort.savedHours)} 小时 ={" "}
           {metrics.effort.taggedRecords} 条已打标 ×{" "}
-          {metrics.effort.manualMinutesPerRecord} 分钟/条。单条分钟数为假设基线，未经实测，因此不换算为金额。
+          {metrics.effort.manualMinutesPerRecord}{" "}
+          分钟/条。单条分钟数为假设基线，未经实测，因此不换算为金额。
         </Typography.Text>
       )}
     </Space>

@@ -5609,6 +5609,7 @@ a {
 
 .oc-console__sider {
   height: 100vh;
+  flex: 0 0 auto;
   /* Its own scroll, not the page's: five queues fit today, and a sixth must push
      the list rather than the layout. */
   overflow-y: auto;
@@ -5616,7 +5617,27 @@ a {
   border-right: 1px solid var(--color-border-2, #e5e6eb);
 }
 
-/* header / content / footer as a column, so the middle is the only flexible part
+/* Arco's own wrapper inside the Sider. Making it the flex column is what lets the
+   showcase link sit at the bottom regardless of how many queues are above it. */
+.oc-console__sider .arco-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.oc-console__sider .arco-menu {
+  flex: 1 1 auto;
+}
+
+.oc-console__sider-footer {
+  flex: 0 0 auto;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--color-border-2, #e5e6eb);
+  font-size: 13px;
+}
+
+/* header / content as a column, so the middle is the only flexible part
    and therefore the only one that can scroll. */
 .oc-console__main {
   display: flex;
@@ -5662,15 +5683,6 @@ a {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
-}
-
-/* Bottom-right: the only link that leaves the console, kept clear of the work. */
-.oc-console__footer {
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: flex-end;
-  padding: 12px 20px 20px;
-  background: transparent;
 }
 
 /* Pushes the count tag to the right edge of the menu item so the five counts
