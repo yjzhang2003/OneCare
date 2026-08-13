@@ -9,6 +9,7 @@ import type { WorkbenchQuery } from "./query";
 export type QueryPatch = Readonly<
   Partial<
     Record<
+      | "section"
       | "queue"
       | "channel"
       | "category"
@@ -44,6 +45,7 @@ export type StringFilterField =
 
 function baseParams(query: WorkbenchQuery): Record<string, string | null> {
   return {
+    section: query.section === "tickets" ? null : query.section,
     queue: query.queue,
     channel: query.channel,
     category: query.category,

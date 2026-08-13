@@ -22,7 +22,6 @@ import {
   Space,
   Statistic,
   Table,
-  Tabs,
   Tag,
   Tooltip,
   Typography,
@@ -31,7 +30,11 @@ import {
   IconApps,
   IconBug,
   IconClockCircle,
+  IconDashboard,
+  IconDesktop,
+  IconFile,
   IconList,
+  IconUser,
   IconUserAdd,
 } from "@arco-design/web-react/icon";
 import Link from "next/link";
@@ -131,6 +134,15 @@ const STATE_COLOR: Readonly<Record<string, string>> = {
 // One icon per queue, so the sider is scannable by shape before it is read.
 // Keyed by QueueKey rather than by position: a reordered QUEUES array must not
 // silently reassign every icon.
+// The queue's own label stands in for the ticket section, since which queue you are
+// looking at is the more specific fact.
+const SECTION_TITLE: Readonly<Record<string, string | undefined>> = {
+  users: "用户画像",
+  devices: "设备追踪",
+  metrics: "数据概览",
+  tickets: undefined,
+};
+
 const QUEUE_ICON: Readonly<Record<string, React.ReactNode>> = {
   open: <IconList />,
   overdue: <IconClockCircle />,
@@ -361,20 +373,69 @@ export function WorkbenchConsole({
     <Layout className="oc-console">
       <Layout.Sider width={200} className="oc-console__sider">
         <div className="oc-console__brand">万护 OneCare</div>
-        {/* No ItemGroup: there is one group and never will be a second, so its
-            title was a label for nothing — and it made every item indented, which
-            is what pushed the queue names out of line with the wordmark above. */}
-        <Menu selectedKeys={[query.queue]} style={{ width: "100%" }}>
-          {QUEUES.map((queue) => (
-            <Menu.Item
-              key={queue.key}
-              onClick={() => go(filterHref(query, { queue: queue.key }))}
-            >
-              {QUEUE_ICON[queue.key]}
-              <span className="oc-console__queue-label">{queue.label}</span>
-              <Tag size="small">{view.queueCounts[queue.key]}</Tag>
-            </Menu.Item>
-          ))}
+        {/* Three top-level destinations, with the queues nested one level under
+            工单. An earlier version had no group heading at all, on the reasoning
+            that a second group would never exist — which lasted exactly until
+            these two arrived. The indentation that reasoning was really about
+            belongs on level two, which is where it now is. */}
+        <Menu
+          selectedKeys={[
+            query.section === "tickets" ? query.queue : query.section,
+          ]}
+          defaultOpenKeys={["tickets"]}
+          style={{ width: "100%" }}
+        >
+          <Menu.Item
+            key="metrics"
+            onClick={() => go(filterHref(query, { section: "metrics" }))}
+          >
+            <IconDashboard />
+            <span className="oc-console__nav-label">数据概览</span>
+          </Menu.Item>
+
+          <Menu.SubMenu
+            key="tickets"
+            title={
+              <>
+                <IconFile />
+                <span className="oc-console__nav-label">工单</span>
+                <Tag size="small">{view.queueCounts.all}</Tag>
+              </>
+            }
+          >
+            {QUEUES.map((queue) => (
+              <Menu.Item
+                key={queue.key}
+                onClick={() =>
+                  go(
+                    filterHref(query, { section: "tickets", queue: queue.key }),
+                  )
+                }
+              >
+                {QUEUE_ICON[queue.key]}
+                <span className="oc-console__nav-label">{queue.label}</span>
+                <Tag size="small">{view.queueCounts[queue.key]}</Tag>
+              </Menu.Item>
+            ))}
+          </Menu.SubMenu>
+
+          <Menu.Item
+            key="users"
+            onClick={() => go(filterHref(query, { section: "users" }))}
+          >
+            <IconUser />
+            <span className="oc-console__nav-label">用户画像</span>
+            <Tag size="small">{users.length}</Tag>
+          </Menu.Item>
+
+          <Menu.Item
+            key="devices"
+            onClick={() => go(filterHref(query, { section: "devices" }))}
+          >
+            <IconDesktop />
+            <span className="oc-console__nav-label">设备追踪</span>
+            <Tag size="small">{devices.length}</Tag>
+          </Menu.Item>
         </Menu>
 
         {/* Pinned to the bottom of the sider by the flex rule on
@@ -428,15 +489,20 @@ export function WorkbenchConsole({
             title={
               <Space align="center">
                 <Typography.Title heading={5} style={{ margin: 0 }}>
-                  {QUEUES.find((q) => q.key === query.queue)?.label}
+                  {SECTION_TITLE[query.section] ??
+                    QUEUES.find((q) => q.key === query.queue)?.label}
                 </Typography.Title>
-                <Tag color="arcoblue">{view.matched} 条</Tag>
+                {query.section === "tickets" && (
+                  <Tag color="arcoblue">{view.matched} 条</Tag>
+                )}
               </Space>
             }
           >
-            <Typography.Paragraph style={{ marginTop: 0 }} type="secondary">
-              {QUEUES.find((q) => q.key === query.queue)?.hint}
-            </Typography.Paragraph>
+            {query.section === "tickets" && (
+              <Typography.Paragraph style={{ marginTop: 0 }} type="secondary">
+                {QUEUES.find((q) => q.key === query.queue)?.hint}
+              </Typography.Paragraph>
+            )}
 
             {(query.userRef !== null || query.deviceRef !== null) && (
               <Alert
@@ -479,8 +545,8 @@ export function WorkbenchConsole({
               />
             )}
 
-            <Tabs defaultActiveTab="tickets">
-              <Tabs.TabPane key="tickets" title="工单列表">
+            {query.section === "tickets" && (
+              <>
                 <Space wrap style={{ marginBottom: 12 }}>
                   {filterSelect("state", "流程状态")}
                   {filterSelect("severity", "严重度")}
@@ -493,7 +559,7 @@ export function WorkbenchConsole({
                   {filterSelect("level1", "问题分类")}
                   <Input.Search
                     allowClear
-                    placeholder="搜原文 / 编号 / 机型"
+                    placeholder="搜原文 / 编号 / 机型 / 来源单号"
                     value={search}
                     style={{ width: 240 }}
                     onChange={setSearch}
@@ -520,25 +586,18 @@ export function WorkbenchConsole({
                     columns={columns}
                     data={[...view.rows]}
                     pagination={false}
-                    // Measured above, so the tbody is what scrolls and the column
-                    // headers stay put while an operator works down 50 rows.
                     scroll={{
                       x: 1200,
                       ...(tableHeight ? { y: tableHeight } : {}),
                     }}
-                    // The whole row opens the drawer. A dedicated action column read
-                    // as bolted on, and every console this one is modelled on makes
-                    // the row itself the target — the record number stays a real
-                    // link so the row is still keyboard-reachable and its URL still
-                    // copyable.
-                    onRow={(row) => ({
-                      onClick: () => go(ticketHref(query, row.recordNumber)),
-                      style: { cursor: "pointer" },
-                    })}
                     border={{ wrapper: true, cell: true }}
                     size="small"
                     loading={pending}
                     noDataElement="这个队列现在是空的"
+                    onRow={(row) => ({
+                      onClick: () => go(ticketHref(query, row.recordNumber)),
+                      style: { cursor: "pointer" },
+                    })}
                   />
 
                   <div className="oc-console__pager">
@@ -551,41 +610,37 @@ export function WorkbenchConsole({
                     />
                   </div>
                 </div>
-              </Tabs.TabPane>
+              </>
+            )}
 
-              <Tabs.TabPane key="users" title={`用户画像 (${users.length})`}>
-                <ProfilePane
-                  kind="user"
-                  profiles={users}
-                  total={userTotal}
-                  query={query}
-                  go={go}
-                />
-              </Tabs.TabPane>
+            {query.section === "users" && (
+              <ProfilePane
+                kind="user"
+                profiles={users}
+                total={userTotal}
+                query={query}
+                go={go}
+              />
+            )}
 
-              <Tabs.TabPane
-                key="devices"
-                title={`设备追踪 (${devices.length})`}
-              >
-                <ProfilePane
-                  kind="device"
-                  profiles={devices}
-                  total={deviceTotal}
-                  query={query}
-                  go={go}
-                />
-              </Tabs.TabPane>
+            {query.section === "devices" && (
+              <ProfilePane
+                kind="device"
+                profiles={devices}
+                total={deviceTotal}
+                query={query}
+                go={go}
+              />
+            )}
 
-              <Tabs.TabPane key="metrics" title="数据概览">
-                {metrics ? (
-                  <MetricsPane metrics={metrics} />
-                ) : (
-                  <Typography.Paragraph>
-                    指标暂不可用，读取多维表格失败，请稍后重试。
-                  </Typography.Paragraph>
-                )}
-              </Tabs.TabPane>
-            </Tabs>
+            {query.section === "metrics" &&
+              (metrics ? (
+                <MetricsPane metrics={metrics} />
+              ) : (
+                <Typography.Paragraph>
+                  指标暂不可用，读取多维表格失败，请稍后重试。
+                </Typography.Paragraph>
+              ))}
           </Card>
         </Layout.Content>
       </Layout>

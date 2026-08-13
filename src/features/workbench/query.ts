@@ -55,9 +55,17 @@ export const SORTS = [
 
 export type SortKey = (typeof SORTS)[number]["key"];
 
+// The console's top-level navigation. Lives in the URL rather than in component
+// state so a link can point at 设备追踪 — while these were content tabs, any
+// navigation bounced back to the ticket list and no link could address them.
+export const SECTIONS = ["tickets", "users", "devices", "metrics"] as const;
+
+export type SectionKey = (typeof SECTIONS)[number];
+
 export const PAGE_SIZE = 50;
 
 export type WorkbenchQuery = Readonly<{
+  section: SectionKey;
   queue: QueueKey;
   channel: string | null;
   category: string | null;
@@ -107,6 +115,7 @@ export function parseWorkbenchQuery(params: RawParams): WorkbenchQuery {
   const rawPage = Number(first(params.page) ?? "1");
 
   return {
+    section: (oneOf(params.section, SECTIONS) ?? "tickets") as SectionKey,
     queue: (oneOf(params.queue, queueKeys) ?? "open") as QueueKey,
     channel: first(params.channel),
     category: first(params.category),

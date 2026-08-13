@@ -5699,14 +5699,25 @@ a {
   gap: 8px;
 }
 
+/* Submenu headers are a different element than items, so the flex row has to be
+   declared for both or 工单's own count tag would not right-align with the
+   queue counts beneath it. */
+.oc-console__sider .arco-menu .arco-menu-inline-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* Takes the slack, so the label stays left and the count is pushed to the item's
-   right edge — which is what turns five ragged counts into a column. */
-.oc-console__queue-label {
+   right edge — which is what turns ragged counts into a column. */
+.oc-console__nav-label {
   flex: 1 1 auto;
   min-width: 0;
 }
 
 .oc-console__sider .arco-menu .arco-menu-item .arco-icon,
-.oc-console__sider .arco-menu .arco-menu-item .arco-tag {
+.oc-console__sider .arco-menu .arco-menu-item .arco-tag,
+.oc-console__sider .arco-menu .arco-menu-inline-header .arco-icon,
+.oc-console__sider .arco-menu .arco-menu-inline-header .arco-tag {
   flex: 0 0 auto;
 }

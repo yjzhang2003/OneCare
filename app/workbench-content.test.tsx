@@ -295,3 +295,45 @@ describe("console copy", () => {
     }
   });
 });
+
+// The three top-level destinations now live in the sider rather than in content
+// tabs, and which one is showing comes from the URL.
+describe("sections", () => {
+  const rows = [
+    ticket({ recordNumber: "R-1", userRef: "U-A", deviceRef: "D-A" }),
+    ticket({ recordNumber: "R-2", userRef: "U-A", deviceRef: "D-A" }),
+  ];
+
+  it("shows the ticket table by default", () => {
+    renderWorkbench({ tickets: rows, searchParams: { queue: "all" } });
+    expect(screen.getByRole("columnheader", { name: /记录编号/ })).toBeInTheDocument();
+  });
+
+  it("shows the user profile table for section=users", () => {
+    renderWorkbench({ tickets: rows, searchParams: { section: "users" } });
+    expect(screen.getByRole("columnheader", { name: /用户标识/ })).toBeInTheDocument();
+    expect(screen.getByText("U-A")).toBeInTheDocument();
+  });
+
+  it("shows the device table for section=devices", () => {
+    renderWorkbench({ tickets: rows, searchParams: { section: "devices" } });
+    expect(screen.getByRole("columnheader", { name: /设备标识/ })).toBeInTheDocument();
+    expect(screen.getByText("D-A")).toBeInTheDocument();
+  });
+
+  // A list that silently shows the repeat profiles only would read as "these are
+  // all of them".
+  it("states how many profiles it left out", () => {
+    renderWorkbench({
+      tickets: [...rows, ticket({ recordNumber: "R-3", userRef: "U-B" })],
+      searchParams: { section: "users" },
+    });
+    expect(screen.getByText(/仅一条未列出/)).toBeInTheDocument();
+  });
+
+  // The word 画像 must not imply cross-category history this data cannot carry.
+  it("says a user here is closer to a case than a lifetime customer", () => {
+    renderWorkbench({ tickets: rows, searchParams: { section: "users" } });
+    expect(screen.getByText(/更接近工单画像/)).toBeInTheDocument();
+  });
+});
