@@ -10,7 +10,7 @@ The production deployment is available at `https://onecare-loop.vercel.app`. The
 
 The member-only workbench opens each ticket at `/workbench/tickets/[recordNumber]` instead of keeping detail state in a list-page drawer. The list page and detail route share the same `readWorkbenchCached()` cache entry so the two surfaces read one consistent snapshot. The detail route checks the website session before any VOC read; anonymous requests redirect to `/enter` without revealing whether a record number exists.
 
-Detail links carry only the allowlisted `WorkbenchQuery` list fields. The return link is rebuilt as an internal `/` URL after parsing those fields; arbitrary `returnTo` values, unknown keys, invalid enums and the retired `ticket` parameter are ignored. Browser-facing `WorkbenchTicket` data exposes only `hasWarRoom: boolean`; the real Feishu group ID is never included in the ticket view model or client payload.
+Detail links carry only the allowlisted `WorkbenchQuery` list fields. The return link is rebuilt as an internal `/` URL after parsing those fields; arbitrary `returnTo` values, unknown keys, invalid enums and the retired `ticket` parameter are ignored. Browser-facing `WorkbenchTicket` data exposes only `hasWarRoom: boolean`, which is true only when the shared tri-state `warRoomDecision()` reports `"exists"`; both an empty decision and the declined marker project to false. Neither the real Feishu group ID nor the marker is included in the ticket view model or client payload.
 
 ## Implemented Baseline
 

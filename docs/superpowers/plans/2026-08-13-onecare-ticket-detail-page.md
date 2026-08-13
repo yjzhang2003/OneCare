@@ -177,11 +177,22 @@ it("builds a deterministic 60-character title", () => {
 - [x] **Step 2: 写数据边界失败测试**
 
 ```ts
-it("exposes only whether a war room exists", () => {
-  const ticket = toWorkbenchTicket(record({ warRoomChatId: "oc_secret" }));
-  expect(ticket.hasWarRoom).toBe(true);
-  expect(ticket).not.toHaveProperty("warRoomChatId");
-  expect(JSON.stringify(ticket)).not.toContain("oc_secret");
+it.each([
+  ["oc_group", true],
+  [DECLINED_MARKER, false],
+  ["", false],
+])("projects the tri-state decision to a boolean", (warRoomChatId, expected) => {
+  expect(toWorkbenchTicket(record({ warRoomChatId })).hasWarRoom).toBe(expected);
+});
+
+it("never serializes the group id or declined marker", () => {
+  const tickets = [
+    toWorkbenchTicket(record({ warRoomChatId: "oc_group" })),
+    toWorkbenchTicket(record({ warRoomChatId: DECLINED_MARKER })),
+  ];
+  expect(JSON.stringify(tickets)).not.toContain("warRoomChatId");
+  expect(JSON.stringify(tickets)).not.toContain("oc_group");
+  expect(JSON.stringify(tickets)).not.toContain(DECLINED_MARKER);
 });
 ```
 
@@ -212,10 +223,10 @@ export function ticketTitle(
 `WorkbenchTicket` 增加 `hasWarRoom: boolean`；映射为：
 
 ```ts
-hasWarRoom: record.warRoomChatId.trim().length > 0,
+hasWarRoom: warRoomDecision(record.warRoomChatId) === "exists",
 ```
 
-不得加入真实 `warRoomChatId`。
+必须复用 `src/features/warroom/naming.ts` 的三态规则；不得重复判断 `DECLINED_MARKER`，也不得加入真实 `warRoomChatId`。
 
 - [x] **Step 6: 列表改用共享函数**
 
@@ -697,6 +708,14 @@ git diff --check
 - 未执行 push、PR、merge、Production deploy 或环境变量修改。仓库指令没有产生需要持久化修正的新歧义，因此不修改 `AGENTS.md` 或 `docs/HARNESS_REFLECTIONS.md`。
 - Windows 分隔符测试修复与详情页区域配置提交为 `5c1aa4f fix: pin the ticket detail route to Hong Kong`；生产飞书事件路由原本已正确配置，先前文档的缺失诊断已撤回。
 
+### 最终评审修正实际结果（2026-08-13）
+
+- `5214635 fix: correct ticket detail review findings` 修复三项 Important：`hasWarRoom` 复用既有三态判断，拒绝建群不再显示为已建立；移动端把概览、动作、正文和关键字段拆成唯一且可独立布局的区域，并严格按导航 → 概览 → 动作 → 正文 → 关键字段排序；停留时长不可计算时，停留时长和超时标记都显示 `—`。
+- 同一提交清理了 `href.ts` 的残缺注释，并纠正 `WorkbenchActions` 注释中的客户端边界；没有改变列表筛选、分页、动作 API、权限或状态机。
+- 聚焦命令通过 5/5 文件、54/54 测试；`npm test` 通过 68/68 文件、874/874 测试；`npm run test:runtime` 通过 1/1 文件、6/6 测试；`npm run lint`、`npm run typecheck`、`npm run build`、`git diff --check` 均退出 0。
+- 按最终修正简报没有再次运行 audit；Task 6 已记录的 4 个漏洞仍是当前已知基线。没有新增真实认证浏览器或 Preview 证据，也没有执行 push、PR、merge、部署或外部配置变更。
+- 构建与 typegen 覆盖 `next-env.d.ts` 后，已恢复任务开始时的 `.next/dev/types/routes.d.ts` 未暂存差异；`.superpowers/` 仍未暂存。
+
 ---
 
 ## 计划自查
@@ -705,4 +724,4 @@ git diff --check
 
 **占位符扫描：** 无待填内容、模糊错误处理或未定义后续实现；代码步骤均有确切接口、文件、命令和预期结果。
 
-**类型一致性：** Task 1 产出 href 和纯列表类型供 Tasks 4/5 使用；Task 2 产出 `hasWarRoom` 和展示函数供 Task 3 使用，真实群 ID 不进入浏览器；Task 3 产出两个组件供 Task 4 使用；动作始终复用 `WorkbenchActions` 与 `availableActions()`。
+**类型一致性：** Task 1 产出 href 和纯列表类型供 Tasks 4/5 使用；Task 2 产出 `hasWarRoom` 和展示函数供 Task 3 使用，`hasWarRoom` 是既有三态群决策的安全布尔投影，真实群 ID 与拒绝标记都不进入浏览器；Task 3 产出两个组件供 Task 4 使用；动作始终复用 `WorkbenchActions` 与 `availableActions()`。

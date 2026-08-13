@@ -140,7 +140,7 @@
 2. 服务端调用 `readWorkbenchCached()`；
 3. 从 `data.tickets` 按完整 `recordNumber` 精确匹配；
 4. 把单个 `WorkbenchTicket`、当前时间和经校验的列表返回地址传给详情展示组件；
-5. 客户端动作岛继续向既有工单动作接口提交 `recordId` 与 `seenState`；
+5. 详情客户端展示面复用的聚焦动作组件继续向既有工单动作接口提交 `recordId` 与 `seenState`；
 6. 写入成功后沿用现有 `router.refresh()`，重新读取已失效缓存并刷新详情页；
 7. 写入冲突、非负责人、非法状态和其他错误继续由既有动作接口与 `WorkbenchActions` 展示，不在详情页另造一套错误协议。
 
@@ -262,8 +262,8 @@ git diff --check
 ### 14.1 已落地实现
 
 - `src/features/workbench/href.ts` 与 `query.ts` 生成独立详情 URL 和站内返回 URL；只保留受控列表参数，旧 `ticket` 与任意 `returnTo` 均不进入返回地址。
-- `src/features/workbench/presentation.ts` 提供列表和详情共享的编号、时间、时长、颜色与标题展示规则；`src/features/workbench/data.ts` 只向浏览器模型暴露 `hasWarRoom`，不暴露真实群 ID。
-- `app/workbench-ticket-detail.tsx` 与 `app/globals.css` 实现章节导航、主要内容和处理上下文；宽于 1100px 为 `180px + minmax(0, 1fr) + 320px` 三栏，761–1100px 为顶部章节导航加正文/300px 右栏，760px 及以下为单栏且动作进入文档流。
+- `src/features/workbench/presentation.ts` 提供列表和详情共享的编号、时间、时长、颜色与标题展示规则；`src/features/workbench/data.ts` 只向浏览器模型暴露 `hasWarRoom`。该布尔值复用 `warRoomDecision()`：只有 `"exists"` 为 `true`，空值与 `DECLINED_MARKER` 均为 `false`；真实群 ID、拒绝标记及原字段都不会序列化进浏览器模型。
+- `app/workbench-ticket-detail.tsx` 与 `app/globals.css` 实现章节导航、主要内容和处理上下文；宽于 1100px 为 `180px + minmax(0, 1fr) + 320px` 三栏，761–1100px 为顶部章节导航加正文/300px 右栏，760px 及以下通过独立命名区域严格按「返回与章节导航 → 标题/状态概览 → 当前动作 → 主要内容 → 关键字段」排列，不复制字段或动作。停留时长无法计算时，停留时长与超时标记都显示 `—`，只有可计算时才显示「已超时 / 未超时」。
 - `app/workbench/tickets/[recordNumber]/page.tsx` 在会话校验后复用 `readWorkbenchCached()`，按完整记录编号匹配，并区分 unavailable 与 not-found。
 - `vercel.json` 将上述详情页面固定到香港 `hkg1`，与其他直接或间接读取 Bitable 的入口保持一致；`vercel-config.test.ts` 会把 Windows 的反斜杠相对路径规范化为 `/` 后再检查该不变量。
 - `app/workbench-console.tsx` 和 `app/workbench-content.tsx` 已删除 Drawer 与选中工单状态；记录链接和整行导航均进入独立详情页。既有 `POST /api/voc/tickets/[recordId]/action`、负责人本人流转、仅填空认领、`seenState` 尽力冲突检测与无 CAS 限制保持不变。
@@ -282,10 +282,18 @@ git diff --check
 - `npm audit --omit=dev`：在允许 registry 访问后退出 1，报告 4 个漏洞（1 moderate、3 high）：`nanoid`、`next`、`postcss`、`sharp`；未运行 `audit fix`，也未升级依赖。此前 `npm ci` 的 7 个漏洞是当时的安装报告，不替代本次审计结果。
 - `git diff --check`：退出 0。
 
+最终评审修正提交 `5214635` 后的全新验证结果：
+
+- 聚焦命令 `npx vitest run src/features/workbench/data.test.ts app/workbench-ticket-detail.test.tsx app/fullscreen-showcase-styles.test.ts app/workbench-content.test.tsx "app/workbench/tickets/[recordNumber]/page.test.tsx"`：退出 0，5/5 文件、54/54 测试通过；RED 阶段分别确认：数据测试 1 项失败（拒绝标记被误判为已有群）；详情组件测试 2 项失败（四个可独立布局区域缺失、未知停留时间误显示「未超时」）；样式测试 1 项失败（移动命名顺序缺失）。
+- `npm test`：退出 0，68/68 文件、874/874 测试通过。
+- `npm run test:runtime`：退出 0；生产构建成功，随后 1/1 运行时文件、6/6 测试通过。
+- `npm run lint`、`npm run typecheck`、`npm run build`：均退出 0；独立构建清单继续包含 `/workbench/tickets/[recordNumber]`。
+- `git diff --check`：退出 0。按修正简报要求没有重新运行 `npm audit --omit=dev`；Task 6 已记录的 4 个已知漏洞不变，也没有运行自动修复或升级依赖。
+
 构建一度把受保护的 `next-env.d.ts` 恢复为 `.next/types/routes.d.ts`；验证后已精确恢复原有 `.next/dev/types/routes.d.ts` 工作树差异，并保持未暂存。
 
 ### 14.3 浏览器验收与 Preview 限制
 
 本地浏览器在 1440×900、1024×768、390×844 三个视口直接访问详情 URL，均因缺少本地飞书认证配置而落到 `/login?auth_error=configuration_error`。三个视口的匿名页面均无横向溢出，浏览器控制台无 warning/error；这只验证了匿名门禁。没有可用测试会话或真实 VOC 数据，因此三/双/单栏详情视觉、返回列表现场、动作写后刷新、拒绝/冲突/非法状态错误和 missing/unavailable 的真实浏览器呈现未验证，不以单元测试冒充浏览器验收。
 
-当前 checkout 没有 `.vercel/project.json`，即未链接 Vercel 项目。按授权边界未选择或链接项目，也未运行会触发交互式选项的 `vercel deploy --yes`；没有 Preview URL、HTTP 200 或唯一标记验证。未执行 Production 部署、环境变量修改、push、PR 或 merge。验收标准第 10 项因此未满足；第 1、2、3、5、6、7、8 项已有自动化合同证据，但仍缺真实认证浏览器证据，不能据此宣称完成端到端视觉与写路径验收。
+当前 checkout 没有 `.vercel/project.json`，即未链接 Vercel 项目。按授权边界未选择或链接项目，也未运行会触发交互式选项的 `vercel deploy --yes`；没有 Preview URL、HTTP 200 或唯一标记验证。最终评审修正也没有增加浏览器或 Preview 证据。未执行 Production 部署、环境变量修改、push、PR 或 merge。验收标准第 10 项因此未满足；第 1、2、3、5、6、7、8 项已有自动化合同证据，但仍缺真实认证浏览器证据，不能据此宣称完成端到端视觉与写路径验收。
