@@ -256,3 +256,35 @@ git diff --check
 8. 中等与小屏布局不产生横向溢出，操作不遮挡内容；
 9. 旧抽屉和 `?ticket=` 详情状态被移除，列表其他行为不回归；
 10. 计划内自动化验证通过，并提供非 Production Preview 供用户确认视觉效果。
+
+## 14. 实施与验证结果（2026-08-13）
+
+### 14.1 已落地实现
+
+- `src/features/workbench/href.ts` 与 `query.ts` 生成独立详情 URL 和站内返回 URL；只保留受控列表参数，旧 `ticket` 与任意 `returnTo` 均不进入返回地址。
+- `src/features/workbench/presentation.ts` 提供列表和详情共享的编号、时间、时长、颜色与标题展示规则；`src/features/workbench/data.ts` 只向浏览器模型暴露 `hasWarRoom`，不暴露真实群 ID。
+- `app/workbench-ticket-detail.tsx` 与 `app/globals.css` 实现章节导航、主要内容和处理上下文；宽于 1100px 为 `180px + minmax(0, 1fr) + 320px` 三栏，761–1100px 为顶部章节导航加正文/300px 右栏，760px 及以下为单栏且动作进入文档流。
+- `app/workbench/tickets/[recordNumber]/page.tsx` 在会话校验后复用 `readWorkbenchCached()`，按完整记录编号匹配，并区分 unavailable 与 not-found。
+- `app/workbench-console.tsx` 和 `app/workbench-content.tsx` 已删除 Drawer 与选中工单状态；记录链接和整行导航均进入独立详情页。既有 `POST /api/voc/tickets/[recordId]/action`、负责人本人流转、仅填空认领、`seenState` 尽力冲突检测与无 CAS 限制保持不变。
+
+对应本地提交为 `8ab4f55`、`3e1167e`、`44ba151`、`b9af41e`、`2a5c947` 和测试补强 `4696244`。
+
+### 14.2 自动验证
+
+2026-08-13 的 Task 6 全量验证结果：
+
+- `npm test`：退出 1；68 个测试文件中 67 个通过，869 项测试中 868 项通过。唯一失败为 `vercel-config.test.ts`：`app/api/feishu/events/route.ts` 未在 `vercel.json` 中配置 `hkg1`。该配置不属于本文档任务的可修改范围，未越界修复。
+- `npm run test:runtime`：退出 0；先完成生产构建，再通过 1 个运行时测试文件、6 项测试。
+- `npm run lint`：退出 0。
+- `npm run typecheck`：退出 0。
+- `npm run build`：退出 0，并在构建清单中生成 `/workbench/tickets/[recordNumber]`。
+- `npm audit --omit=dev`：在允许 registry 访问后退出 1，报告 4 个漏洞（1 moderate、3 high）：`nanoid`、`next`、`postcss`、`sharp`；未运行 `audit fix`，也未升级依赖。此前 `npm ci` 的 7 个漏洞是当时的安装报告，不替代本次审计结果。
+- `git diff --check`：退出 0。
+
+构建一度把受保护的 `next-env.d.ts` 恢复为 `.next/types/routes.d.ts`；验证后已精确恢复原有 `.next/dev/types/routes.d.ts` 工作树差异，并保持未暂存。
+
+### 14.3 浏览器验收与 Preview 限制
+
+本地浏览器在 1440×900、1024×768、390×844 三个视口直接访问详情 URL，均因缺少本地飞书认证配置而落到 `/login?auth_error=configuration_error`。三个视口的匿名页面均无横向溢出，浏览器控制台无 warning/error；这只验证了匿名门禁。没有可用测试会话或真实 VOC 数据，因此三/双/单栏详情视觉、返回列表现场、动作写后刷新、拒绝/冲突/非法状态错误和 missing/unavailable 的真实浏览器呈现未验证，不以单元测试冒充浏览器验收。
+
+当前 checkout 没有 `.vercel/project.json`，即未链接 Vercel 项目。按授权边界未选择或链接项目，也未运行会触发交互式选项的 `vercel deploy --yes`；没有 Preview URL、HTTP 200 或唯一标记验证。未执行 Production 部署、环境变量修改、push、PR 或 merge。验收标准第 10 项因此未满足，且第 2、5、6、7、8 项仍缺真实认证浏览器证据。

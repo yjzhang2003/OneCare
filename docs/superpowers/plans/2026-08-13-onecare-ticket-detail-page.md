@@ -53,7 +53,7 @@
 - Consumes: `WorkbenchQuery`、`parseWorkbenchQuery()`。
 - Produces: `listHref(query): string`、`ticketDetailHref(query, recordNumber): string`，以及不含 `ticket` / `selected` 的查询类型。
 
-- [ ] **Step 1: 写 URL 失败测试**
+- [x] **Step 1: 写 URL 失败测试**
 
 ```ts
 it("opens a ticket on an independent route and preserves list state", () => {
@@ -76,7 +76,7 @@ it("never emits the retired ticket parameter", () => {
 });
 ```
 
-- [ ] **Step 2: 写查询层失败测试**
+- [x] **Step 2: 写查询层失败测试**
 
 ```ts
 it("ignores the retired ticket parameter", () => {
@@ -94,13 +94,13 @@ it("returns no selected ticket", () => {
 });
 ```
 
-- [ ] **Step 3: 确认 RED**
+- [x] **Step 3: 确认 RED**
 
 Run: `npx vitest run src/features/workbench/href.test.ts src/features/workbench/query.test.ts`
 
 Expected: FAIL，两个 href 函数未导出，查询仍含旧状态。
 
-- [ ] **Step 4: 写 URL 最小实现**
+- [x] **Step 4: 写 URL 最小实现**
 
 `baseParams()` 只保留列表字段；删除 `ticketHref()`，新增：
 
@@ -120,17 +120,17 @@ export function ticketDetailHref(
 }
 ```
 
-- [ ] **Step 5: 删除查询详情状态**
+- [x] **Step 5: 删除查询详情状态**
 
 从 `WorkbenchQuery`、`parseWorkbenchQuery()` 删除 `ticket`；从 `WorkbenchPage`、`applyWorkbenchQuery()` 删除 `selected`。其余过滤、排序、计数和分页代码不变。
 
-- [ ] **Step 6: 确认 GREEN**
+- [x] **Step 6: 确认 GREEN**
 
 Run: `npx vitest run src/features/workbench/href.test.ts src/features/workbench/query.test.ts`
 
 Expected: PASS。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add src/features/workbench/href.ts src/features/workbench/href.test.ts src/features/workbench/query.ts src/features/workbench/query.test.ts
@@ -154,7 +154,7 @@ git commit -m "refactor: separate ticket routes from list state"
 **Interfaces:**
 - Produces: `ABSENT`、`shortRecordNumber()`、`formatShanghaiTime()`、`formatHours()`、`ticketTitle()`、颜色映射、`WorkbenchTicket.hasWarRoom`。
 
-- [ ] **Step 1: 写展示失败测试**
+- [x] **Step 1: 写展示失败测试**
 
 ```ts
 it("formats shared ticket presentation", () => {
@@ -174,7 +174,7 @@ it("builds a deterministic 60-character title", () => {
 });
 ```
 
-- [ ] **Step 2: 写数据边界失败测试**
+- [x] **Step 2: 写数据边界失败测试**
 
 ```ts
 it("exposes only whether a war room exists", () => {
@@ -187,13 +187,13 @@ it("exposes only whether a war room exists", () => {
 
 所有 `WorkbenchTicket` 测试夹具补 `hasWarRoom: false`。
 
-- [ ] **Step 3: 确认 RED**
+- [x] **Step 3: 确认 RED**
 
 Run: `npx vitest run src/features/workbench/presentation.test.ts src/features/workbench/data.test.ts`
 
 Expected: FAIL，模块和字段不存在。
 
-- [ ] **Step 4: 写共享展示实现**
+- [x] **Step 4: 写共享展示实现**
 
 创建 `presentation.ts`，把当前 console 内的 `ABSENT`、短编号、固定 +08:00 时间、时长格式和两套颜色映射原样提取。标题实现：
 
@@ -207,7 +207,7 @@ export function ticketTitle(
 }
 ```
 
-- [ ] **Step 5: 写安全群事实实现**
+- [x] **Step 5: 写安全群事实实现**
 
 `WorkbenchTicket` 增加 `hasWarRoom: boolean`；映射为：
 
@@ -217,17 +217,17 @@ hasWarRoom: record.warRoomChatId.trim().length > 0,
 
 不得加入真实 `warRoomChatId`。
 
-- [ ] **Step 6: 列表改用共享函数**
+- [x] **Step 6: 列表改用共享函数**
 
 删除 console 内重复实现并导入共享函数。只机械替换名称，不改变列表 DOM 或行为。
 
-- [ ] **Step 7: 确认 GREEN**
+- [x] **Step 7: 确认 GREEN**
 
 Run: `npx vitest run src/features/workbench/presentation.test.ts src/features/workbench/data.test.ts app/workbench-content.test.tsx`
 
 Expected: PASS。
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 git add src/features/workbench/presentation.ts src/features/workbench/presentation.test.ts src/features/workbench/data.ts src/features/workbench/data.test.ts app/workbench-console.tsx
@@ -248,7 +248,7 @@ git commit -m "refactor: share ticket presentation rules"
 - Consumes: `AuthUser`、`WorkbenchTicket`、`WorkbenchActions`、`availableActions()`、`dwellHours()` 和 Task 2 展示函数。
 - Produces: `TicketDetailPageView`、`TicketDetailState` 和 `.oc-ticket-detail*` CSS。
 
-- [ ] **Step 1: 写信息架构失败测试**
+- [x] **Step 1: 写信息架构失败测试**
 
 ```tsx
 it("renders the five anchored sections without the queue sider", () => {
@@ -276,7 +276,7 @@ it("shows facts but not a group id", () => {
 });
 ```
 
-- [ ] **Step 2: 写动作和错误状态失败测试**
+- [x] **Step 2: 写动作和错误状态失败测试**
 
 ```tsx
 it("reuses current action rules", () => {
@@ -309,7 +309,7 @@ it("distinguishes missing from unavailable", () => {
 });
 ```
 
-- [ ] **Step 3: 写 CSS 失败合同**
+- [x] **Step 3: 写 CSS 失败合同**
 
 ```ts
 expect(styles).toMatch(/\.oc-ticket-detail__grid\s*\{[^}]*grid-template-columns:\s*180px\s+minmax\(0,\s*1fr\)\s+320px/s);
@@ -317,13 +317,13 @@ expect(styles).toMatch(/@media\s*\(max-width:\s*1100px\)[\s\S]*?\.oc-ticket-deta
 expect(styles).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.oc-ticket-detail__grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);
 ```
 
-- [ ] **Step 4: 确认 RED**
+- [x] **Step 4: 确认 RED**
 
 Run: `npx vitest run app/workbench-ticket-detail.test.tsx app/fullscreen-showcase-styles.test.ts`
 
 Expected: FAIL，组件与 CSS 不存在。
 
-- [ ] **Step 5: 写详情组件最小实现**
+- [x] **Step 5: 写详情组件最小实现**
 
 文件必须以 React 19 adapter 开始，再导入 Arco CSS。固定章节：
 
@@ -367,7 +367,7 @@ const canClaim = !ticket.hasOwner;
 
 保留原抽屉终态文案和权限提示。AI 区标题必须明确“AI 摘要”“AI 回复话术”。`TicketDetailState` 使用 `user` 渲染相同品牌栏与登录成员信息；unavailable 有重试和返回，not-found 只有记录编号和返回，无动作。
 
-- [ ] **Step 6: 写响应式 CSS**
+- [x] **Step 6: 写响应式 CSS**
 
 ```css
 .oc-ticket-detail__content { width: 100%; max-width: 1600px; margin: 0 auto; padding: 20px 24px 40px; }
@@ -388,13 +388,13 @@ const canClaim = !ticket.hasOwner;
 
 不得引入固定底栏；补充换行规则确保无横向溢出。
 
-- [ ] **Step 7: 确认 GREEN**
+- [x] **Step 7: 确认 GREEN**
 
 Run: `npx vitest run app/workbench-ticket-detail.test.tsx app/fullscreen-showcase-styles.test.ts app/workbench-actions.test.tsx`
 
 Expected: PASS。
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 git add app/workbench-ticket-detail.tsx app/workbench-ticket-detail.test.tsx app/globals.css app/fullscreen-showcase-styles.test.ts
@@ -413,7 +413,7 @@ git commit -m "feat: build the full-page ticket workspace"
 - Consumes: `getCurrentSession()`、`readWorkbenchCached()`、Task 1 href、Task 3 组件。
 - Produces: `/workbench/tickets/[recordNumber]`。
 
-- [ ] **Step 1: 写门禁失败测试**
+- [x] **Step 1: 写门禁失败测试**
 
 mock `getCurrentSession`、`readWorkbenchCached` 和 `next/navigation.redirect`：
 
@@ -428,7 +428,7 @@ it("redirects before reading VOC data", async () => {
 });
 ```
 
-- [ ] **Step 2: 写成功与错误失败测试**
+- [x] **Step 2: 写成功与错误失败测试**
 
 ```tsx
 it("renders a ticket with a validated back link", async () => {
@@ -466,13 +466,13 @@ it("renders not-found only after a successful read", async () => {
 });
 ```
 
-- [ ] **Step 3: 确认 RED**
+- [x] **Step 3: 确认 RED**
 
 Run: `npx vitest run --dir app/workbench/tickets`
 
 Expected: FAIL，路由不存在。
 
-- [ ] **Step 4: 写路由最小实现**
+- [x] **Step 4: 写路由最小实现**
 
 ```tsx
 export default async function TicketDetailPage({ params, searchParams }: Props) {
@@ -501,13 +501,13 @@ export default async function TicketDetailPage({ params, searchParams }: Props) 
 
 Next 已解码动态参数；不得二次 `decodeURIComponent()`。会话确认前不得调用数据源。
 
-- [ ] **Step 5: 确认 GREEN 和认证回归**
+- [x] **Step 5: 确认 GREEN 和认证回归**
 
 Run: `npx vitest run --dir app/workbench/tickets app/page.test.tsx app/enter/route.test.ts app/workbench-ticket-detail.test.tsx`
 
 Expected: PASS。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add "app/workbench/tickets/[recordNumber]/page.tsx" "app/workbench/tickets/[recordNumber]/page.test.tsx"
@@ -527,7 +527,7 @@ git commit -m "feat: add the protected ticket detail route"
 - Consumes: `ticketDetailHref()`。
 - Produces: 无抽屉、无 selected 状态的列表。
 
-- [ ] **Step 1: 改写列表失败测试**
+- [x] **Step 1: 改写列表失败测试**
 
 ```tsx
 it("links the record to the independent detail route", () => {
@@ -563,13 +563,13 @@ expect(console).not.toContain("TicketDrawer");
 expect(console).not.toContain("selected");
 ```
 
-- [ ] **Step 2: 确认 RED**
+- [x] **Step 2: 确认 RED**
 
 Run: `npx vitest run app/workbench-content.test.tsx`
 
 Expected: FAIL，仍使用 Drawer。
 
-- [ ] **Step 3: 写最小迁移**
+- [x] **Step 3: 写最小迁移**
 
 - 从 Arco import 删除 `Drawer`；删除 `selected`、Drawer JSX 和 `TicketDrawer()`。
 - 删除因此闲置的 `Descriptions`、`availableActions`、`WorkbenchActions` import，但保留 `MetricsPane` 所需 import。
@@ -582,19 +582,19 @@ onClick: () => go(ticketDetailHref(query, row.recordNumber))
 
 - 更新注释为 full ticket page；`workbench-content.tsx` 不再声称 URL 管理详情状态。
 
-- [ ] **Step 4: 确认 GREEN**
+- [x] **Step 4: 确认 GREEN**
 
 Run: `npx vitest run app/workbench-content.test.tsx src/features/workbench/href.test.ts src/features/workbench/query.test.ts`
 
 Expected: PASS。
 
-- [ ] **Step 5: 工作台回归**
+- [x] **Step 5: 工作台回归**
 
 Run: `npx vitest run app/workbench-content.test.tsx app/workbench-ticket-detail.test.tsx app/workbench-actions.test.tsx src/features/workbench`
 
 Expected: PASS。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add app/workbench-console.tsx app/workbench-content.tsx app/workbench-content.test.tsx
@@ -616,17 +616,17 @@ git commit -m "refactor: open tickets as full pages"
 - Consumes: Tasks 1–5。
 - Produces: 一致文档、验证证据、非 Production Preview URL。
 
-- [ ] **Step 1: 更新文档**
+- [x] **Step 1: 更新文档**
 
 README 准确写明：“点行进入独立工单详情页；详情页隐藏队列侧栏，以章节导航、主要内容和处理上下文组成三栏，返回时恢复列表现场。”保留动作 API、负责人权限、认领填空和无 CAS 限制。
 
 TECH_STACK 写明：详情路由、共享缓存、安全返回参数、未登录不读 VOC、只暴露 `hasWarRoom` 而非群 ID。
 
-- [ ] **Step 2: 更新规格与计划状态**
+- [x] **Step 2: 更新规格与计划状态**
 
 规格增加实施结果；计划勾选实际完成步骤并记录实际文件、断点、浏览器结果和 Preview。不得把未执行检查写成通过。
 
-- [ ] **Step 3: 全量自动验证**
+- [x] **Step 3: 全量自动验证**
 
 ```bash
 npm test
@@ -640,7 +640,7 @@ git diff --check
 
 Expected: 除 README 已记录的既有 audit 例外外均退出 0；audit 非零则如实报告，不擅自升级依赖。构建若改写 `next-env.d.ts`，只报告，不暂存、不提交、不重置。
 
-- [ ] **Step 4: 浏览器验收**
+- [x] **Step 4: 浏览器验收（认证环境不具备，仅完成匿名门禁）**
 
 - `1440×900`：独立 URL、三栏、无全局队列侧栏、右栏 sticky；
 - `1024×768`：顶部章节导航 + 正文/右栏双栏；
@@ -683,6 +683,18 @@ git diff --check
 当前没有证据需要修改 Harness，因此不改 `AGENTS.md` 或 `docs/HARNESS_REFLECTIONS.md`。只有发现耐久且仓库特定的问题时，才先写 reflection，再报告规则变化。
 
 最终交付报告：文件与提交、每条验证结果、Preview URL/限制、未验证假设、`next-env.d.ts` 状态，以及未执行 push/PR/merge/Production deploy。
+
+### Task 6 实际结果（2026-08-13）
+
+- 文档已更新为独立详情页、隐藏队列侧栏、章节导航/主要内容/处理上下文布局，以及返回恢复列表现场；既有动作 API、负责人本人流转、填空认领和无 CAS 限制未改写。
+- 实际实现文件与断点：`app/workbench-ticket-detail.tsx`、`app/workbench/tickets/[recordNumber]/page.tsx`、`app/workbench-console.tsx`、`src/features/workbench/{href,query,presentation,data}.ts`；CSS 在 `>1100px` 为三栏、`761–1100px` 为顶部导航加双栏、`≤760px` 为单栏。
+- `npm test` 退出 1：67/68 文件、868/869 测试通过；唯一失败是 `vercel-config.test.ts` 报 `app/api/feishu/events/route.ts` 未固定 `hkg1`。这是 Task 6 文档边界之外的现有配置失败，未修改。
+- `npm run test:runtime` 退出 0（1 文件、6 测试）；`npm run lint`、`npm run typecheck`、`npm run build`、`git diff --check` 均退出 0。构建产物包含 `/workbench/tickets/[recordNumber]`。
+- `npm audit --omit=dev` 首次受沙箱 registry/cache 限制退出 1；获准重跑后仍退出 1，实际报告 4 个漏洞（1 moderate、3 high，涉及 `nanoid`、`next`、`postcss`、`sharp`）。未运行 `audit fix` 或升级依赖。此前 `npm ci` 的 7 个漏洞仅作为历史安装结果保留。
+- 浏览器在 1440×900、1024×768、390×844 访问详情 URL 均落到 `/login?auth_error=configuration_error`；三个匿名页面无横向溢出，控制台无 warning/error。因无本地飞书配置、测试会话和真实 VOC 数据，认证详情布局、返回现场、写操作/刷新/错误以及 missing/unavailable 未做真实浏览器验收。
+- Preview 仍阻塞：checkout 没有 `.vercel/project.json`。未擅自链接或选择项目，因此没有执行会进入项目选择的 `vercel deploy --yes`，也没有 Preview URL、HTTP 200 或唯一标记证据。
+- `next-env.d.ts` 被构建覆盖后已恢复为任务开始时的 `.next/dev/types/routes.d.ts` 差异，并保持未暂存。
+- 未执行 push、PR、merge、Production deploy 或环境变量修改。仓库指令没有产生需要持久化修正的新歧义，因此不修改 `AGENTS.md` 或 `docs/HARNESS_REFLECTIONS.md`。
 
 ---
 
