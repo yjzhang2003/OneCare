@@ -1190,9 +1190,13 @@ describe("POST /api/feishu/events — VOC war room actions, wired for real", () 
 
     expect(response.status).toBe(200);
     expect(createChat).not.toHaveBeenCalled();
-    // Declining is decided entirely in the synchronous section — nothing is
-    // ever deferred for it.
-    expect(setup.scheduled).toHaveLength(0);
+    // Declining is still decided entirely in the synchronous section — no chat, no
+    // message, no notification. The one deferred task is the Postgres mirror
+    // refresh: reads come from the mirror, so a decline that only reached the
+    // Bitable would leave the console showing this ticket as still awaiting a
+    // decision. It is deferred rather than awaited because this callback answers to
+    // Feishu's 3s deadline.
+    expect(setup.scheduled).toHaveLength(1);
     expect(client.updateRecord).toHaveBeenCalledTimes(1);
     const [, fields] = client.updateRecord.mock.calls[0];
     expect(fields["协同群 ID"]).toBe("declined");
@@ -1339,8 +1343,12 @@ describe("POST /api/feishu/events — VOC war room actions, wired for real", () 
     // Only the war-room click's background write above touched the record;
     // the rejected state click must not have.
     expect(client.updateRecord).toHaveBeenCalledTimes(1);
-    // And it must not have queued a second background task.
-    expect(setup.scheduled).toHaveLength(1);
+    // Two deferred tasks exist, and neither belongs to the rejected click: the war
+    // room's own background section (queued and then run above) and the Postgres
+    // mirror refresh its write scheduled. What this asserts is that the rejected
+    // state action added nothing — the count is unchanged from immediately after the
+    // background ran.
+    expect(setup.scheduled).toHaveLength(2);
   });
 
   // Complements the closure-loop describe block above: those tests already

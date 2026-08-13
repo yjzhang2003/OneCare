@@ -1,5 +1,7 @@
 import { after } from "next/server";
 
+import { mirrorRecordDeferred } from "../../../../src/features/store/mirror";
+
 import type { VocRecord } from "../../../../src/features/bitable/field-map";
 import {
   createBitableClient,
@@ -496,7 +498,18 @@ export function createResolveAction(
         recordId: input.recordId,
         operatorOpenId: input.operatorOpenId,
         getRecord: (recordId) => bitable().getRecord(recordId),
-        updateRecord: (recordId, fields) => bitable().updateRecord(recordId, fields),
+        updateRecord: async (recordId, fields) => {
+          await bitable().updateRecord(recordId, fields);
+          // Deferred, not awaited: this callback answers to Feishu's 3s deadline and
+          // the war room path already measured 2725ms of it.
+          //
+          // Through `schedule`, not after() directly. after() throws outside a
+          // request scope, so calling it here killed the war room's own background
+          // task in tests — and `schedule` is the deferral primitive this function
+          // already takes, wired to after() in production and to an inspectable
+          // array in tests.
+          mirrorRecordDeferred(bitable(), recordId, schedule);
+        },
         fallbackOpenIds: warRoom.fallbackOpenIds,
         createChat: warRoom.createChat,
         sendToChat: warRoom.sendToChat,

@@ -11,6 +11,7 @@ import { getCurrentSession } from "../../../../../../src/features/auth/current-s
 import type { AuthUser } from "../../../../../../src/features/auth/types";
 import { readBitableEnv, readBotEnv } from "../../../../../../src/lib/env";
 import { VOC_RECORDS_CACHE_TAG } from "../../../../../../src/features/voc/cache-tags";
+import { mirrorRecord } from "../../../../../../src/features/store/mirror";
 import { VOC_STATES, type VocState } from "../../../../../../src/features/voc/service-event";
 import {
   resolveWorkbenchWrite,
@@ -218,8 +219,13 @@ function getBitableClient(): BitableClient {
 export const POST = createTicketActionRoute({
   session: getCurrentSession,
   getRecord: (recordId) => getBitableClient().getRecord(recordId),
-  updateRecord: (recordId, fields) =>
-    getBitableClient().updateRecord(recordId, fields),
+  updateRecord: async (recordId, fields) => {
+    await getBitableClient().updateRecord(recordId, fields);
+    // Awaited: reads come from the mirror, so skipping this would show the operator
+    // their own change as not having happened. Costs one getRecord (~650ms measured)
+    // on a path with no external deadline.
+    await mirrorRecord(getBitableClient(), recordId);
+  },
   // { expire: 0 } — immediate expiration — rather than a named profile, and the
   // difference is the whole feature working or appearing not to. Read from
   // Next's own source, not assumed:

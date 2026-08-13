@@ -1,15 +1,10 @@
 import { cacheLife, cacheTag } from "next/cache";
 
-import {
-  createBitableClient,
-  createTenantTokenProvider,
-  type BitableClient,
-  type TenantTokenProvider,
-} from "../../../../src/features/bitable/client";
 import type { VocRecord } from "../../../../src/features/bitable/field-map";
 import { getCurrentSession } from "../../../../src/features/auth/current-session";
 import type { AuthUser } from "../../../../src/features/auth/types";
 import { VOC_RECORDS_CACHE_TAG } from "../../../../src/features/voc/cache-tags";
+import { readAllRecords } from "../../../../src/features/store/records";
 import {
   aggregateVocMetrics,
   type VocMetricsInput,
@@ -20,7 +15,6 @@ import {
   type BuildWorkbenchOptions,
   type WorkbenchData,
 } from "../../../../src/features/workbench/data";
-import { readBitableEnv, readBotEnv } from "../../../../src/lib/env";
 
 // getVocDashboardMetrics (below) still backs the public, unauthenticated
 // /dashboard/voc page, and that page's only evidence-of-real-data guarantee
@@ -123,27 +117,10 @@ export function createDashboardRoute(dependencies: DashboardRouteDependencies) {
 }
 
 // ---------------------------------------------------------------------------
-// Production wiring. Deferred (closures, not eagerly-evaluated values) so
-// importing this module never touches process.env, matching every other
-// route in this codebase (see app/api/voc/analyze/route.ts).
+// Production wiring. This route no longer builds a Bitable client at all: its
+// reads come from the Postgres mirror, and the lazy token-provider/client pair
+// that used to live here had no remaining caller.
 // ---------------------------------------------------------------------------
-
-let tokenProvider: TenantTokenProvider | null = null;
-function getTokenProvider(): TenantTokenProvider {
-  if (!tokenProvider) {
-    const botEnv = readBotEnv();
-    tokenProvider = createTenantTokenProvider(botEnv.appId, botEnv.appSecret);
-  }
-  return tokenProvider;
-}
-
-let bitableClient: BitableClient | null = null;
-function getBitableClient(): BitableClient {
-  if (!bitableClient) {
-    bitableClient = createBitableClient(readBitableEnv(), getTokenProvider());
-  }
-  return bitableClient;
-}
 
 // The result of the one network call this route makes. A plain boolean
 // discriminant rather than a thrown exception, because — confirmed
@@ -181,7 +158,12 @@ export async function readVocRecordsCached(): Promise<VocRecordsRead> {
   cacheLife("minutes");
   cacheTag(VOC_RECORDS_CACHE_TAG);
   try {
-    const records = await getBitableClient().listRecords();
+    // Postgres, not the Bitable. The same scan cost 8 sequential cross-border
+    // requests, 1.6MB and a measured 8.9 seconds; the mirror answers it in one
+    // query. The Bitable is still the system of record — every write goes there
+    // first and refreshes this mirror immediately afterwards — so this is a read
+    // optimisation, not a change of authority.
+    const records = await readAllRecords();
     return { ok: true, records };
   } catch (error) {
     // Server-side log only. The reason can carry Bitable error codes or
@@ -227,7 +209,7 @@ export const GET = createDashboardRoute(defaultDependencies);
 
 // The cached read backing the gated workbench surface. Composes
 // readVocRecordsCached above rather than issuing its own
-// getBitableClient().listRecords() call: this route and the public
+// readAllRecords() call: this route and the public
 // dashboard page both ultimately read the same Base table, and
 // getVocDashboardMetrics's own comment states the reason plainly — "a judge
 // comparing the rendered page against a direct curl sees identical numbers

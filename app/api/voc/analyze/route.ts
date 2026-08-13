@@ -5,6 +5,7 @@ import {
   type BitableClient,
   type TenantTokenProvider,
 } from "../../../../src/features/bitable/client";
+import { mirrorRecord } from "../../../../src/features/store/mirror";
 import {
   VOC_FIELD_NAMES,
   openIds,
@@ -1001,8 +1002,12 @@ const defaultDependencies: AnalyzeRouteDependencies = {
   listPending: listPendingRecords,
   tag: (records) => getTaggingProvider().tag(records),
   ownerRules: () => listOwnerRules(readBitableEnv(), getTokenProvider()),
-  updateRecord: (recordId, fields) =>
-    getBitableClient().updateRecord(recordId, fields),
+  updateRecord: async (recordId, fields) => {
+    await getBitableClient().updateRecord(recordId, fields);
+    // Awaited: this shard runs under a 300s maxDuration, and a tagged record that
+    // never reaches the mirror is invisible in the console until the next full sync.
+    await mirrorRecord(getBitableClient(), recordId);
+  },
   // readBotEnv() is called here, not hoisted: this module is imported at build
   // time and must never touch process.env on import (the same discipline the
   // rest of this wiring follows). A missing bot credential therefore surfaces
