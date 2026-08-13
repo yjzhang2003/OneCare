@@ -124,13 +124,15 @@ describe("WorkbenchConsole", () => {
   // unreachable by keyboard and its URL is not copyable.
   it("links the record to the independent detail route", () => {
     renderWorkbench({
-      tickets: [ticket({ recordNumber: "R # 001" })],
-      searchParams: { queue: "overdue", severity: "高", page: "2" },
+      tickets: [ticket({ recordNumber: "R # 001", severity: "高" })],
+      searchParams: { queue: "all", severity: "高" },
     });
 
-    expect(screen.getByRole("link", { name: "R # 001" })).toHaveAttribute(
+    const link = screen.getByRole("link", { name: "# 001" });
+    expect(link).toHaveAttribute("title", "R # 001");
+    expect(link).toHaveAttribute(
       "href",
-      "/workbench/tickets/R%20%23%20001?queue=overdue&severity=%E9%AB%98&sort=feedback_desc&page=2",
+      "/workbench/tickets/R%20%23%20001?queue=all&severity=%E9%AB%98&sort=feedback_desc",
     );
   });
 

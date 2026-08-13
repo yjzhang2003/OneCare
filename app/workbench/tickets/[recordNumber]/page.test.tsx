@@ -3,15 +3,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WorkbenchData, WorkbenchTicket } from "../../../../src/features/workbench/data";
 
-const { getCurrentSession, readWorkbenchCached } = vi.hoisted(() => ({
+const { getCurrentSession, readWorkbenchCached, refresh } = vi.hoisted(() => ({
   getCurrentSession: vi.fn(),
   readWorkbenchCached: vi.fn(),
+  refresh: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
   redirect: (href: string) => {
     throw new Error(`NEXT_REDIRECT:${href}`);
   },
+  useRouter: () => ({ refresh }),
 }));
 
 vi.mock("../../../../src/features/auth/current-session", () => ({
@@ -115,7 +117,7 @@ describe("TicketDetailPage", () => {
       }),
     );
 
-    expect(screen.getByRole("link", { name: "返回工单列表" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "← 返回工单列表" })).toHaveAttribute(
       "href",
       "/?queue=overdue&severity=%E9%AB%98&sort=feedback_desc&page=2",
     );
