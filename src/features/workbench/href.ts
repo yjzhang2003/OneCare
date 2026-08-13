@@ -20,6 +20,8 @@ export type QueryPatch = Readonly<
       | "unit"
       | "level1"
       | "ticketNo"
+      | "user"
+      | "device"
       | "search"
       | "sort"
       | "page"
@@ -53,6 +55,8 @@ function baseParams(query: WorkbenchQuery): Record<string, string | null> {
     unit: query.unit,
     level1: query.level1,
     ticketNo: query.sourceTicketNo,
+    user: query.userRef,
+    device: query.deviceRef,
     search: query.search.length > 0 ? query.search : null,
     sort: query.sort,
     page: query.page > 1 ? String(query.page) : null,

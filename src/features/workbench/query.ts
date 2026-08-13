@@ -71,6 +71,9 @@ export type WorkbenchQuery = Readonly<{
   // An exact source case number, not a search term: the drawer links here to show
   // every record that came from the same 400 case or the same review.
   sourceTicketNo: string | null;
+  // Exact identity filters, set by clicking a row in the profile tabs.
+  userRef: string | null;
+  deviceRef: string | null;
   search: string;
   sort: SortKey;
   page: number;
@@ -115,6 +118,8 @@ export function parseWorkbenchQuery(params: RawParams): WorkbenchQuery {
     unit: first(params.unit),
     level1: first(params.level1),
     sourceTicketNo: first(params.ticketNo),
+    userRef: first(params.user),
+    deviceRef: first(params.device),
     search: first(params.search) ?? "",
     sort: (oneOf(params.sort, sortKeys) ?? "feedback_desc") as SortKey,
     page: Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1,
@@ -205,6 +210,10 @@ function matchesFilters(ticket: WorkbenchTicket, query: WorkbenchQuery): boolean
     query.sourceTicketNo !== null &&
     ticket.sourceTicketNo !== query.sourceTicketNo
   ) {
+    return false;
+  }
+  if (query.userRef !== null && ticket.userRef !== query.userRef) return false;
+  if (query.deviceRef !== null && ticket.deviceRef !== query.deviceRef) {
     return false;
   }
   return matchesSearch(ticket, query.search);

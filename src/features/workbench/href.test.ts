@@ -27,6 +27,8 @@ function query(overrides: Partial<WorkbenchQuery> = {}): WorkbenchQuery {
     unit: null,
     level1: null,
     sourceTicketNo: null,
+    userRef: null,
+    deviceRef: null,
     search: "",
     sort: "feedback_desc",
     page: 1,

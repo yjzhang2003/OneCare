@@ -41,6 +41,21 @@ export const VOC_FIELD_NAMES = {
   // interesting one — 3629 rows carry only 2773 distinct values, so ~856 of them
   // share a source case with another row, which is a real grouping key rather
   // than a derived or simulated one.
+  // Reinstated with a defensible source. The previous commit removed this mapping
+  // because the column was permanently empty — the export is desensitised and
+  // carries no user identity. It is now populated with an id derived from
+  // 来源单号: records sharing a support case are the same person, which is true for
+  // 1456 of 3628 rows, so the grouping is real and only the id string stands in
+  // for the phone number or account that was stripped.
+  //
+  // The ceiling of that derivation, measured: 0 users span more than one product
+  // category, because one case concerns one product. A "user" here is closer to a
+  // case than to a lifetime customer, and any copy or analysis built on it has to
+  // say so.
+  userRef: "用户标识",
+  // (来源单号, 机型) — a device instance rather than a model. 854 of them, 206 with
+  // more than one report, which is the repeat-failure signal the tab exists for.
+  deviceRef: "设备标识",
   sourceTicketNo: "来源单号",
   sourceUrl: "来源链接",
   sourceDetail: "来源明细",
@@ -90,6 +105,8 @@ export type VocRecord = Readonly<{
   // CAS-42567239-Q7Q8Q, or an e-commerce review id). Not a user and not a device:
   // the export contains no user identity of any kind, so this is the only
   // real correlation key it offers beyond the record's own number.
+  userRef: string;
+  deviceRef: string;
   sourceTicketNo: string;
   sourceUrl: string;
   // The channel at full granularity — 68 distinct values in the export, against
@@ -254,6 +271,8 @@ export function toVocRecord(
     ticketOpenedAt: isoDate(safeFields[VOC_FIELD_NAMES.ticketOpenedAt]),
     closedAt: isoDate(safeFields[VOC_FIELD_NAMES.closedAt]),
     warRoomChatId: text(safeFields[VOC_FIELD_NAMES.warRoomChatId]),
+    userRef: text(safeFields[VOC_FIELD_NAMES.userRef]),
+    deviceRef: text(safeFields[VOC_FIELD_NAMES.deviceRef]),
     sourceTicketNo: text(safeFields[VOC_FIELD_NAMES.sourceTicketNo]),
     sourceUrl: text(safeFields[VOC_FIELD_NAMES.sourceUrl]),
     sourceDetail: text(safeFields[VOC_FIELD_NAMES.sourceDetail]),

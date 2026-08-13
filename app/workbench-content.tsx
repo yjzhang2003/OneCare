@@ -5,6 +5,11 @@ import {
   applyWorkbenchQuery,
   parseWorkbenchQuery,
 } from "../src/features/workbench/query";
+import {
+  deviceProfiles,
+  repeatOnly,
+  userProfiles,
+} from "../src/features/workbench/profiles";
 import { WorkbenchConsole } from "./workbench-console";
 
 type RawSearchParams = Readonly<Record<string, string | string[] | undefined>>;
@@ -67,6 +72,14 @@ export function WorkbenchContent({
   const query = parseWorkbenchQuery(searchParams);
   const view = applyWorkbenchQuery(data.tickets, query, now);
 
+  // Only the profiles that carry a pattern cross the wire. 2172 of 2772 users and
+  // 648 of 854 devices have a single record; sending all of them would bury the
+  // ones worth looking at and serialize ~3600 rows into the page for nothing.
+  // The totals travel alongside so the UI can say what it left out rather than
+  // presenting a filtered list as if it were complete.
+  const users = userProfiles(data.tickets);
+  const devices = deviceProfiles(data.tickets);
+
   return (
     <WorkbenchConsole
       user={user}
@@ -75,6 +88,10 @@ export function WorkbenchContent({
       query={query}
       now={now}
       options={filterOptions(data.tickets)}
+      users={repeatOnly(users)}
+      devices={repeatOnly(devices)}
+      userTotal={users.length}
+      deviceTotal={devices.length}
     />
   );
 }

@@ -54,6 +54,8 @@ export type WorkbenchTicket = Readonly<{
   // capability rather than a column: ~856 of the 3628 rows share a source case
   // number with another row, so "the other records from this same 400 case" is a
   // real question this data can now answer.
+  userRef: string;
+  deviceRef: string;
   sourceTicketNo: string;
   sourceUrl: string;
   sourceDetail: string;
@@ -99,6 +101,8 @@ export function toWorkbenchTicket(record: VocRecord): WorkbenchTicket {
     ownerNames: record.ownerNames,
     retryCount: record.retryCount,
     hasOwner: record.ownerOpenIds.length > 0,
+    userRef: record.userRef,
+    deviceRef: record.deviceRef,
     sourceTicketNo: record.sourceTicketNo,
     sourceUrl: record.sourceUrl,
     sourceDetail: record.sourceDetail,

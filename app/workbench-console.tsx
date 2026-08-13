@@ -58,6 +58,7 @@ import {
   type WorkbenchPage,
   type WorkbenchQuery,
 } from "../src/features/workbench/query";
+import type { IdentityProfile } from "../src/features/workbench/profiles";
 import { availableActions } from "../src/features/workbench/write-actions";
 import { WorkbenchActions } from "./workbench-actions";
 
@@ -147,6 +148,12 @@ export type WorkbenchConsoleProps = Readonly<{
   // Distinct values are computed on the server from every record, not from the
   // current page, so a filter never offers only what happens to be on screen.
   options: Readonly<Record<StringFilterField, readonly string[]>>;
+  // Already narrowed to the repeat profiles by the server; the totals are here so
+  // the tabs can state what was left out instead of implying completeness.
+  users: readonly IdentityProfile[];
+  devices: readonly IdentityProfile[];
+  userTotal: number;
+  deviceTotal: number;
 }>;
 
 export function WorkbenchConsole({
@@ -156,6 +163,10 @@ export function WorkbenchConsole({
   query,
   now,
   options,
+  users,
+  devices,
+  userTotal,
+  deviceTotal,
 }: WorkbenchConsoleProps) {
   const router = useRouter();
   const [search, setSearch] = useState(query.search);
@@ -427,6 +438,23 @@ export function WorkbenchConsole({
               {QUEUES.find((q) => q.key === query.queue)?.hint}
             </Typography.Paragraph>
 
+            {(query.userRef !== null || query.deviceRef !== null) && (
+              <Alert
+                type="info"
+                style={{ marginBottom: 12 }}
+                content={
+                  query.userRef !== null
+                    ? `只显示用户 ${query.userRef} 的记录`
+                    : `只显示设备 ${query.deviceRef} 的记录`
+                }
+                action={
+                  <Link href={filterHref(query, { user: null, device: null })}>
+                    清除
+                  </Link>
+                }
+              />
+            )}
+
             {query.sourceTicketNo !== null && (
               <Alert
                 type="info"
@@ -525,6 +553,29 @@ export function WorkbenchConsole({
                 </div>
               </Tabs.TabPane>
 
+              <Tabs.TabPane key="users" title={`用户画像 (${users.length})`}>
+                <ProfilePane
+                  kind="user"
+                  profiles={users}
+                  total={userTotal}
+                  query={query}
+                  go={go}
+                />
+              </Tabs.TabPane>
+
+              <Tabs.TabPane
+                key="devices"
+                title={`设备追踪 (${devices.length})`}
+              >
+                <ProfilePane
+                  kind="device"
+                  profiles={devices}
+                  total={deviceTotal}
+                  query={query}
+                  go={go}
+                />
+              </Tabs.TabPane>
+
               <Tabs.TabPane key="metrics" title="数据概览">
                 {metrics ? (
                   <MetricsPane metrics={metrics} />
@@ -558,6 +609,133 @@ export function WorkbenchConsole({
         )}
       </Drawer>
     </Layout>
+  );
+}
+
+// Both profile tabs are the same table over the same shape, differing only in what
+// an id means and which filter drilling into one applies. Two near-identical
+// components would drift.
+function ProfilePane({
+  kind,
+  profiles,
+  total,
+  query,
+  go,
+}: Readonly<{
+  kind: "user" | "device";
+  profiles: readonly IdentityProfile[];
+  total: number;
+  query: WorkbenchQuery;
+  go: (href: string) => void;
+}>) {
+  const isUser = kind === "user";
+
+  const columns = [
+    {
+      title: isUser ? "用户标识" : "设备标识",
+      dataIndex: "id",
+      width: 130,
+      render: (_: unknown, row: IdentityProfile) => (
+        <Typography.Text style={{ fontFamily: "ui-monospace, monospace" }}>
+          {row.id}
+        </Typography.Text>
+      ),
+    },
+    { title: "反馈条数", dataIndex: "records", width: 96 },
+    {
+      title: "未闭环",
+      dataIndex: "open",
+      width: 90,
+      render: (_: unknown, row: IdentityProfile) =>
+        row.open === 0 ? (
+          <Typography.Text type="secondary">0</Typography.Text>
+        ) : (
+          <Tag color="orange">{row.open}</Tag>
+        ),
+    },
+    {
+      title: "高严重度",
+      dataIndex: "severityHigh",
+      width: 100,
+      render: (_: unknown, row: IdentityProfile) =>
+        row.severityHigh === 0 ? (
+          <Typography.Text type="secondary">0</Typography.Text>
+        ) : (
+          <Tag color="red">{row.severityHigh}</Tag>
+        ),
+    },
+    {
+      title: isUser ? "品类" : "机型",
+      dataIndex: "categories",
+      ellipsis: true,
+      width: 200,
+      render: (_: unknown, row: IdentityProfile) =>
+        (isUser ? row.categories : row.models).join("、") || ABSENT,
+    },
+    {
+      title: "问题维度",
+      dataIndex: "dimensions",
+      ellipsis: true,
+      width: 220,
+      render: (_: unknown, row: IdentityProfile) =>
+        row.dimensions.join("、") || ABSENT,
+    },
+    {
+      title: "首次反馈",
+      dataIndex: "firstFeedbackAt",
+      width: 140,
+      render: (_: unknown, row: IdentityProfile) =>
+        shanghaiTime(row.firstFeedbackAt) ?? ABSENT,
+    },
+    {
+      title: "最近反馈",
+      dataIndex: "lastFeedbackAt",
+      width: 140,
+      render: (_: unknown, row: IdentityProfile) =>
+        shanghaiTime(row.lastFeedbackAt) ?? ABSENT,
+    },
+  ];
+
+  return (
+    <>
+      <Typography.Paragraph style={{ marginTop: 0 }} type="secondary">
+        {isUser
+          ? "同一来源工单的记录属于同一个人，据此重建了被脱敏抹掉的用户标识。列表只显示有多条反馈的用户。"
+          : "同一用户的同一机型算一台设备。重复报修是批次问题线索，列表只显示报修超过一次的设备。"}
+        {/* Stated, not implied. A list that silently shows 600 of 2772 rows reads
+            as "these are all of them", and the single-record majority is exactly
+            what makes the shown rows meaningful. */}
+        {` 共 ${total} 个，其中 ${profiles.length} 个有多条记录，另 ${total - profiles.length} 个仅一条未列出。`}
+        {isUser
+          ? " 这份数据里没有跨品类的用户——一个来源工单只涉及一个产品，所以这更接近工单画像而非终身客户画像。"
+          : ""}
+      </Typography.Paragraph>
+
+      <Table
+        rowKey="id"
+        columns={columns}
+        data={[...profiles]}
+        pagination={{ pageSize: 20, showTotal: true, sizeCanChange: false }}
+        scroll={{ x: 1200, y: 420 }}
+        border={{ wrapper: true, cell: true }}
+        size="small"
+        noDataElement="没有多条记录的对象"
+        onRow={(row) => ({
+          // Drilling in goes to the ticket list filtered to this identity, rather
+          // than opening yet another drawer: the records are the substance, and the
+          // list already knows how to show them.
+          onClick: () =>
+            go(
+              filterHref(query, {
+                ...(isUser ? { user: row.id } : { device: row.id }),
+                queue: "all",
+                ticket: null,
+              }),
+            ),
+          style: { cursor: "pointer" },
+        })}
+      />
+    </>
   );
 }
 
@@ -726,6 +904,40 @@ function TicketDrawer({
             label: "来源",
             value:
               ticket.sourceDetail.length === 0 ? ABSENT : ticket.sourceDetail,
+          },
+          {
+            label: "用户标识",
+            value:
+              ticket.userRef.length === 0 ? (
+                ABSENT
+              ) : (
+                <Link
+                  href={filterHref(query, {
+                    user: ticket.userRef,
+                    queue: "all",
+                    ticket: null,
+                  })}
+                >
+                  {ticket.userRef}
+                </Link>
+              ),
+          },
+          {
+            label: "设备标识",
+            value:
+              ticket.deviceRef.length === 0 ? (
+                ABSENT
+              ) : (
+                <Link
+                  href={filterHref(query, {
+                    device: ticket.deviceRef,
+                    queue: "all",
+                    ticket: null,
+                  })}
+                >
+                  {ticket.deviceRef}
+                </Link>
+              ),
           },
           { label: "事业部", value: ticket.businessUnit || ABSENT },
           { label: "问题分类", value: ticket.categoryLevel1 || ABSENT },

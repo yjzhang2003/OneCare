@@ -64,6 +64,8 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
     retryCount: 0,
     hasOwner: true,
     sourceTicketNo: "CAS-42567239-Q7Q8Q",
+    userRef: "U-3878645B",
+    deviceRef: "D-91C2A70E",
     sourceUrl: "",
     sourceDetail: "400投诉",
     businessUnit: "冰冷事业部",
