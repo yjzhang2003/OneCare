@@ -48,7 +48,6 @@ describe("parseWorkbenchQuery", () => {
       page: 1,
       search: "",
       polarity: null,
-      ticket: null,
     });
   });
 
@@ -93,6 +92,17 @@ describe("parseWorkbenchQuery", () => {
       expect(parseWorkbenchQuery({ page }).page).toBe(1);
     }
     expect(parseWorkbenchQuery({ page: "4" }).page).toBe(4);
+  });
+
+  it("ignores the retired ticket parameter", () => {
+    const query = parseWorkbenchQuery({
+      queue: "all",
+      ticket: "R-2",
+      page: "2",
+    });
+
+    expect(query).not.toHaveProperty("ticket");
+    expect(query.page).toBe(2);
   });
 });
 
@@ -343,27 +353,14 @@ describe("applyWorkbenchQuery", () => {
     expect(result.pageCount).toBe(1);
   });
 
-  it("opens a linked ticket even when the current filters exclude it", () => {
-    // Someone pastes a link in a chat; the recipient's saved queue must not
-    // decide whether the thing they were sent opens.
+  it("returns no selected ticket", () => {
     const result = applyWorkbenchQuery(
-      rows,
-      parseWorkbenchQuery({ queue: "failed", ticket: "B" }),
+      [ticket({ recordNumber: "R-1" })],
+      parseWorkbenchQuery({ queue: "all" }),
       NOW,
     );
 
-    expect(numbers(result)).toEqual(["D"]);
-    expect(result.selected?.recordNumber).toBe("B");
-  });
-
-  it("reports no selection for an unknown ticket instead of throwing", () => {
-    const result = applyWorkbenchQuery(
-      rows,
-      parseWorkbenchQuery({ ticket: "does-not-exist" }),
-      NOW,
-    );
-
-    expect(result.selected).toBeNull();
+    expect(result).not.toHaveProperty("selected");
   });
 
   it("does not mutate the tickets it was given", () => {

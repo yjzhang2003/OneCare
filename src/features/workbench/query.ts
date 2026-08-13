@@ -69,7 +69,6 @@ export type WorkbenchQuery = Readonly<{
   search: string;
   sort: SortKey;
   page: number;
-  ticket: string | null;
 }>;
 
 type RawParams = Readonly<Record<string, string | string[] | undefined>>;
@@ -110,7 +109,6 @@ export function parseWorkbenchQuery(params: RawParams): WorkbenchQuery {
     search: first(params.search) ?? "",
     sort: (oneOf(params.sort, sortKeys) ?? "feedback_desc") as SortKey,
     page: Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1,
-    ticket: first(params.ticket),
   };
 }
 
@@ -234,7 +232,6 @@ export type WorkbenchPage = Readonly<{
   page: number;
   pageCount: number;
   queueCounts: Readonly<Record<QueueKey, number>>;
-  selected: WorkbenchTicket | null;
 }>;
 
 export function applyWorkbenchQuery(
@@ -269,12 +266,5 @@ export function applyWorkbenchQuery(
     page,
     pageCount,
     queueCounts,
-    // Looked up across every record rather than within the current page: a link
-    // to one ticket has to open it even when the recipient's filters exclude it.
-    selected:
-      query.ticket === null
-        ? null
-        : (tickets.find((ticket) => ticket.recordNumber === query.ticket) ??
-          null),
   };
 }
