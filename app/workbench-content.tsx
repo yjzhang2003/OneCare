@@ -2,18 +2,17 @@ import type { AuthUser } from "../src/features/auth/types";
 import type { StringFilterField } from "../src/features/workbench/href";
 import { parseWorkbenchQuery } from "../src/features/workbench/query";
 import {
-  deviceProfiles,
-  repeatOnly,
-  userProfiles,
-} from "../src/features/workbench/profiles";
-import {
   readFilterOptions,
+  readProfile,
+  readProfiles,
   readWorkbenchPage,
 } from "../src/features/store/workbench-query";
 import { readWorkbenchCached } from "./api/voc/dashboard/route";
 import { WorkbenchConsole } from "./workbench-console";
 
 type RawSearchParams = Readonly<Record<string, string | string[] | undefined>>;
+
+const EMPTY_PROFILES = { profiles: [], total: 0 } as const;
 
 const NO_OPTIONS: Readonly<Record<StringFilterField, readonly string[]>> = {
   channel: [],
@@ -59,25 +58,26 @@ export async function WorkbenchContent({
   // GROUP BY, and neither transfers rows nobody will read.
   const view = await readWorkbenchPage(query, now);
 
-  // Everything below is fetched only for the section that needs it. The profile and
-  // overview sections still aggregate in JavaScript over the full set, so they still
-  // pay for reading it — but the ticket list, which is where an operator spends
-  // their time and which every navigation returns to, no longer does.
-  const needsFullSet = query.section !== "tickets";
+  // Fetched per section, and only the overview still reads the whole table — its
+  // aggregate (aggregateVocMetrics) has a wider surface than the profile grouping and
+  // is the one section an operator rarely opens, so it keeps the cached full read
+  // rather than a rushed transcription into SQL.
+  const needsFullSet = query.section === "metrics";
   const data = needsFullSet ? await readWorkbenchCached() : null;
-  const tickets = data?.tickets ?? [];
 
-  const users = needsFullSet ? userProfiles(tickets) : [];
-  const devices = needsFullSet ? deviceProfiles(tickets) : [];
+  // Profiles are a GROUP BY now, not a pass over 3628 rows.
+  const users =
+    query.section === "users" ? await readProfiles("user") : EMPTY_PROFILES;
+  const devices =
+    query.section === "devices" ? await readProfiles("device") : EMPTY_PROFILES;
 
-  // The one profile a detail view needs, looked up across every record rather than
-  // taken from the repeat-only lists the console receives — a single-record identity
-  // would otherwise open to an empty page.
+  // Looked up separately because the lists above carry only repeat profiles: a
+  // single-record identity would otherwise open to an empty page.
   const selectedProfile =
     query.userRef !== null
-      ? (users.find((profile) => profile.id === query.userRef) ?? null)
+      ? await readProfile("user", query.userRef)
       : query.deviceRef !== null
-        ? (devices.find((profile) => profile.id === query.deviceRef) ?? null)
+        ? await readProfile("device", query.deviceRef)
         : null;
 
   return (
@@ -96,10 +96,10 @@ export async function WorkbenchContent({
       options={
         query.section === "tickets" ? await readFilterOptions() : NO_OPTIONS
       }
-      users={repeatOnly(users)}
-      devices={repeatOnly(devices)}
-      userTotal={users.length}
-      deviceTotal={devices.length}
+      users={users.profiles}
+      devices={devices.profiles}
+      userTotal={users.total}
+      deviceTotal={devices.total}
       selectedProfile={selectedProfile}
     />
   );

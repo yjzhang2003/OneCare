@@ -9,6 +9,11 @@ import {
   type WorkbenchPage,
   type WorkbenchQuery,
 } from "../workbench/query";
+import {
+  deviceProfiles,
+  userProfiles,
+  type IdentityProfile,
+} from "../workbench/profiles";
 import { getSql, toVocRecord } from "./records";
 
 // The same triage semantics as applyWorkbenchQuery, expressed in SQL.
@@ -257,4 +262,89 @@ export async function readFilterOptions(): Promise<
     bucket.sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
   }
   return grouped;
+}
+
+// GROUP BY user_ref / device_ref, replacing a pass over all 3628 rows in memory.
+//
+// A transcription of profiles.ts: same blank-identity exclusion, same terminal-state
+// split, same ordering (heaviest first, id breaking ties), and the same restriction
+// to repeat profiles — 2172 of 2772 users have a single record and would bury the 600
+// that carry a pattern.
+//
+// Sorting of the distinct arrays stays in JavaScript so the collation matches what
+// the reference produced; Postgres's own ordering of Chinese text depends on the
+// database's locale and would differ.
+export async function readProfiles(
+  kind: "user" | "device",
+): Promise<Readonly<{ profiles: readonly IdentityProfile[]; total: number }>> {
+  const column = kind === "user" ? "user_ref" : "device_ref";
+  const rows = (await getSql().query(
+    `SELECT
+       ${column} AS id,
+       COUNT(*)::int AS records,
+       COUNT(*) FILTER (WHERE severity = '高')::int AS severity_high,
+       COUNT(*) FILTER (WHERE state NOT IN ('已闭环', '无需跟进'))::int AS open,
+       COUNT(*) FILTER (WHERE state IN ('已闭环', '无需跟进'))::int AS closed,
+       MIN(feedback_at) AS first_feedback_at,
+       MAX(feedback_at) AS last_feedback_at,
+       array_agg(DISTINCT category) FILTER (WHERE category <> '') AS categories,
+       array_agg(DISTINCT model) FILTER (WHERE model <> '') AS models,
+       array_agg(DISTINCT channel) FILTER (WHERE channel <> '') AS channels,
+       (SELECT array_agg(DISTINCT d)
+          FROM voc_records inner_records, unnest(inner_records.dimensions) AS d
+         WHERE inner_records.${column} = voc_records.${column} AND d <> '') AS dimensions
+     FROM voc_records
+     WHERE ${column} <> ''
+     GROUP BY ${column}
+     ORDER BY COUNT(*) DESC, ${column} ASC`,
+  )) as Record<string, unknown>[];
+
+  const sortText = (values: unknown): readonly string[] =>
+    (Array.isArray(values) ? values.filter((v): v is string => typeof v === "string") : [])
+      .sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+
+  const iso = (value: unknown): string | null =>
+    value instanceof Date ? value.toISOString() : null;
+
+  const all = rows.map((row) => ({
+    id: String(row.id ?? ""),
+    records: Number(row.records ?? 0),
+    categories: sortText(row.categories),
+    models: sortText(row.models),
+    channels: sortText(row.channels),
+    dimensions: sortText(row.dimensions),
+    severityHigh: Number(row.severity_high ?? 0),
+    open: Number(row.open ?? 0),
+    closed: Number(row.closed ?? 0),
+    firstFeedbackAt: iso(row.first_feedback_at),
+    lastFeedbackAt: iso(row.last_feedback_at),
+  }));
+
+  return {
+    profiles: all.filter((profile) => profile.records > 1),
+    total: all.length,
+  };
+}
+
+// The one profile a detail page needs, including single-record identities that the
+// list above deliberately omits.
+export async function readProfile(
+  kind: "user" | "device",
+  id: string,
+): Promise<IdentityProfile | null> {
+  const { profiles, total } = await readProfiles(kind);
+  const listed = profiles.find((profile) => profile.id === id);
+  if (listed) return listed;
+  if (total === 0) return null;
+  // A single-record identity: one more grouped query, scoped to it.
+  const column = kind === "user" ? "user_ref" : "device_ref";
+  const rows = (await getSql().query(
+    `SELECT * FROM voc_records WHERE ${column} = $1`,
+    [id],
+  )) as Record<string, unknown>[];
+  if (rows.length === 0) return null;
+  const tickets = rows.map((row) => toWorkbenchTicket(toVocRecord(row)));
+  const grouped =
+    kind === "user" ? userProfiles(tickets) : deviceProfiles(tickets);
+  return grouped[0] ?? null;
 }

@@ -31,9 +31,6 @@ export type IdentityProfile = Readonly<{
   closed: number;
   firstFeedbackAt: string | null;
   lastFeedbackAt: string | null;
-  // The record numbers behind this row, so the drawer can list them without a
-  // second pass over every ticket.
-  recordNumbers: readonly string[];
 }>;
 
 const TERMINAL = new Set(["已闭环", "无需跟进"]);
@@ -69,7 +66,6 @@ function toProfile(id: string, group: readonly WorkbenchTicket[]): IdentityProfi
     closed: group.filter((ticket) => TERMINAL.has(ticket.state)).length,
     firstFeedbackAt: earliest(group.map((ticket) => ticket.feedbackAt)),
     lastFeedbackAt: latest(group.map((ticket) => ticket.feedbackAt)),
-    recordNumbers: group.map((ticket) => ticket.recordNumber),
   };
 }
 

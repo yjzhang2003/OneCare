@@ -48,7 +48,6 @@ describe("userProfiles", () => {
       ["U-A", 2],
       ["U-B", 1],
     ]);
-    expect(profiles[0]?.recordNumbers).toEqual(["R-1", "R-2"]);
   });
 
   // The list answers "who is complaining most", so the heaviest profile is first.
