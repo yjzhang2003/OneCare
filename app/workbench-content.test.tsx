@@ -63,6 +63,7 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
     ownerNames: ["张三"],
     retryCount: 0,
     hasOwner: true,
+    hasWarRoom: false,
     ticketOpenedAt: null,
     closedAt: null,
     durationHours: null,

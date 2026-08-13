@@ -35,6 +35,7 @@ describe("toWorkbenchTicket", () => {
       recordId: "rec1",
       retryCount: 0,
       hasOwner: true,
+      hasWarRoom: false,
       recordNumber: "R-001",
       feedbackAt: "2026-01-23T02:00:00.000Z",
       channel: "电商评价",
@@ -100,6 +101,14 @@ describe("toWorkbenchTicket", () => {
     expect(toWorkbenchTicket(record({ ownerOpenIds: ["ou_a"] })).hasOwner).toBe(
       true,
     );
+  });
+
+  it("exposes only whether a war room exists", () => {
+    const ticket = toWorkbenchTicket(record({ warRoomChatId: "oc_secret" }));
+
+    expect(ticket.hasWarRoom).toBe(true);
+    expect(ticket).not.toHaveProperty("warRoomChatId");
+    expect(JSON.stringify(ticket)).not.toContain("oc_secret");
   });
 });
 

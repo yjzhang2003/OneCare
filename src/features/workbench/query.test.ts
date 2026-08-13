@@ -18,6 +18,7 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
     recordId: "rec1",
     retryCount: 0,
     hasOwner: true,
+    hasWarRoom: false,
     recordNumber: "R-001",
     feedbackAt: "2026-02-09T00:00:00.000Z",
     channel: "电商评价",

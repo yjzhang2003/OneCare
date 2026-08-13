@@ -42,6 +42,14 @@ import type { AuthUser } from "../src/features/auth/types";
 import type { VocMetrics } from "../src/features/voc/metrics";
 import type { WorkbenchTicket } from "../src/features/workbench/data";
 import {
+  ABSENT,
+  formatHours,
+  formatShanghaiTime,
+  SEVERITY_COLOR,
+  shortRecordNumber,
+  STATE_COLOR,
+} from "../src/features/workbench/presentation";
+import {
   filterHref,
   pageHref,
   ticketHref,
@@ -61,60 +69,9 @@ import {
 import { availableActions } from "../src/features/workbench/write-actions";
 import { WorkbenchActions } from "./workbench-actions";
 
-const ABSENT = "—";
-
-// The Base's 记录编号 is a 36-character UUID, so the full value is unreadable in
-// a table column and useless as a title. The last six characters are the same
-// handle warRoomName builds group names from ("VOC-a3cdc5-冰箱-高"), which is the
-// point: an operator looking at a Feishu war room can find its row, and someone
-// reading a row knows what its group is called. The full value stays available
-// in the drawer.
-function shortNumber(recordNumber: string): string {
-  return recordNumber.slice(-6);
-}
-
-// Fixed +08:00, never the runtime's zone: this renders identically on a Vercel
-// box in Washington and on a laptop in Shanghai, and the records it describes
-// are Chinese customer feedback timestamped in Beijing time.
-function shanghaiTime(iso: string | null): string | null {
-  if (!iso) return null;
-  const parsed = Date.parse(iso);
-  if (!Number.isFinite(parsed)) return null;
-  const shifted = new Date(parsed + 8 * 3_600_000);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return (
-    `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}` +
-    ` ${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}`
-  );
-}
-
-function hours(value: number): string {
-  return value >= 10 ? value.toFixed(0) : value.toFixed(1);
-}
-
 function percent(ratio: number): string {
   return `${Math.round(ratio * 100)}%`;
 }
-
-const SEVERITY_COLOR: Readonly<Record<string, string>> = {
-  高: "red",
-  中: "orange",
-  低: "gray",
-};
-
-// Terminal states are grey because a closed ticket is not news. The two states
-// that need someone to move are the only coloured ones, so scanning the column
-// finds work rather than finding every row equally loud.
-const STATE_COLOR: Readonly<Record<string, string>> = {
-  待分析: "gray",
-  分析失败: "red",
-  已分析: "arcoblue",
-  无需跟进: "gray",
-  待跟进: "orange",
-  跟进中: "arcoblue",
-  待闭环: "purple",
-  已闭环: "green",
-};
 
 // One icon per queue, so the sider is scannable by shape before it is read.
 // Keyed by QueueKey rather than by position: a reordered QUEUES array must not
@@ -183,7 +140,7 @@ export function WorkbenchConsole({
           href={ticketHref(query, row.recordNumber)}
           title={row.recordNumber}
         >
-          {shortNumber(row.recordNumber)}
+          {shortRecordNumber(row.recordNumber)}
         </Link>
       ),
     },
@@ -192,7 +149,7 @@ export function WorkbenchConsole({
       dataIndex: "feedbackAt",
       width: 140,
       render: (_: unknown, row: WorkbenchTicket) =>
-        shanghaiTime(row.feedbackAt) ?? ABSENT,
+        formatShanghaiTime(row.feedbackAt) ?? ABSENT,
     },
     {
       title: "渠道 / 品类",
@@ -250,7 +207,7 @@ export function WorkbenchConsole({
         if (dwell === null) return ABSENT;
         return (
           <Space size={4}>
-            <span>{hours(dwell)} 小时</span>
+            <span>{formatHours(dwell)} 小时</span>
             {isOverdue(row, now) && (
               <Tag color="red" size="small">
                 超时
@@ -449,7 +406,7 @@ export function WorkbenchConsole({
       <Drawer
         width={620}
         visible={selected !== null}
-        title={selected ? `工单详情 · ${shortNumber(selected.recordNumber)}` : ""}
+        title={selected ? `工单详情 · ${shortRecordNumber(selected.recordNumber)}` : ""}
         footer={null}
         onCancel={() => go(ticketHref(query, null))}
       >
@@ -481,7 +438,7 @@ function MetricsPane({ metrics }: Readonly<{ metrics: VocMetrics }>) {
         <Statistic title="闭环率（已闭环 / 已建单）" value={percent(metrics.closureRate)} />
         <Statistic
           title="平均闭环时长"
-          value={`${hours(metrics.averageClosureHours)} 小时`}
+          value={`${formatHours(metrics.averageClosureHours)} 小时`}
         />
         <Statistic
           title="打标成功率（成功 / 成功+失败）"
@@ -524,7 +481,7 @@ function MetricsPane({ metrics }: Readonly<{ metrics: VocMetrics }>) {
 
       {metrics.effort && (
         <Typography.Text type="secondary">
-          折算节省工时 {hours(metrics.effort.savedHours)} 小时 ={" "}
+          折算节省工时 {formatHours(metrics.effort.savedHours)} 小时 ={" "}
           {metrics.effort.taggedRecords} 条已打标 ×{" "}
           {metrics.effort.manualMinutesPerRecord} 分钟/条。单条分钟数为假设基线，未经实测，因此不换算为金额。
         </Typography.Text>
@@ -609,23 +566,23 @@ function TicketDrawer({
           },
           {
             label: "停留时长",
-            value: dwell === null ? ABSENT : `${hours(dwell)} 小时`,
+            value: dwell === null ? ABSENT : `${formatHours(dwell)} 小时`,
           },
           {
             label: "反馈时间",
-            value: shanghaiTime(ticket.feedbackAt) ?? ABSENT,
+            value: formatShanghaiTime(ticket.feedbackAt) ?? ABSENT,
           },
           {
             label: "建单时间",
-            value: shanghaiTime(ticket.ticketOpenedAt) ?? ABSENT,
+            value: formatShanghaiTime(ticket.ticketOpenedAt) ?? ABSENT,
           },
-          { label: "闭环时间", value: shanghaiTime(ticket.closedAt) ?? ABSENT },
+          { label: "闭环时间", value: formatShanghaiTime(ticket.closedAt) ?? ABSENT },
           {
             label: "时长",
             value:
               ticket.durationHours === null
                 ? ABSENT
-                : `${hours(ticket.durationHours)} 小时`,
+                : `${formatHours(ticket.durationHours)} 小时`,
           },
         ]}
       />

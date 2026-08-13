@@ -50,6 +50,7 @@ export type WorkbenchTicket = Readonly<{
   // is therefore left to the route handler to answer.
   retryCount: number;
   hasOwner: boolean;
+  hasWarRoom: boolean;
   ticketOpenedAt: string | null;
   closedAt: string | null;
   durationHours: number | null;
@@ -90,6 +91,7 @@ export function toWorkbenchTicket(record: VocRecord): WorkbenchTicket {
     ownerNames: record.ownerNames,
     retryCount: record.retryCount,
     hasOwner: record.ownerOpenIds.length > 0,
+    hasWarRoom: record.warRoomChatId.trim().length > 0,
     ticketOpenedAt: record.ticketOpenedAt,
     closedAt: record.closedAt,
     durationHours: hours(record.ticketOpenedAt, record.closedAt),
