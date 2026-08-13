@@ -5639,3 +5639,23 @@ a {
   justify-content: flex-end;
   margin-top: 16px;
 }
+
+/* Bottom-right: the only link that leaves the console, kept clear of the work. */
+.oc-console__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px 20px;
+  background: transparent;
+}
+
+/* Pushes the count tag to the right edge of the menu item so the five counts
+   line up in a column instead of floating after labels of different widths. */
+.oc-console__queue-label {
+  flex: 1;
+  margin-left: 4px;
+}
+
+.oc-console .arco-menu-item {
+  display: flex;
+  align-items: center;
+}

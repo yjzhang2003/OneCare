@@ -9,6 +9,7 @@ import "@arco-design/web-react/dist/css/arco.css";
 
 import {
   Alert,
+  Avatar,
   Breadcrumb,
   Card,
   Descriptions,
@@ -25,9 +26,16 @@ import {
   Tag,
   Typography,
 } from "@arco-design/web-react";
+import {
+  IconApps,
+  IconBug,
+  IconClockCircle,
+  IconList,
+  IconUserAdd,
+} from "@arco-design/web-react/icon";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import type { AuthUser } from "../src/features/auth/types";
 import type { VocMetrics } from "../src/features/voc/metrics";
@@ -107,6 +115,17 @@ const STATE_COLOR: Readonly<Record<string, string>> = {
   已闭环: "green",
 };
 
+// One icon per queue, so the sider is scannable by shape before it is read.
+// Keyed by QueueKey rather than by position: a reordered QUEUES array must not
+// silently reassign every icon.
+const QUEUE_ICON: Readonly<Record<string, React.ReactNode>> = {
+  open: <IconList />,
+  overdue: <IconClockCircle />,
+  unassigned: <IconUserAdd />,
+  failed: <IconBug />,
+  all: <IconApps />,
+};
+
 export type WorkbenchConsoleProps = Readonly<{
   user: AuthUser;
   metrics: VocMetrics | null;
@@ -128,10 +147,27 @@ export function WorkbenchConsole({
 }: WorkbenchConsoleProps) {
   const router = useRouter();
   const [search, setSearch] = useState(query.search);
+  // Every navigation here is a server round trip: filtering and paging 3628
+  // records stays on the server so only 50 rows cross the wire. That is the right
+  // trade, but it means a click has latency, and without a pending state the UI
+  // looks dead while it waits — which is what "左侧按钮反应特别慢" actually
+  // described. startTransition surfaces the wait; the prefetch below removes most
+  // of it.
+  const [pending, startTransition] = useTransition();
 
   function go(href: string) {
-    router.push(href);
+    startTransition(() => router.push(href));
   }
+
+  // Warm all five queue routes up front. Switching queues is the most frequent
+  // action in this console and the one with nothing to type first, so it is worth
+  // paying for eagerly; by the time a queue is clicked its payload is usually
+  // already there.
+  useEffect(() => {
+    for (const queue of QUEUES) {
+      router.prefetch(filterHref(query, { queue: queue.key }));
+    }
+  }, [router, query]);
 
   const selected = view.selected;
 
@@ -264,10 +300,9 @@ export function WorkbenchConsole({
                 key={queue.key}
                 onClick={() => go(filterHref(query, { queue: queue.key }))}
               >
-                <Space>
-                  <span>{queue.label}</span>
-                  <Tag size="small">{view.queueCounts[queue.key]}</Tag>
-                </Space>
+                {QUEUE_ICON[queue.key]}
+                <span className="oc-console__queue-label">{queue.label}</span>
+                <Tag size="small">{view.queueCounts[queue.key]}</Tag>
               </Menu.Item>
             ))}
           </Menu.ItemGroup>
@@ -278,16 +313,32 @@ export function WorkbenchConsole({
         <Layout.Header className="oc-console__header">
           <Space size="large">
             <Breadcrumb>
-              <Breadcrumb.Item>服务运营</Breadcrumb.Item>
-              <Breadcrumb.Item>VOC 工单</Breadcrumb.Item>
-              <Breadcrumb.Item>
+              <Breadcrumb.Item key="domain">服务运营</Breadcrumb.Item>
+              <Breadcrumb.Item key="entity">VOC 工单</Breadcrumb.Item>
+              <Breadcrumb.Item key="queue">
                 {QUEUES.find((q) => q.key === query.queue)?.label}
               </Breadcrumb.Item>
             </Breadcrumb>
           </Space>
-          <Space>
+          <Space size="small" align="center">
             <span className="oc-console__user">{user.name}</span>
-            <Link href="/?view=showcase">方案展示厅 →</Link>
+            {/* avatarUrl is optional on AuthUser — Feishu does not always return
+                one — so the fallback is the name's first character rather than a
+                broken image. */}
+            <Avatar size={30} style={{ backgroundColor: "rgb(var(--primary-6))" }}>
+              {user.avatarUrl ? (
+                // A plain <img>, not next/image: the avatar host is whatever
+                // Feishu's OAuth user-info returned, so it cannot be declared in
+                // images.remotePatterns at build time, and guessing a CDN
+                // hostname is exactly the kind of unverified external assumption
+                // this project has been burned by. At 30px the rule's LCP and
+                // bandwidth concerns do not apply.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img alt={user.name} src={user.avatarUrl} />
+              ) : (
+                user.name.slice(0, 1)
+              )}
+            </Avatar>
           </Space>
         </Layout.Header>
 
@@ -362,6 +413,7 @@ export function WorkbenchConsole({
                   scroll={{ x: 1400 }}
                   border={{ wrapper: true, cell: true }}
                   size="small"
+                  loading={pending}
                   noDataElement="这个队列现在是空的"
                 />
 
@@ -388,6 +440,13 @@ export function WorkbenchConsole({
             </Tabs>
           </Card>
         </Layout.Content>
+
+        {/* Bottom-right, out of the way of the work. It is the one link on this
+            page that leaves the workbench, and a pitch page has no business
+            sharing the top bar with an operator's own identity. */}
+        <Layout.Footer className="oc-console__footer">
+          <Link href="/?view=showcase">方案展示厅 →</Link>
+        </Layout.Footer>
       </Layout>
 
       <Drawer

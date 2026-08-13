@@ -14,7 +14,10 @@ import { WorkbenchContent } from "./workbench-content";
 // href.test.ts owns the URLs those controls carry.
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, refresh: () => {} }),
+  // prefetch is part of the surface the console uses: it warms all five queue
+  // routes on mount. A mock missing it fails every test in this file with
+  // "router.prefetch is not a function".
+  useRouter: () => ({ push, refresh: () => {}, prefetch: () => {} }),
 }));
 
 function emptyMetrics(): VocMetrics {
