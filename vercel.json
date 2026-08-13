@@ -2,6 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "app/page.tsx": { "regions": ["hkg1"] },
+    "app/workbench/tickets/[recordNumber]/page.tsx": { "regions": ["hkg1"] },
     "app/api/feishu/events/route.ts": { "regions": ["hkg1"] },
     "app/api/voc/analyze/route.ts": { "regions": ["hkg1"] },
     "app/api/voc/dashboard/route.ts": { "regions": ["hkg1"] },
