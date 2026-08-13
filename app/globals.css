@@ -5583,8 +5583,15 @@ a {
    no contrast, so no assertion in this repo can catch a repeat. Hence explicit
    backgrounds on every surface below.
 --------------------------------------------------------------------------- */
+/* The console owns the viewport: the sider and the top bar stay put and only the
+   middle scrolls, which is what makes a long queue navigable — scrolling the
+   whole document takes the queue list and the breadcrumb off screen exactly when
+   an operator deep in a list needs them. overflow:hidden is scoped to this class
+   rather than put on body, because every other page on this site scrolls
+   normally. */
 .oc-console {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background: var(--color-fill-1, #f7f8fa);
 
   /* Arco ships one blue as its accent everywhere. Remapping the six primary
@@ -5601,8 +5608,21 @@ a {
 }
 
 .oc-console__sider {
+  height: 100vh;
+  /* Its own scroll, not the page's: five queues fit today, and a sixth must push
+     the list rather than the layout. */
+  overflow-y: auto;
   background: #fff;
   border-right: 1px solid var(--color-border-2, #e5e6eb);
+}
+
+/* header / content / footer as a column, so the middle is the only flexible part
+   and therefore the only one that can scroll. */
+.oc-console__main {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .oc-console__brand {
@@ -5614,6 +5634,7 @@ a {
 }
 
 .oc-console__header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -5630,7 +5651,10 @@ a {
 }
 
 .oc-console__content {
-  padding: 16px 20px 32px;
+  flex: 1 1 auto;
+  min-height: 0; /* without this a flex child refuses to shrink below its content */
+  overflow-y: auto;
+  padding: 16px 20px 24px;
 }
 
 /* Right-aligned, matching where every console this one is modelled on puts it. */
@@ -5642,6 +5666,7 @@ a {
 
 /* Bottom-right: the only link that leaves the console, kept clear of the work. */
 .oc-console__footer {
+  flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
   padding: 12px 20px 20px;

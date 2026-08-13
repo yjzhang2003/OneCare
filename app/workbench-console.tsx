@@ -298,7 +298,7 @@ export function WorkbenchConsole({
         </Menu>
       </Layout.Sider>
 
-      <Layout>
+      <Layout className="oc-console__main">
         <Layout.Header className="oc-console__header">
           <Space size="large">
             <Breadcrumb>
