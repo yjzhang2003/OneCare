@@ -351,19 +351,20 @@ export function WorkbenchConsole({
     <Layout className="oc-console">
       <Layout.Sider width={200} className="oc-console__sider">
         <div className="oc-console__brand">万护 OneCare</div>
+        {/* No ItemGroup: there is one group and never will be a second, so its
+            title was a label for nothing — and it made every item indented, which
+            is what pushed the queue names out of line with the wordmark above. */}
         <Menu selectedKeys={[query.queue]} style={{ width: "100%" }}>
-          <Menu.ItemGroup title="工单队列">
-            {QUEUES.map((queue) => (
-              <Menu.Item
-                key={queue.key}
-                onClick={() => go(filterHref(query, { queue: queue.key }))}
-              >
-                {QUEUE_ICON[queue.key]}
-                <span className="oc-console__queue-label">{queue.label}</span>
-                <Tag size="small">{view.queueCounts[queue.key]}</Tag>
-              </Menu.Item>
-            ))}
-          </Menu.ItemGroup>
+          {QUEUES.map((queue) => (
+            <Menu.Item
+              key={queue.key}
+              onClick={() => go(filterHref(query, { queue: queue.key }))}
+            >
+              {QUEUE_ICON[queue.key]}
+              <span className="oc-console__queue-label">{queue.label}</span>
+              <Tag size="small">{view.queueCounts[queue.key]}</Tag>
+            </Menu.Item>
+          ))}
         </Menu>
 
         {/* Pinned to the bottom of the sider by the flex rule on
