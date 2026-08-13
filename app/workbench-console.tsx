@@ -402,7 +402,6 @@ export function WorkbenchConsole({
               <>
                 <IconFile />
                 <span className="oc-console__nav-label">工单</span>
-                <Tag size="small">{view.queueCounts.all}</Tag>
               </>
             }
           >
@@ -502,25 +501,6 @@ export function WorkbenchConsole({
             }
           >
             <Spin loading={pending} style={{ display: "block", width: "100%" }}>
-              {(query.userRef !== null || query.deviceRef !== null) && (
-                <Alert
-                  type="info"
-                  style={{ marginBottom: 12 }}
-                  content={
-                    query.userRef !== null
-                      ? `只显示用户 ${query.userRef} 的记录`
-                      : `只显示设备 ${query.deviceRef} 的记录`
-                  }
-                  action={
-                    <Link
-                      href={filterHref(query, { user: null, device: null })}
-                    >
-                      清除
-                    </Link>
-                  }
-                />
-              )}
-
               {query.sourceTicketNo !== null && (
                 <Alert
                   type="info"
@@ -1124,6 +1104,7 @@ function TicketDrawer({
               ) : (
                 <Link
                   href={filterHref(query, {
+                    section: "users",
                     user: ticket.userRef,
                     queue: "all",
                     ticket: null,
@@ -1141,6 +1122,7 @@ function TicketDrawer({
               ) : (
                 <Link
                   href={filterHref(query, {
+                    section: "devices",
                     device: ticket.deviceRef,
                     queue: "all",
                     ticket: null,

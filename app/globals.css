@@ -5693,19 +5693,32 @@ a {
    icon, label and count are its direct children — there is no
    .arco-menu-item-inner in this configuration, only in the indented one. Making
    the item itself the flex row is therefore the only place this can go. */
+/* No gap: Arco already puts margin-right:16px on the icon, and inside a submenu
+   header the icon and label sit in a wrapper span that a gap here cannot reach —
+   which is precisely why 工单's label landed 8px left of the other top-level items.
+   Letting Arco's own margin do the spacing puts every level-one label on the same
+   line. */
 .oc-console__sider .arco-menu .arco-menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
 }
 
-/* Submenu headers are a different element than items, so the flex row has to be
-   declared for both or 工单's own count tag would not right-align with the
-   queue counts beneath it. */
-.oc-console__sider .arco-menu .arco-menu-inline-header {
-  display: flex;
+.oc-console__sider .arco-menu .arco-menu-item .arco-tag {
+  margin-left: 8px;
+}
+
+/* Level-two items are indented, and Arco wraps an indented item's contents in this
+   span with an inline display:block — so the flex row above lands on the item and
+   never reaches the icon, label and count inside. Inline styles cannot be beaten by
+   specificity, hence !important on the one declaration that must win.
+   flex:1 as well, because the item is itself a flex container and this span would
+   otherwise size to its content, leaving the count wherever the label happened to
+   end. That is exactly what the five queue counts did. */
+.oc-console__sider .arco-menu .arco-menu-item-inner {
+  display: flex !important;
   align-items: center;
-  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* Takes the slack, so the label stays left and the count is pushed to the item's
@@ -5716,8 +5729,6 @@ a {
 }
 
 .oc-console__sider .arco-menu .arco-menu-item .arco-icon,
-.oc-console__sider .arco-menu .arco-menu-item .arco-tag,
-.oc-console__sider .arco-menu .arco-menu-inline-header .arco-icon,
-.oc-console__sider .arco-menu .arco-menu-inline-header .arco-tag {
+.oc-console__sider .arco-menu .arco-menu-item .arco-tag {
   flex: 0 0 auto;
 }
