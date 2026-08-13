@@ -278,25 +278,34 @@ export async function readProfiles(
   kind: "user" | "device",
 ): Promise<Readonly<{ profiles: readonly IdentityProfile[]; total: number }>> {
   const column = kind === "user" ? "user_ref" : "device_ref";
+  // dimensions is pre-aggregated in its own CTE and joined, rather than fetched by a
+  // correlated subquery per group. The first version did the latter, which re-scans
+  // the whole table once per group — 2772 scans for the user view — and is the kind
+  // of N+1 that hides inside a single statement and looks like one query.
   const rows = (await getSql().query(
-    `SELECT
-       ${column} AS id,
+    `WITH dims AS (
+       SELECT ${column} AS id, array_agg(DISTINCT d) AS dimensions
+       FROM voc_records, unnest(dimensions) AS d
+       WHERE ${column} <> '' AND d <> ''
+       GROUP BY ${column}
+     )
+     SELECT
+       r.${column} AS id,
        COUNT(*)::int AS records,
-       COUNT(*) FILTER (WHERE severity = '高')::int AS severity_high,
-       COUNT(*) FILTER (WHERE state NOT IN ('已闭环', '无需跟进'))::int AS open,
-       COUNT(*) FILTER (WHERE state IN ('已闭环', '无需跟进'))::int AS closed,
-       MIN(feedback_at) AS first_feedback_at,
-       MAX(feedback_at) AS last_feedback_at,
-       array_agg(DISTINCT category) FILTER (WHERE category <> '') AS categories,
-       array_agg(DISTINCT model) FILTER (WHERE model <> '') AS models,
-       array_agg(DISTINCT channel) FILTER (WHERE channel <> '') AS channels,
-       (SELECT array_agg(DISTINCT d)
-          FROM voc_records inner_records, unnest(inner_records.dimensions) AS d
-         WHERE inner_records.${column} = voc_records.${column} AND d <> '') AS dimensions
-     FROM voc_records
-     WHERE ${column} <> ''
-     GROUP BY ${column}
-     ORDER BY COUNT(*) DESC, ${column} ASC`,
+       COUNT(*) FILTER (WHERE r.severity = '高')::int AS severity_high,
+       COUNT(*) FILTER (WHERE r.state NOT IN ('已闭环', '无需跟进'))::int AS open,
+       COUNT(*) FILTER (WHERE r.state IN ('已闭环', '无需跟进'))::int AS closed,
+       MIN(r.feedback_at) AS first_feedback_at,
+       MAX(r.feedback_at) AS last_feedback_at,
+       array_agg(DISTINCT r.category) FILTER (WHERE r.category <> '') AS categories,
+       array_agg(DISTINCT r.model) FILTER (WHERE r.model <> '') AS models,
+       array_agg(DISTINCT r.channel) FILTER (WHERE r.channel <> '') AS channels,
+       dims.dimensions AS dimensions
+     FROM voc_records r
+     LEFT JOIN dims ON dims.id = r.${column}
+     WHERE r.${column} <> ''
+     GROUP BY r.${column}, dims.dimensions
+     ORDER BY COUNT(*) DESC, r.${column} ASC`,
   )) as Record<string, unknown>[];
 
   const sortText = (values: unknown): readonly string[] =>
