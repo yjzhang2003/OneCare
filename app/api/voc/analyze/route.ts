@@ -46,6 +46,7 @@ import {
   resolveOwner,
   type OwnerRule,
 } from "../../../../src/features/voc/assignment";
+import { OWNER_FIELDS } from "../../../../src/features/voc/owner-directory";
 import {
   transition,
   type TransitionContext,
@@ -791,13 +792,9 @@ async function listPendingRecords(
 // The owner table (负责范围/负责人/兜底) is a second table on the same Base,
 // outside BitableClient's scope (which only addresses the VOC table). It has
 // no schema-guard of its own; reading it here mirrors the pattern deliberately
-// kept minimal for a table this small.
-const OWNER_FIELD_NAMES = {
-  scope: "负责范围",
-  owner: "负责人",
-  fallback: "兜底",
-} as const;
-
+// kept minimal for a table this small. Its three column names come from
+// owner-directory, which now also writes them from 人员管理 — two copies of
+// these strings would let the console rename a column the pipeline still reads.
 // The Bitable-response -> OwnerRule[] mapping, pulled out of listOwnerRules
 // so it's testable without a fetcher or real env vars — previously this whole
 // function was only exercised by the live Base round-trip.
@@ -806,12 +803,12 @@ export function parseOwnerRules(items: readonly unknown[]): readonly OwnerRule[]
     if (!isRecord(item) || !isRecord(item.fields)) return [];
     return [
       {
-        scope: text(item.fields[OWNER_FIELD_NAMES.scope]),
+        scope: text(item.fields[OWNER_FIELDS.scope]),
         // resolveOwner already drops rules with a blank openId (assignment.ts
         // "usable" filter), so an empty fallback here is handled downstream
         // rather than filtered twice.
-        openId: openIds(item.fields[OWNER_FIELD_NAMES.owner])[0] ?? "",
-        fallback: item.fields[OWNER_FIELD_NAMES.fallback] === true,
+        openId: openIds(item.fields[OWNER_FIELDS.owner])[0] ?? "",
+        fallback: item.fields[OWNER_FIELDS.fallback] === true,
       },
     ];
   });

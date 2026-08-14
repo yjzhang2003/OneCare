@@ -58,7 +58,15 @@ export type SortKey = (typeof SORTS)[number]["key"];
 // The console's top-level navigation. Lives in the URL rather than in component
 // state so a link can point at 设备追踪 — while these were content tabs, any
 // navigation bounced back to the ticket list and no link could address them.
-export const SECTIONS = ["tickets", "users", "devices", "metrics"] as const;
+export const SECTIONS = [
+  "tickets",
+  "users",
+  "devices",
+  "metrics",
+  // 人员管理: the routing table the tagging pipeline reads. A section rather than a
+  // separate page because it is part of the same console and shares its shell.
+  "owners",
+] as const;
 
 export type SectionKey = (typeof SECTIONS)[number];
 

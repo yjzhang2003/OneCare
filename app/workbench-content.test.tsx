@@ -154,6 +154,7 @@ function renderWorkbench(
       // their own section is the one being rendered.
       userCount={repeatOnly(users).length}
       deviceCount={repeatOnly(devices).length}
+      owners={{ rules: [], members: [], unavailable: false }}
       selectedProfile={selectedProfile}
     />,
   );
@@ -407,7 +408,7 @@ describe("WorkbenchContent source", () => {
   // longer provides, and falls back to the deleted ReactDOM.render. Without this
   // import the console's toasts die at runtime with a green build.
   it("registers the React 19 adapter before any Arco component", () => {
-    const adapter = console.indexOf("react-19-adapter");
+    const adapter = console.indexOf("arco-runtime");
     const firstComponent = console.indexOf('from "@arco-design/web-react"');
     expect(adapter).toBeGreaterThan(-1);
     expect(adapter).toBeLessThan(firstComponent);

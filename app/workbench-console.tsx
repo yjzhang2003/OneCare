@@ -4,7 +4,7 @@
 // export, where React 19 no longer puts it, and silently falls back to the
 // deleted ReactDOM.render. src/features/workbench/arco-react19.test.tsx fails if
 // this line goes away.
-import "@arco-design/web-react/lib/_util/react-19-adapter";
+import "../src/features/workbench/arco-runtime";
 import "@arco-design/web-react/dist/css/arco.css";
 
 import {
@@ -30,6 +30,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import type { AuthUser } from "../src/features/auth/types";
+import type { Member } from "../src/features/directory/members";
+import type { OwnerRuleRecord } from "../src/features/voc/owner-rules";
 import type { VocMetrics } from "../src/features/voc/metrics";
 import type { WorkbenchTicket } from "../src/features/workbench/data";
 import {
@@ -53,6 +55,7 @@ import type {
   IdentityProfile,
   ProfilePage,
 } from "../src/features/workbench/profiles";
+import { OwnersPane } from "./workbench-owners";
 import { ProfileInsightPanel } from "./workbench-profile-insight";
 import { ConsoleSider } from "./workbench-sider";
 
@@ -128,6 +131,7 @@ const SECTION_TITLE: Readonly<Record<string, string | undefined>> = {
   users: "用户画像",
   devices: "设备追踪",
   metrics: "数据概览",
+  owners: "人员管理",
   tickets: undefined,
 };
 
@@ -152,6 +156,14 @@ export type WorkbenchConsoleProps = Readonly<{
   userCount: number;
   deviceCount: number;
   selectedProfile: IdentityProfile | null;
+  // 人员管理's data. Read only on its own section; `unavailable` distinguishes "the
+  // routing table could not be read" from "there are no rules", which are very
+  // different things to show an operator.
+  owners: Readonly<{
+    rules: readonly OwnerRuleRecord[];
+    members: readonly Member[];
+    unavailable: boolean;
+  }>;
 }>;
 
 export function WorkbenchConsole({
@@ -166,6 +178,7 @@ export function WorkbenchConsole({
   userCount,
   deviceCount,
   selectedProfile,
+  owners,
 }: WorkbenchConsoleProps) {
   const router = useRouter();
   const [search, setSearch] = useState(query.search);
@@ -415,7 +428,13 @@ export function WorkbenchConsole({
           <Space size="large">
             <Breadcrumb>
               <Breadcrumb.Item key="domain">服务运营</Breadcrumb.Item>
-              <Breadcrumb.Item key="entity">VOC 工单</Breadcrumb.Item>
+              {/* The queues, the two profile lists and the overview are all views of
+                  the same VOC tickets. 人员管理 is not one of them — it is the routing
+                  configuration those tickets are matched against, and filing it under
+                  工单 said it held tickets. */}
+              {query.section !== "owners" && (
+                <Breadcrumb.Item key="entity">VOC 工单</Breadcrumb.Item>
+              )}
               {/* Where you actually are, which is the section unless the section is
                   the ticket list — there the queue is the more specific fact. It read
                   the queue label unconditionally before, so 用户画像 announced itself
@@ -581,6 +600,16 @@ export function WorkbenchConsole({
                     go={go}
                   />
                 ))}
+
+              {query.section === "owners" && (
+                <OwnersPane
+                  rules={owners.rules}
+                  members={owners.members}
+                  channels={options.channel}
+                  categories={options.category}
+                  unavailable={owners.unavailable}
+                />
+              )}
 
               {query.section === "metrics" &&
                 (metrics ? (

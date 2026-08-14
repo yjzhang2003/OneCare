@@ -1,6 +1,12 @@
 import type { AuthUser } from "../src/features/auth/types";
+import type { Member } from "../src/features/directory/members";
+import type { OwnerRuleRecord } from "../src/features/voc/owner-rules";
 import type { StringFilterField } from "../src/features/workbench/href";
 import { parseWorkbenchQuery } from "../src/features/workbench/query";
+import { listAssignableMembers } from "../src/features/directory/members";
+import { createTenantTokenProvider } from "../src/features/bitable/client";
+import { listOwnerRuleRecords } from "../src/features/voc/owner-directory";
+import { readBitableEnv, readBotEnv } from "../src/lib/env";
 import {
   readFilterOptions,
   readProfile,
@@ -21,6 +27,45 @@ const EMPTY_PROFILES = {
   page: 1,
   pageCount: 1,
 } as const;
+
+const EMPTY_OWNERS = {
+  rules: [] as readonly OwnerRuleRecord[],
+  members: [] as readonly Member[],
+  unavailable: false,
+} as const;
+
+// Both reads are best-effort and independent: a directory that cannot be read leaves the
+// person picker empty (and the page says so), while a routing table that cannot be read
+// is the one failure the page must not disguise as "no rules".
+async function readOwners(): Promise<{
+  rules: readonly OwnerRuleRecord[];
+  members: readonly Member[];
+  unavailable: boolean;
+}> {
+  const token = () => {
+    const bot = readBotEnv();
+    return createTenantTokenProvider(bot.appId, bot.appSecret);
+  };
+
+  const [rules, members] = await Promise.all([
+    listOwnerRuleRecords({ bitable: readBitableEnv(), token: token() })
+      .then((value) => ({ value }))
+      .catch((error: unknown) => {
+        console.error(
+          "Owner rules read failed:",
+          error instanceof Error ? error.message : String(error),
+        );
+        return { value: null };
+      }),
+    listAssignableMembers({ tenantToken: () => token()() }).catch(() => []),
+  ]);
+
+  return {
+    rules: rules.value ?? [],
+    members,
+    unavailable: rules.value === null,
+  };
+}
 
 const NO_OPTIONS: Readonly<Record<StringFilterField, readonly string[]>> = {
   channel: [],
@@ -65,8 +110,16 @@ export async function WorkbenchContent({
   // the section reads waited on the queue counts, which waited on nothing at all.
   // Only the reads this section actually needs are dispatched; the rest resolve
   // immediately to their empty values.
-  const [view, profileCounts, metrics, users, devices, selectedProfile, options] =
-    await Promise.all([
+  const [
+    view,
+    profileCounts,
+    metrics,
+    users,
+    devices,
+    selectedProfile,
+    options,
+    owners,
+  ] = await Promise.all([
       // Always: the sider's five queue counts, and — on the ticket section — one page
       // of rows. Both come from aggregate SQL rather than from 3628 rows in memory,
       // which is the whole point of having a database: a page is one query, the
@@ -103,10 +156,17 @@ export async function WorkbenchContent({
       // is now the two profile lists as well. Not on a profile *detail* page: that
       // page is one identity's records and has no filter row.
       query.section === "tickets" ||
+      query.section === "owners" ||
       (query.section === "users" && query.userRef === null) ||
       (query.section === "devices" && query.deviceRef === null)
         ? readFilterOptions()
         : NO_OPTIONS,
+
+      // 人员管理 reads the routing table live from the Bitable — it is a handful of rows
+      // and it is the source of truth the tagging pipeline itself reads, so mirroring it
+      // would buy nothing and could disagree. Failing to read it is shown as "unavailable"
+      // rather than as an empty routing table, which would look like "nobody is on call".
+      query.section === "owners" ? readOwners() : EMPTY_OWNERS,
     ]);
 
   return (
@@ -121,6 +181,7 @@ export async function WorkbenchContent({
       devices={devices}
       userCount={profileCounts.users}
       deviceCount={profileCounts.devices}
+      owners={owners}
       selectedProfile={selectedProfile}
     />
   );

@@ -3,7 +3,7 @@
 // Must precede every Arco import: Arco reads createRoot off the "react-dom" root
 // export, where React 19 no longer puts it, and silently falls back to the deleted
 // ReactDOM.render. src/features/workbench/arco-react19.test.tsx fails if it goes away.
-import "@arco-design/web-react/lib/_util/react-19-adapter";
+import "../src/features/workbench/arco-runtime";
 import "@arco-design/web-react/dist/css/arco.css";
 
 import { Layout, Menu, Tag } from "@arco-design/web-react";
@@ -14,6 +14,7 @@ import {
   IconDashboard,
   IconDesktop,
   IconFile,
+  IconSettings,
   IconList,
   IconUser,
   IconUserAdd,
@@ -143,6 +144,16 @@ export function ConsoleSider({
           <IconDesktop />
           <span className="oc-console__nav-label">设备追踪</span>
           {count(deviceCount)}
+        </Menu.Item>
+
+        {/* 人员管理: the routing table the pipeline reads. No count tag — a number here
+            would compete with the four above it for a value nobody triages by. */}
+        <Menu.Item
+          key="owners"
+          onClick={() => navigate(destination({ section: "owners" }))}
+        >
+          <IconSettings />
+          <span className="oc-console__nav-label">人员管理</span>
         </Menu.Item>
       </Menu>
 
