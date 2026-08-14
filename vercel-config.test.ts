@@ -18,6 +18,9 @@ const BITABLE_MARKERS = [
   // manual-analyze route looked region-neutral to this check while doing the most
   // cross-border work of anything in the repository.
   "analyzeOneRecord",
+  // Creates a Feishu group and posts into it. Not a Bitable call, but the same
+  // cross-border round trip this check exists to keep close to Hong Kong.
+  "createWarRoomChat",
 ];
 
 // Entry points Vercel turns into functions: route handlers and pages.

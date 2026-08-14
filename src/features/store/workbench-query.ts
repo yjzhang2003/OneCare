@@ -463,6 +463,26 @@ export async function readProfile(
   return grouped[0] ?? null;
 }
 
+// Every record behind one identity, for the analysis behind 画像分析 / 设备预警. Not the
+// ticket page's paged query: the rules read the whole set (polarity mix, which dimension
+// repeats, when the feedback arrived), and a page boundary would silently change the
+// verdict. Repeat identities carry a handful of records each — 1456 records across 600
+// users — so this is bounded in practice, and capped anyway.
+export async function readIdentityRecords(
+  kind: "user" | "device",
+  id: string,
+): Promise<readonly WorkbenchTicket[]> {
+  const column = kind === "user" ? "user_ref" : "device_ref";
+  const rows = (await getSql().query(
+    `SELECT * FROM voc_records
+     WHERE ${column} = $1
+     ORDER BY feedback_at DESC NULLS LAST, record_number ASC
+     LIMIT 200`,
+    [id],
+  )) as Record<string, unknown>[];
+  return rows.map((row) => toWorkbenchTicket(toVocRecord(row)));
+}
+
 // aggregateVocMetrics in SQL: one statement for the scalars, two small ones for the
 // dimension and channel breakdowns. This was the last surface reading all 3628 rows
 // to render a page.
@@ -563,4 +583,26 @@ export async function readVocMetrics(
       savedHours: (taggedCount * options.manualMinutesPerRecord) / 60,
     },
   };
+}
+
+// The open_ids of whoever owns this identity's unfinished tickets — the people a 协同群
+// for it has to contain. Read separately from readIdentityRecords because WorkbenchTicket
+// deliberately drops owner open_ids: an open_id names a person, and those rows are served
+// from a cache entry shared by every viewer.
+export async function readIdentityOwnerOpenIds(
+  kind: "user" | "device",
+  id: string,
+): Promise<readonly string[]> {
+  const column = kind === "user" ? "user_ref" : "device_ref";
+  const rows = (await getSql().query(
+    `SELECT DISTINCT unnest(owner_open_ids) AS open_id
+     FROM voc_records
+     WHERE ${column} = $1
+       AND ticket_opened_at IS NOT NULL
+       AND state NOT IN ('已闭环', '无需跟进')`,
+    [id],
+  )) as Record<string, unknown>[];
+  return rows
+    .map((row) => String(row.open_id ?? ""))
+    .filter((openId) => openId.length > 0);
 }

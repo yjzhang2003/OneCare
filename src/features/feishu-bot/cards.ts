@@ -893,3 +893,58 @@ export function createVocTicketMessage(
     content: JSON.stringify(createVocTicketCard(record, tag)),
   };
 }
+
+// The card posted into an identity's 协同群 when an operator pulls one from 用户画像 or
+// 设备追踪. It carries the whole analysis, because a group created with nothing in it
+// leaves everyone who was just added asking what it is for — and because the analysis is
+// the reason the group exists.
+//
+// 由 states which engine produced the finding. Today that is the rule engine, not a
+// model, and the card says so for the same reason the page does: a group full of
+// colleagues is exactly where an unmarked machine judgement would get quoted as one.
+export type ProfileInsightCardInput = Readonly<{
+  kind: "user" | "device";
+  id: string;
+  level: string;
+  headline: string;
+  labels: readonly string[];
+  signals: readonly string[];
+  actions: readonly string[];
+  producedBy: string;
+  // The identity's open ticket numbers, so the group can start from the work in flight
+  // rather than from a search.
+  openTicketNumbers: readonly string[];
+}>;
+
+export function createProfileInsightCard(
+  input: ProfileInsightCardInput,
+): FeishuCard {
+  const isUser = input.kind === "user";
+  return cardRoot({
+    title: isUser ? "用户画像分析" : "设备预警分析",
+    subtitle: input.id,
+    status: `${isUser ? "关注度" : "预警等级"} ${input.level}`,
+    statusColor: input.level === "高" ? "red" : input.level === "中" ? "orange" : "grey",
+    template: input.level === "高" ? "red" : "blue",
+    summary: `${isUser ? "用户画像" : "设备预警"} · ${input.id}`,
+    elements: [
+      field("结论", input.headline),
+      field("标签", input.labels.length > 0 ? input.labels.join(" / ") : "—"),
+      field(
+        "依据",
+        input.signals.length > 0 ? input.signals.map((s) => `· ${s}`).join("\n") : "—",
+      ),
+      field(
+        "建议动作",
+        input.actions.length > 0 ? input.actions.map((a) => `· ${a}`).join("\n") : "—",
+      ),
+      field(
+        "在途工单",
+        input.openTicketNumbers.length > 0
+          ? input.openTicketNumbers.join("、")
+          : "无",
+      ),
+      note(`由 ${input.producedBy} 生成`),
+    ],
+  });
+}

@@ -53,6 +53,7 @@ import type {
   IdentityProfile,
   ProfilePage,
 } from "../src/features/workbench/profiles";
+import { ProfileInsightPanel } from "./workbench-profile-insight";
 import { ConsoleSider } from "./workbench-sider";
 
 const ABSENT = "—";
@@ -821,6 +822,11 @@ function ProfileDetail({
           { label: "未闭环", value: profile.open },
         ]}
       />
+
+      {/* The analysis and the 拉群 it leads to. Its own client component because both
+          buttons are actions with in-flight state, and this pane is otherwise a
+          read-only rendering of what the server already resolved. */}
+      <ProfileInsightPanel kind={kind} id={id} open={profile.open} />
 
       <Table
         rowKey="recordNumber"

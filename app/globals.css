@@ -6085,3 +6085,27 @@ a {
 .oc-chart__note {
   margin-top: 10px;
 }
+
+/* ---------------------------------------------------------------------------
+   画像分析 / 设备预警
+
+   The evidence and action lists are the substance of the panel, so they get real
+   list styling rather than Arco's reset: an operator reads them as a checklist
+   before picking up the phone.
+   --------------------------------------------------------------------------- */
+.oc-profile-insight__block ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--color-text-1, #1d2129);
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.oc-profile-insight__block li {
+  overflow-wrap: anywhere;
+}
+
+/* Provenance sits quieter than the finding it qualifies, but never hidden. */
+.oc-profile-insight__by {
+  font-size: 12px;
+}
