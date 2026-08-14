@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createBitableClient, createTenantTokenProvider } from "./client";
+import {
+  BATCH_UPDATE_LIMIT,
+  createBitableClient,
+  createTenantTokenProvider,
+} from "./client";
 import { VOC_FIELD_NAMES } from "./field-map";
 
 const env = {
@@ -295,6 +299,80 @@ describe("createBitableClient", () => {
     await expect(
       client.updateRecord("rec1", { bad: 1 }),
     ).rejects.toThrow(/1254005/);
+  });
+
+  // Only the demo re-seeding uses this, and only because it has to rewrite the whole
+  // table: 3628 sequential PUTs is 3628 round trips against the app's write rate limit.
+  describe("batchUpdateRecords", () => {
+    it("chunks at Feishu's ceiling and sends record_id with fields", async () => {
+      const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+        jsonResponse({ code: 0, data: {} }),
+      );
+      const client = createBitableClient(
+        env,
+        token,
+        fetcher as unknown as typeof fetch,
+      );
+
+      const updates = Array.from({ length: BATCH_UPDATE_LIMIT + 3 }, (_, i) => ({
+        recordId: `rec${i}`,
+        fields: { [VOC_FIELD_NAMES.state]: "已闭环" },
+      }));
+      await client.batchUpdateRecords(updates);
+
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      const [url, init] = fetcher.mock.calls[0];
+      expect(url).toContain("/records/batch_update?user_id_type=open_id");
+      expect(init?.method).toBe("POST");
+      const first = JSON.parse(init?.body as string) as {
+        records: { record_id: string; fields: unknown }[];
+      };
+      expect(first.records).toHaveLength(BATCH_UPDATE_LIMIT);
+      expect(first.records[0]).toEqual({
+        record_id: "rec0",
+        fields: { [VOC_FIELD_NAMES.state]: "已闭环" },
+      });
+      const second = JSON.parse(
+        fetcher.mock.calls[1]![1]?.body as string,
+      ) as { records: unknown[] };
+      expect(second.records).toHaveLength(3);
+    });
+
+    it("sends nothing when there is nothing to update", async () => {
+      const fetcher = vi.fn(async () => jsonResponse({ code: 0, data: {} }));
+      const client = createBitableClient(
+        env,
+        token,
+        fetcher as unknown as typeof fetch,
+      );
+
+      await client.batchUpdateRecords([]);
+      expect(fetcher).not.toHaveBeenCalled();
+    });
+
+    // A partial failure across several requests can only be resumed if the caller is
+    // told how far it got, so the position is in the message rather than just the code.
+    it("names the position of the chunk that failed", async () => {
+      let call = 0;
+      const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => {
+        call += 1;
+        return jsonResponse(call === 1 ? { code: 0, data: {} } : { code: 1254005 });
+      });
+      const client = createBitableClient(
+        env,
+        token,
+        fetcher as unknown as typeof fetch,
+      );
+
+      const updates = Array.from({ length: BATCH_UPDATE_LIMIT + 1 }, (_, i) => ({
+        recordId: `rec${i}`,
+        fields: {},
+      }));
+
+      await expect(client.batchUpdateRecords(updates)).rejects.toThrow(
+        new RegExp(`record ${BATCH_UPDATE_LIMIT}.*1254005`),
+      );
+    });
   });
 
   it("finds a ticket by its war room chat id with a filtered search, not a full scan", async () => {

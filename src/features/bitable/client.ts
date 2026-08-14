@@ -89,10 +89,28 @@ export type CountFilterCondition = Readonly<{
   value: readonly string[];
 }>;
 
+export type BatchRecordUpdate = Readonly<{
+  recordId: string;
+  fields: BitableFields;
+}>;
+
+// Feishu's own ceiling for records/batch_update. Chunking is the client's job rather
+// than the caller's, so no caller can exceed it by accident.
+export const BATCH_UPDATE_LIMIT = 500;
+
 export type BitableClient = Readonly<{
   getRecord(recordId: string): Promise<VocRecord | null>;
   listRecords(options?: ListRecordsOptions): Promise<readonly VocRecord[]>;
   updateRecord(recordId: string, fields: BitableFields): Promise<void>;
+  // Many records in one request, for the one job that has to touch the whole table:
+  // re-seeding the demo dataset's timeline. 3628 sequential updateRecord calls would be
+  // roughly 3628 round trips at ~400ms and would sit on the app's write rate limit for
+  // twenty minutes; batch_update takes up to 500 records per call, so the same work is
+  // eight requests. Deliberately not used by any operator-facing path — those change
+  // one record and should stay one obvious call.
+  batchUpdateRecords(
+    updates: readonly BatchRecordUpdate[],
+  ): Promise<void>;
   listFieldNames(): Promise<readonly string[]>;
   findByWarRoomChatId(chatId: string): Promise<VocRecord | null>;
   // Task 14: a records/search count is ~1.0s against the live Base (measured)
@@ -197,6 +215,33 @@ export function createBitableClient(
         throw new Error(
           `Bitable update failed (code ${String(payload.code)})`,
         );
+      }
+    },
+
+    async batchUpdateRecords(updates) {
+      for (let from = 0; from < updates.length; from += BATCH_UPDATE_LIMIT) {
+        const chunk = updates.slice(from, from + BATCH_UPDATE_LIMIT);
+        const payload = await call(
+          `${recordsUrl}/batch_update?user_id_type=open_id`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              records: chunk.map((update) => ({
+                record_id: update.recordId,
+                fields: update.fields,
+              })),
+            }),
+          },
+        );
+
+        if (payload.code !== 0) {
+          // Named with the chunk's position: a partial failure across eight requests is
+          // otherwise impossible to resume from, and this write is re-runnable only if
+          // the caller knows how far it got.
+          throw new Error(
+            `Bitable batch update failed at record ${from} (code ${String(payload.code)})`,
+          );
+        }
       }
     },
 

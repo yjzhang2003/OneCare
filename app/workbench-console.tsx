@@ -1033,7 +1033,11 @@ function MetricsPane({ metrics }: Readonly<{ metrics: VocMetrics }>) {
             label,
             count,
           }))}
-          note="源数据全部是负向 VOC，这里的极性来自 AI 打标"
+          // The old note here read "源数据全部是负向 VOC，这里的极性来自 AI 打标". Both
+          // halves stopped being true: the corpus is mostly e-commerce reviews and plenty
+          // of them are praise, and since the demo dataset was re-seeded most of these
+          // tags are synthesized rather than model output. A label on a chart has to hold.
+          note="极性来自打标结果；演示数据集中多数打标为合成（打标来源 demo-seed）"
         />
         <BarChart
           title="问题维度分布"
