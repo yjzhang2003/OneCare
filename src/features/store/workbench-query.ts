@@ -13,6 +13,7 @@ import {
   deviceProfiles,
   userProfiles,
   type IdentityProfile,
+  type ProfilePage,
 } from "../workbench/profiles";
 import type { VocMetrics } from "../voc/metrics";
 import type { VocDimension } from "../voc/triage";
@@ -79,9 +80,17 @@ function orderBy(sort: WorkbenchQuery["sort"]): string {
 
 type Bound = Readonly<{ clause: string; params: readonly unknown[] }>;
 
-// matchesFilters() and matchesSearch(). Parameterised throughout — the values are
+// matchesQuery() and matchesSearch(). Parameterised throughout — the values are
 // operator input arriving from a URL.
-function filterClauses(query: WorkbenchQuery, from: number): Bound {
+//
+// `alsoSearch` widens the search to one more column, and exists for the profile
+// views: there, the most useful thing to type is the identity itself, which is the
+// column being grouped on and is not among the four a ticket search covers.
+function filterClauses(
+  query: WorkbenchQuery,
+  from: number,
+  alsoSearch?: string,
+): Bound {
   const clauses: string[] = [];
   const params: unknown[] = [];
   const add = (sql: string, value: unknown) => {
@@ -109,9 +118,14 @@ function filterClauses(query: WorkbenchQuery, from: number): Bound {
     // reference performs, and it reads as the intent rather than as a trick.
     params.push(`%${query.search}%`);
     const p = `$${from + params.length - 1}`;
-    clauses.push(
-      `(content ILIKE ${p} OR model ILIKE ${p} OR record_number ILIKE ${p} OR source_ticket_no ILIKE ${p})`,
-    );
+    const columns = [
+      "content",
+      "model",
+      "record_number",
+      "source_ticket_no",
+      ...(alsoSearch ? [alsoSearch] : []),
+    ];
+    clauses.push(columns.map((column) => `${column} ILIKE ${p}`).join(" OR "));
   }
 
   return {
@@ -314,38 +328,86 @@ export async function readFilterOptions(): Promise<
 // Sorting of the distinct arrays stays in JavaScript so the collation matches what
 // the reference produced; Postgres's own ordering of Chinese text depends on the
 // database's locale and would differ.
+// Filters and search apply to the *records*, which are then grouped — the only
+// reading of "filter a profile" that means anything, since every filterable field
+// (channel, state, severity, 问题维度, …) belongs to a record and not to an identity.
+// So 严重度=高 answers "who has a high-severity record", and the counts in each row
+// describe the filtered records, not the identity's whole history. The queue is
+// deliberately not applied: it is the ticket list's control, it is not on screen
+// here, and inheriting 待处理 from the last list view would silently hide identities
+// whose records are all closed.
 export async function readProfiles(
   kind: "user" | "device",
-): Promise<Readonly<{ profiles: readonly IdentityProfile[]; total: number }>> {
+  query?: WorkbenchQuery,
+): Promise<ProfilePage> {
   const column = kind === "user" ? "user_ref" : "device_ref";
+  // Search also matches the identity itself here: on a page listing 600 opaque ids,
+  // pasting one in is the most likely thing an operator wants to do.
+  const filters = query
+    ? filterClauses(query, 1, column)
+    : { clause: "TRUE", params: [] as readonly unknown[] };
+  const where = `r.${column} <> '' AND (${filters.clause})`;
+  const params = [...filters.params];
+
   // dimensions is pre-aggregated in its own CTE and joined, rather than fetched by a
   // correlated subquery per group. The first version did the latter, which re-scans
   // the whole table once per group — 2772 scans for the user view — and is the kind
   // of N+1 that hides inside a single statement and looks like one query.
-  const rows = (await getSql().query(
-    `WITH dims AS (
-       SELECT ${column} AS id, array_agg(DISTINCT d) AS dimensions
-       FROM voc_records, unnest(dimensions) AS d
-       WHERE ${column} <> '' AND d <> ''
-       GROUP BY ${column}
-     )
+  //
+  // Both CTEs read the same filtered set, so a filter cannot admit a record for the
+  // aggregate row while excluding it from that row's 问题维度 list.
+  const grouped = `
+    WITH matched AS (
+      SELECT * FROM voc_records r WHERE ${where}
+    ), dims AS (
+      SELECT m.${column} AS id, array_agg(DISTINCT d) AS dimensions
+      FROM matched m, unnest(m.dimensions) AS d
+      WHERE d <> ''
+      GROUP BY m.${column}
+    ), grouped AS (
+      SELECT
+        r.${column} AS id,
+        COUNT(*)::int AS records,
+        COUNT(*) FILTER (WHERE r.severity = '高')::int AS severity_high,
+        COUNT(*) FILTER (WHERE r.state NOT IN ('已闭环', '无需跟进'))::int AS open,
+        COUNT(*) FILTER (WHERE r.state IN ('已闭环', '无需跟进'))::int AS closed,
+        MIN(r.feedback_at) AS first_feedback_at,
+        MAX(r.feedback_at) AS last_feedback_at,
+        array_agg(DISTINCT r.category) FILTER (WHERE r.category <> '') AS categories,
+        array_agg(DISTINCT r.model) FILTER (WHERE r.model <> '') AS models,
+        array_agg(DISTINCT r.channel) FILTER (WHERE r.channel <> '') AS channels,
+        dims.dimensions AS dimensions
+      FROM matched r
+      LEFT JOIN dims ON dims.id = r.${column}
+      GROUP BY r.${column}, dims.dimensions
+    )`;
+
+  const sql = getSql();
+  // Counted before the page is read, not alongside it: which page exists depends on
+  // how many rows matched, so clamping the requested page needs this answer first.
+  const countRows = (await sql.query(
+    `${grouped}
      SELECT
-       r.${column} AS id,
-       COUNT(*)::int AS records,
-       COUNT(*) FILTER (WHERE r.severity = '高')::int AS severity_high,
-       COUNT(*) FILTER (WHERE r.state NOT IN ('已闭环', '无需跟进'))::int AS open,
-       COUNT(*) FILTER (WHERE r.state IN ('已闭环', '无需跟进'))::int AS closed,
-       MIN(r.feedback_at) AS first_feedback_at,
-       MAX(r.feedback_at) AS last_feedback_at,
-       array_agg(DISTINCT r.category) FILTER (WHERE r.category <> '') AS categories,
-       array_agg(DISTINCT r.model) FILTER (WHERE r.model <> '') AS models,
-       array_agg(DISTINCT r.channel) FILTER (WHERE r.channel <> '') AS channels,
-       dims.dimensions AS dimensions
-     FROM voc_records r
-     LEFT JOIN dims ON dims.id = r.${column}
-     WHERE r.${column} <> ''
-     GROUP BY r.${column}, dims.dimensions
-     ORDER BY COUNT(*) DESC, r.${column} ASC`,
+       COUNT(*) FILTER (WHERE records > 1)::int AS matched,
+       COUNT(*)::int AS total
+     FROM grouped`,
+    params,
+  )) as Record<string, number>[];
+
+  const counts = countRows[0] ?? {};
+  const matched = counts.matched ?? 0;
+  const total = counts.total ?? 0;
+
+  const pageCount = Math.max(1, Math.ceil(matched / PAGE_SIZE));
+  const page = Math.min(query?.page ?? 1, pageCount);
+
+  const rows = (await sql.query(
+    `${grouped}
+     SELECT * FROM grouped
+     WHERE records > 1
+     ORDER BY records DESC, id ASC
+     LIMIT ${PAGE_SIZE} OFFSET ${(page - 1) * PAGE_SIZE}`,
+    params,
   )) as Record<string, unknown>[];
 
   const sortText = (values: unknown): readonly string[] =>
@@ -355,37 +417,40 @@ export async function readProfiles(
   const iso = (value: unknown): string | null =>
     value instanceof Date ? value.toISOString() : null;
 
-  const all = rows.map((row) => ({
-    id: String(row.id ?? ""),
-    records: Number(row.records ?? 0),
-    categories: sortText(row.categories),
-    models: sortText(row.models),
-    channels: sortText(row.channels),
-    dimensions: sortText(row.dimensions),
-    severityHigh: Number(row.severity_high ?? 0),
-    open: Number(row.open ?? 0),
-    closed: Number(row.closed ?? 0),
-    firstFeedbackAt: iso(row.first_feedback_at),
-    lastFeedbackAt: iso(row.last_feedback_at),
-  }));
-
   return {
-    profiles: all.filter((profile) => profile.records > 1),
-    total: all.length,
+    profiles: rows.map((row) => ({
+      id: String(row.id ?? ""),
+      records: Number(row.records ?? 0),
+      categories: sortText(row.categories),
+      models: sortText(row.models),
+      channels: sortText(row.channels),
+      dimensions: sortText(row.dimensions),
+      severityHigh: Number(row.severity_high ?? 0),
+      open: Number(row.open ?? 0),
+      closed: Number(row.closed ?? 0),
+      firstFeedbackAt: iso(row.first_feedback_at),
+      lastFeedbackAt: iso(row.last_feedback_at),
+    })),
+    matched,
+    total,
+    page,
+    pageCount,
   };
 }
 
-// The one profile a detail page needs, including single-record identities that the
-// list above deliberately omits.
+// The one profile a detail page needs — including single-record identities, which the
+// list deliberately omits, and identities on any page of it.
+//
+// One indexed read of that identity's records, grouped by the reference implementation
+// itself. It used to search readProfiles' output first and fall back to this; once
+// that list became a page of 50, the fallback was the only branch that could be
+// correct for an identity on page 2, so the search is gone rather than left to be
+// right by luck. This is also the cheaper of the two: an index lookup instead of a
+// GROUP BY over the table.
 export async function readProfile(
   kind: "user" | "device",
   id: string,
 ): Promise<IdentityProfile | null> {
-  const { profiles, total } = await readProfiles(kind);
-  const listed = profiles.find((profile) => profile.id === id);
-  if (listed) return listed;
-  if (total === 0) return null;
-  // A single-record identity: one more grouped query, scoped to it.
   const column = kind === "user" ? "user_ref" : "device_ref";
   const rows = (await getSql().query(
     `SELECT * FROM voc_records WHERE ${column} = $1`,

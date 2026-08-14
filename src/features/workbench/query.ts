@@ -194,7 +194,19 @@ function matchesSearch(ticket: WorkbenchTicket, search: string): boolean {
   );
 }
 
-function matchesFilters(ticket: WorkbenchTicket, query: WorkbenchQuery): boolean {
+// Which records a query admits — the reference definition, in one place because there
+// are now two consumers and two implementations. The ticket list uses it directly; the
+// profile lists group the records it admits, and their SQL is held to this function by
+// scripts/equiv exactly as the ticket page query is.
+//
+// `alsoSearch` widens the search to one more field per record, mirroring the same
+// parameter on the SQL side: the profile views search the identity column too, since
+// on a page of 600 opaque ids that is the most useful thing to type.
+export function matchesQuery(
+  ticket: WorkbenchTicket,
+  query: WorkbenchQuery,
+  alsoSearch?: (ticket: WorkbenchTicket) => string,
+): boolean {
   if (query.channel !== null && ticket.channel !== query.channel) return false;
   if (query.category !== null && ticket.category !== query.category) return false;
   if (query.polarity !== null && ticket.polarity !== query.polarity) return false;
@@ -223,7 +235,11 @@ function matchesFilters(ticket: WorkbenchTicket, query: WorkbenchQuery): boolean
   if (query.deviceRef !== null && ticket.deviceRef !== query.deviceRef) {
     return false;
   }
-  return matchesSearch(ticket, query.search);
+  if (query.search.length === 0) return true;
+  if (matchesSearch(ticket, query.search)) return true;
+  return (alsoSearch?.(ticket) ?? "")
+    .toLowerCase()
+    .includes(query.search.toLowerCase());
 }
 
 const SEVERITY_RANK: Readonly<Record<string, number>> = {
@@ -307,7 +323,7 @@ export function applyWorkbenchQuery(
 
   const matchedRows = tickets
     .filter((ticket) => inQueue(ticket, query.queue, now))
-    .filter((ticket) => matchesFilters(ticket, query))
+    .filter((ticket) => matchesQuery(ticket, query))
     .slice()
     .sort((a, b) => compare(a, b, query.sort, now));
 

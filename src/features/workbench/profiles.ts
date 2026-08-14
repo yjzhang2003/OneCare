@@ -33,6 +33,20 @@ export type IdentityProfile = Readonly<{
   lastFeedbackAt: string | null;
 }>;
 
+// One page of a profile list. Declared here rather than in the store module for the
+// same reason WorkbenchPage lives in query.ts: it is what a view receives, and a
+// client component must be able to name it without importing the database client.
+export type ProfilePage = Readonly<{
+  profiles: readonly IdentityProfile[];
+  // Repeat identities the filters admit — the size of the list being paged.
+  matched: number;
+  // Every identity the filters admit, single-record ones included. The difference
+  // between the two is what the list leaves out on purpose.
+  total: number;
+  page: number;
+  pageCount: number;
+}>;
+
 const TERMINAL = new Set(["已闭环", "无需跟进"]);
 
 function distinct(values: readonly string[]): readonly string[] {

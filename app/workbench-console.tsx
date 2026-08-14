@@ -49,7 +49,10 @@ import {
   type WorkbenchPage,
   type WorkbenchQuery,
 } from "../src/features/workbench/query";
-import type { IdentityProfile } from "../src/features/workbench/profiles";
+import type {
+  IdentityProfile,
+  ProfilePage,
+} from "../src/features/workbench/profiles";
 import { ConsoleSider } from "./workbench-sider";
 
 const ABSENT = "—";
@@ -136,12 +139,12 @@ export type WorkbenchConsoleProps = Readonly<{
   // Distinct values are computed on the server from every record, not from the
   // current page, so a filter never offers only what happens to be on screen.
   options: Readonly<Record<StringFilterField, readonly string[]>>;
-  // Already narrowed to the repeat profiles by the server; the totals are here so
-  // the tabs can state what was left out instead of implying completeness.
-  users: readonly IdentityProfile[];
-  devices: readonly IdentityProfile[];
-  userTotal: number;
-  deviceTotal: number;
+  // One page of repeat profiles each, narrowed by the same filters and search the
+  // ticket list uses. `total` is every identity the filters admit, single-record ones
+  // included, so the list can state what it leaves out instead of implying
+  // completeness.
+  users: ProfilePage;
+  devices: ProfilePage;
   // The sider's own two counts, read on every section rather than taken from the
   // lists above — those are empty unless their section is the one being shown, so
   // deriving the counts from them made the sider report 0 users everywhere else.
@@ -159,8 +162,6 @@ export function WorkbenchConsole({
   options,
   users,
   devices,
-  userTotal,
-  deviceTotal,
   userCount,
   deviceCount,
   selectedProfile,
@@ -228,7 +229,16 @@ export function WorkbenchConsole({
     observer.observe(content);
     observer.observe(wrap);
     return () => observer.disconnect();
-  }, [view.rows.length, query.queue]);
+    // Re-measured whenever the mounted table changes: the ticket list and the two
+    // profile lists share this ref (only one is ever mounted), and each has its own
+    // row count and its own chrome above it.
+  }, [
+    view.rows.length,
+    query.queue,
+    query.section,
+    users.profiles.length,
+    devices.profiles.length,
+  ]);
 
   function go(href: string) {
     startTransition(() => router.push(href));
@@ -336,8 +346,16 @@ export function WorkbenchConsole({
     },
   ];
 
-  function filterSelect(field: StringFilterField, placeholder: string) {
-    return (
+  // The nine selects plus the search box, shared by the ticket list and both profile
+  // lists. One definition because they are the same controls over the same records:
+  // a profile is an aggregation of records, so filtering profiles means filtering the
+  // records first and grouping what is left. The ticket list adds its sort control
+  // through `extra`; the profile lists have a fixed order (heaviest first).
+  function filterRow(
+    searchPlaceholder: string,
+    extra?: React.ReactNode,
+  ): React.ReactNode {
+    const filterSelect = (field: StringFilterField, placeholder: string) => (
       <Select
         key={field}
         allowClear
@@ -349,6 +367,29 @@ export function WorkbenchConsole({
           go(filterHref(query, toPatch(field, (value as string) ?? null)))
         }
       />
+    );
+
+    return (
+      <Space wrap style={{ marginBottom: 12 }}>
+        {filterSelect("state", "流程状态")}
+        {filterSelect("severity", "严重度")}
+        {filterSelect("channel", "渠道")}
+        {filterSelect("category", "品类")}
+        {filterSelect("polarity", "情绪极性")}
+        {filterSelect("dimension", "问题维度")}
+        {filterSelect("owner", "负责人")}
+        {filterSelect("unit", "事业部")}
+        {filterSelect("level1", "问题分类")}
+        <Input.Search
+          allowClear
+          placeholder={searchPlaceholder}
+          value={search}
+          style={{ width: 240 }}
+          onChange={setSearch}
+          onSearch={(value) => go(filterHref(query, { search: value || null }))}
+        />
+        {extra}
+      </Space>
     );
   }
 
@@ -374,8 +415,13 @@ export function WorkbenchConsole({
             <Breadcrumb>
               <Breadcrumb.Item key="domain">服务运营</Breadcrumb.Item>
               <Breadcrumb.Item key="entity">VOC 工单</Breadcrumb.Item>
-              <Breadcrumb.Item key="queue">
-                {QUEUES.find((q) => q.key === query.queue)?.label}
+              {/* Where you actually are, which is the section unless the section is
+                  the ticket list — there the queue is the more specific fact. It read
+                  the queue label unconditionally before, so 用户画像 announced itself
+                  as 待处理 in the breadcrumb while the card title said otherwise. */}
+              <Breadcrumb.Item key="section">
+                {SECTION_TITLE[query.section] ??
+                  QUEUES.find((q) => q.key === query.queue)?.label}
               </Breadcrumb.Item>
             </Breadcrumb>
           </Space>
@@ -416,6 +462,12 @@ export function WorkbenchConsole({
                 {query.section === "tickets" && (
                   <Tag color="arcoblue">{view.matched} 条</Tag>
                 )}
+                {query.section === "users" && query.userRef === null && (
+                  <Tag color="arcoblue">{users.matched} 个</Tag>
+                )}
+                {query.section === "devices" && query.deviceRef === null && (
+                  <Tag color="arcoblue">{devices.matched} 个</Tag>
+                )}
               </Space>
             }
           >
@@ -435,26 +487,8 @@ export function WorkbenchConsole({
 
               {query.section === "tickets" && (
                 <>
-                  <Space wrap style={{ marginBottom: 12 }}>
-                    {filterSelect("state", "流程状态")}
-                    {filterSelect("severity", "严重度")}
-                    {filterSelect("channel", "渠道")}
-                    {filterSelect("category", "品类")}
-                    {filterSelect("polarity", "情绪极性")}
-                    {filterSelect("dimension", "问题维度")}
-                    {filterSelect("owner", "负责人")}
-                    {filterSelect("unit", "事业部")}
-                    {filterSelect("level1", "问题分类")}
-                    <Input.Search
-                      allowClear
-                      placeholder="搜原文 / 编号 / 机型 / 来源单号"
-                      value={search}
-                      style={{ width: 240 }}
-                      onChange={setSearch}
-                      onSearch={(value) =>
-                        go(filterHref(query, { search: value || null }))
-                      }
-                    />
+                  {filterRow(
+                    "搜原文 / 编号 / 机型 / 来源单号",
                     <Select
                       value={query.sort}
                       style={{ width: 176 }}
@@ -465,8 +499,8 @@ export function WorkbenchConsole({
                       onChange={(value) =>
                         go(filterHref(query, { sort: value as string }))
                       }
-                    />
-                  </Space>
+                    />,
+                  )}
 
                   <div ref={tableWrapRef}>
                     <Table
@@ -505,10 +539,12 @@ export function WorkbenchConsole({
                 (query.userRef === null ? (
                   <ProfilePane
                     kind="user"
-                    profiles={users}
-                    total={userTotal}
+                    page={users}
                     query={query}
                     go={go}
+                    filterRow={filterRow}
+                    tableWrapRef={tableWrapRef}
+                    tableHeight={tableHeight}
                   />
                 ) : (
                   <ProfileDetail
@@ -526,10 +562,12 @@ export function WorkbenchConsole({
                 (query.deviceRef === null ? (
                   <ProfilePane
                     kind="device"
-                    profiles={devices}
-                    total={deviceTotal}
+                    page={devices}
                     query={query}
                     go={go}
+                    filterRow={filterRow}
+                    tableWrapRef={tableWrapRef}
+                    tableHeight={tableHeight}
                   />
                 ) : (
                   <ProfileDetail
@@ -563,18 +601,27 @@ export function WorkbenchConsole({
 // components would drift.
 function ProfilePane({
   kind,
-  profiles,
-  total,
+  page,
   query,
   go,
+  filterRow,
+  tableWrapRef,
+  tableHeight,
 }: Readonly<{
   kind: "user" | "device";
-  profiles: readonly IdentityProfile[];
-  total: number;
+  page: ProfilePage;
   query: WorkbenchQuery;
   go: (href: string) => void;
+  // The console's own filter controls, passed in rather than rebuilt: these are the
+  // same nine selects over the same records, and a second copy would drift.
+  filterRow: (searchPlaceholder: string, extra?: React.ReactNode) => React.ReactNode;
+  // The measured table height, shared with the ticket list. Only one of the two
+  // tables is ever mounted, so they can share the one ref and the one measurement.
+  tableWrapRef: React.RefObject<HTMLDivElement | null>;
+  tableHeight: number | null;
 }>) {
   const isUser = kind === "user";
+  const { profiles, matched, total } = page;
 
   const columns = [
     {
@@ -644,36 +691,65 @@ function ProfilePane({
 
   return (
     <>
+      {filterRow(
+        isUser ? "搜用户标识 / 原文 / 机型" : "搜设备标识 / 原文 / 机型",
+      )}
+
       <Space style={{ marginBottom: 12 }}>
-        <Tag>{`${profiles.length} / ${total}`}</Tag>
-        <Tag color="arcoblue">{isUser ? "多条反馈" : "重复报修"}</Tag>
+        <Tag color="arcoblue">
+          {`${matched} 个${isUser ? "多条反馈" : "重复报修"}`}
+        </Tag>
+        <Tag>{`共 ${total} 个${isUser ? "用户" : "设备"}标识`}</Tag>
       </Space>
 
-      <Table
-        rowKey="id"
-        columns={columns}
-        data={[...profiles]}
-        pagination={{ pageSize: 20, showTotal: true, sizeCanChange: false }}
-        scroll={{ x: 1200, y: 420 }}
-        border={{ wrapper: true, cell: true }}
-        size="small"
-        noDataElement="没有多条记录的对象"
-        onRow={(row) => ({
-          // Drilling in goes to the ticket list filtered to this identity, rather
-          // than opening yet another drawer: the records are the substance, and the
-          // list already knows how to show them.
-          onClick: () =>
-            go(
-              filterHref(query, {
-                ...(isUser ? { user: row.id } : { device: row.id }),
-                // queue=all so the detail page shows every record for this
-                // identity rather than only those the current queue admits.
-                queue: "all",
-              }),
-            ),
-          style: { cursor: "pointer" },
-        })}
-      />
+      <div ref={tableWrapRef}>
+        <Table
+          rowKey="id"
+          columns={columns}
+          data={[...profiles]}
+          // Paged on the server like the ticket list, so a filter narrows the whole
+          // set rather than the page. Arco's own pagination would have paged
+          // whatever 50 rows the server sent and called it the total.
+          pagination={false}
+          scroll={{ x: 1200, ...(tableHeight ? { y: tableHeight } : {}) }}
+          border={{ wrapper: true, cell: true }}
+          size="small"
+          // "Nothing here" and "everything here has exactly one record" are different
+          // answers, and the second one is what a search for a specific id usually
+          // gets: the identity exists, it just isn't a repeat. Saying so beats an
+          // empty table that reads as "no such user".
+          noDataElement={
+            matched === 0 && total > 0
+              ? `命中 ${total} 个标识，但都只有 1 条反馈`
+              : "没有多条记录的对象"
+          }
+          onRow={(row) => ({
+            // Drilling in goes to the ticket list filtered to this identity, rather
+            // than opening yet another drawer: the records are the substance, and the
+            // list already knows how to show them.
+            onClick: () =>
+              go(
+                filterHref(query, {
+                  ...(isUser ? { user: row.id } : { device: row.id }),
+                  // queue=all so the detail page shows every record for this
+                  // identity rather than only those the current queue admits.
+                  queue: "all",
+                }),
+              ),
+            style: { cursor: "pointer" },
+          })}
+        />
+
+        <div className="oc-console__pager">
+          <Pagination
+            current={page.page}
+            total={matched}
+            pageSize={PAGE_SIZE}
+            showTotal={(count) => `共 ${count} 个`}
+            onChange={(next) => go(pageHref(query, next))}
+          />
+        </div>
+      </div>
     </>
   );
 }

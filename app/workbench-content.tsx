@@ -14,7 +14,13 @@ import { WorkbenchConsole } from "./workbench-console";
 
 type RawSearchParams = Readonly<Record<string, string | string[] | undefined>>;
 
-const EMPTY_PROFILES = { profiles: [], total: 0 } as const;
+const EMPTY_PROFILES = {
+  profiles: [],
+  matched: 0,
+  total: 0,
+  page: 1,
+  pageCount: 1,
+} as const;
 
 const NO_OPTIONS: Readonly<Record<StringFilterField, readonly string[]>> = {
   channel: [],
@@ -80,9 +86,10 @@ export async function WorkbenchContent({
           })
         : null,
 
-      // Profiles are a GROUP BY now, not a pass over 3628 rows.
-      query.section === "users" ? readProfiles("user") : EMPTY_PROFILES,
-      query.section === "devices" ? readProfiles("device") : EMPTY_PROFILES,
+      // Profiles are a GROUP BY now, not a pass over 3628 rows — and they carry the
+      // query, so the same filters and search the ticket list uses narrow them too.
+      query.section === "users" ? readProfiles("user", query) : EMPTY_PROFILES,
+      query.section === "devices" ? readProfiles("device", query) : EMPTY_PROFILES,
 
       // Looked up separately because the lists above carry only repeat profiles: a
       // single-record identity would otherwise open to an empty page.
@@ -92,7 +99,14 @@ export async function WorkbenchContent({
           ? readProfile("device", query.deviceRef)
           : null,
 
-      query.section === "tickets" ? readFilterOptions() : NO_OPTIONS,
+      // The filter selects need their option lists wherever they are rendered, which
+      // is now the two profile lists as well. Not on a profile *detail* page: that
+      // page is one identity's records and has no filter row.
+      query.section === "tickets" ||
+      (query.section === "users" && query.userRef === null) ||
+      (query.section === "devices" && query.deviceRef === null)
+        ? readFilterOptions()
+        : NO_OPTIONS,
     ]);
 
   return (
@@ -103,10 +117,8 @@ export async function WorkbenchContent({
       query={query}
       now={now}
       options={options}
-      users={users.profiles}
-      devices={devices.profiles}
-      userTotal={users.total}
-      deviceTotal={devices.total}
+      users={users}
+      devices={devices}
       userCount={profileCounts.users}
       deviceCount={profileCounts.devices}
       selectedProfile={selectedProfile}

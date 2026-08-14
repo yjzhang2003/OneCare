@@ -14,6 +14,8 @@ import {
   deviceProfiles,
   repeatOnly,
   userProfiles,
+  type IdentityProfile,
+  type ProfilePage,
 } from "../src/features/workbench/profiles";
 import { WorkbenchConsole } from "./workbench-console";
 
@@ -86,6 +88,13 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
   };
 }
 
+function profilePage(
+  profiles: readonly IdentityProfile[],
+  total: number,
+): ProfilePage {
+  return { profiles, matched: profiles.length, total, page: 1, pageCount: 1 };
+}
+
 // Renders the console directly, assembling its props with the same reference
 // functions the server component uses. These assertions always described the
 // console's rendering, not the fetching around it — WorkbenchContent was only ever
@@ -134,10 +143,12 @@ function renderWorkbench(
         unit: distinct(tickets.map((t) => t.businessUnit)),
         level1: distinct(tickets.map((t) => t.categoryLevel1)),
       }}
-      users={repeatOnly(users)}
-      devices={repeatOnly(devices)}
-      userTotal={users.length}
-      deviceTotal={devices.length}
+      // The reference aggregation stands in for the SQL one, the same way
+      // applyWorkbenchQuery stands in for the ticket page query. These fixtures are
+      // small enough to be one page, so paging is not exercised here — the SQL's own
+      // paging and filtering are held to profiles.ts by scripts/equiv.
+      users={profilePage(repeatOnly(users), users.length)}
+      devices={profilePage(repeatOnly(devices), devices.length)}
       // What the server reads for the sider on every section, which is why they are
       // props rather than derived from the two lists above: those are empty unless
       // their own section is the one being rendered.
@@ -262,6 +273,53 @@ describe("WorkbenchConsole", () => {
 
     expect(screen.queryByText(/读不出来/)).not.toBeInTheDocument();
     expect(screen.queryByText(/失败/)).not.toBeInTheDocument();
+  });
+
+  // The profile lists had a table and nothing else: no way to narrow 600 users, and no
+  // way to find one. They now carry the ticket list's own controls, because a profile
+  // is an aggregation of records and every filterable field belongs to a record.
+  it.each([
+    ["users", "搜用户标识 / 原文 / 机型"],
+    ["devices", "搜设备标识 / 原文 / 机型"],
+  ] as const)("gives the %s list the same nine filters and a search", (section, placeholder) => {
+    const { container } = renderWorkbench({ searchParams: { section } });
+
+    const content = container.querySelector<HTMLElement>(".oc-console__content")!;
+    expect(content.querySelectorAll(".arco-select")).toHaveLength(9);
+    expect(
+      within(content).getByPlaceholderText(placeholder),
+    ).toBeInTheDocument();
+    // Paged by the server like the ticket list, so a filter narrows the whole set
+    // rather than whichever rows the browser happened to be given.
+    expect(content.querySelector(".oc-console__pager")).not.toBeNull();
+  });
+
+  it("filters the profile list through the URL, not in the browser", () => {
+    renderWorkbench({ searchParams: { section: "users" } });
+
+    const input = screen.getByPlaceholderText("搜用户标识 / 原文 / 机型");
+    fireEvent.change(input, { target: { value: "U-10774311" } });
+    fireEvent.keyDown(input, { key: "Enter", keyCode: 13 });
+
+    expect(push).toHaveBeenCalledWith(
+      expect.stringContaining("search=U-10774311"),
+    );
+    expect(push).toHaveBeenCalledWith(expect.stringContaining("section=users"));
+  });
+
+  // A profile detail page is one identity's records. Offering nine filters there would
+  // invite narrowing a set of three rows, and the options behind them are not even
+  // fetched for that page.
+  it("leaves the filters off a profile detail page", () => {
+    const { container } = renderWorkbench({
+      searchParams: { section: "users", user: "U-3878645B", queue: "all" },
+    });
+
+    const content = container.querySelector<HTMLElement>(".oc-console__content")!;
+    expect(content.querySelectorAll(".arco-select")).toHaveLength(0);
+    expect(
+      within(content).queryByPlaceholderText(/搜用户标识/),
+    ).not.toBeInTheDocument();
   });
 });
 
