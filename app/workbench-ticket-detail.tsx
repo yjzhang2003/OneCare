@@ -16,9 +16,9 @@ import {
   Tag,
   Typography,
 } from "@arco-design/web-react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useTransition } from "react";
 
 import type { AuthUser } from "../src/features/auth/types";
 import type { Member } from "../src/features/directory/members";
@@ -135,6 +135,21 @@ function DetailShell({
   );
 }
 
+// The label inside the back link, split out only because useLinkStatus has to be
+// called from a descendant of the Link it reports on. `pending` is true from the click
+// until the list route commits — which is the gap the operator called "反应很慢": the
+// old link gave no sign it had been pressed, so the only feedback was the page
+// eventually changing.
+function BackLabel() {
+  const { pending } = useLinkStatus();
+  return (
+    <>
+      ← 返回工单列表
+      {pending && <Spin size={12} style={{ marginLeft: 8 }} />}
+    </>
+  );
+}
+
 function ActionPanel({
   ticket,
   members,
@@ -182,6 +197,14 @@ export function TicketDetailPageView({
   // console, so it gets the same treatment: the wait is shown over the content the
   // operator is leaving, rather than nothing happening for a second.
   const [leaving, startLeaving] = useTransition();
+
+  // Warm the two ways out of this page: the list it came from, and the queue every
+  // sider item resolves to. Leaving a ticket is the most frequent thing done here and
+  // needs nothing typed first, so it is worth paying for eagerly.
+  useEffect(() => {
+    router.prefetch(backHref);
+  }, [router, backHref]);
+
   const dwell = dwellHours(ticket, now);
   const overdue = isOverdue(ticket, now);
   const owner = ticket.ownerNames.length === 0 ? "未分配" : ticket.ownerNames.join("、");
@@ -218,8 +241,12 @@ export function TicketDetailPageView({
           <Spin loading={leaving} style={{ display: "block", width: "100%" }}>
         <div className="oc-ticket-detail__grid">
           <main className="oc-ticket-detail__main">
-            <Link className="oc-ticket-detail__back" href={backHref}>
-              ← 返回工单列表
+            {/* prefetch, so the list's payload is usually already in the client by
+                the time this is clicked — the same trick the console uses for its five
+                queues. It does nothing in `next dev`, where prefetching is disabled;
+                the wait an operator sees there is compilation, not the query. */}
+            <Link className="oc-ticket-detail__back" href={backHref} prefetch>
+              <BackLabel />
             </Link>
             <section
               className="oc-ticket-detail__section oc-ticket-detail__overview"
@@ -237,9 +264,14 @@ export function TicketDetailPageView({
                   </Space>
                   <div>
                     <Typography.Text type="secondary">工单概览</Typography.Text>
-                    <Typography.Title heading={3} className="oc-ticket-detail__title">
-                      工单主题 · {ticketTitle(ticket)}
-                    </Typography.Title>
+                    {/* Body text, not a heading. At heading size this ran to three
+                        wrapped lines and was cut at 60 characters — so the one line
+                        that says what the ticket is about was both the loudest thing
+                        on the page and incomplete. */}
+                    <p className="oc-ticket-detail__subject">
+                      <span className="oc-ticket-detail__subject-label">工单主题</span>
+                      {ticketTitle(ticket)}
+                    </p>
                     <Typography.Text code>{ticket.recordNumber}</Typography.Text>
                   </div>
                 </Space>

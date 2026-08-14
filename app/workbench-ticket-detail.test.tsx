@@ -199,7 +199,11 @@ describe("TicketDetailPageView", () => {
       hasWarRoom: true,
     });
     expect(screen.getByText("冷藏室温度持续偏高")).toBeInTheDocument();
-    expect(screen.getByText("疑似传感器异常")).toBeInTheDocument();
+    // Twice on purpose: the subject line at the top is the summary, in full, and
+    // AI 摘要 further down is the same sentence. It used to appear once because the
+    // subject was cut at 60 characters, so the duplication was hidden rather than
+    // absent.
+    expect(screen.getAllByText("疑似传感器异常")).toHaveLength(2);
     expect(screen.getByText("已记录问题。")).toBeInTheDocument();
     expect(screen.getByText("已建立")).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("oc_");

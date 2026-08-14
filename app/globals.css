@@ -5799,9 +5799,24 @@ a {
   overflow-wrap: anywhere;
 }
 
-.oc-ticket-detail__title {
-  margin: 6px 0 12px !important;
+/* The ticket's subject line: body size, complete, and allowed to wrap. It was an
+   h3 with a 60-character cut, which made the sentence explaining the ticket both the
+   loudest element on the page and the only truncated one. */
+.oc-ticket-detail__subject {
+  margin: 6px 0 12px;
+  color: var(--color-text-1, #1d2129);
+  font-size: 14px;
+  line-height: 1.7;
   overflow-wrap: anywhere;
+}
+
+.oc-ticket-detail__subject-label {
+  margin-right: 8px;
+  color: var(--color-text-3, #86909c);
+}
+
+.oc-ticket-detail__subject-label::after {
+  content: " ·";
 }
 
 .oc-ticket-detail__prose {

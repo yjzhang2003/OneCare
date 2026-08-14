@@ -22,12 +22,14 @@ export function formatHours(value: number): string {
   return value >= 10 ? value.toFixed(0) : value.toFixed(1);
 }
 
+// Not truncated. It was cut at 60 characters because it rendered as a heading, and a
+// heading that wraps to three lines looks broken — but the thing being cut is the one
+// sentence saying what the ticket is about, and "…遇" is not that sentence. The line is
+// body text now, so it can simply be complete.
 export function ticketTitle(
   ticket: Pick<WorkbenchTicket, "summary" | "content">,
 ): string {
-  const source = ticket.summary.trim() || ticket.content.trim() || "未提供反馈内容";
-  const chars = Array.from(source);
-  return chars.length > 60 ? `${chars.slice(0, 60).join("")}…` : source;
+  return ticket.summary.trim() || ticket.content.trim() || "未提供反馈内容";
 }
 
 export const SEVERITY_COLOR: Readonly<Record<string, string>> = {
