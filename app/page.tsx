@@ -1,5 +1,7 @@
 import { getCurrentSession } from "../src/features/auth/current-session";
-import { getVocDashboardMetrics } from "./api/voc/dashboard/route";
+import { readVocMetrics } from "../src/features/store/workbench-query";
+import type { VocMetricsResult } from "../src/features/voc/metrics";
+import { ASSUMED_MANUAL_MINUTES_PER_RECORD } from "./api/voc/dashboard/route";
 import { LandingContent } from "./landing-content";
 import { WorkbenchContent } from "./workbench-content";
 
@@ -74,6 +76,34 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   // showroom visitor browsing the pitch has no session and no reason to be
   // pushed into a Feishu login — only a tenant member choosing to enter the
   // workbench (via /enter) starts that flow.
-  const metrics = await getVocDashboardMetrics();
+  const metrics = await landingMetrics();
   return <LandingContent authError={authError} metrics={metrics} user={user} />;
+}
+
+// The pitch page's numbers, from Postgres. This was the last surface still reading all
+// 3628 records out of the Bitable, on the one page an outside visitor sees first:
+// measured on the same machine against the same data, the whole page went from 2.5s
+// warm (and far worse on a cold cache) to 125ms, of which this read is 117–124ms. The
+// aggregate is the same one the console's 数据概览 uses, so the two now agree by
+// construction rather than by both happening to run the same in-memory reducer.
+//
+// Never throws, for the reason getVocDashboardMetrics gave: this is awaited in the
+// page's own top-level render with no try/catch and no Suspense boundary above it, and
+// the page is prerendered — so a thrown read would fail `next build`. An unreadable
+// database renders 指标暂不可用, which LandingContent already knows how to show.
+async function landingMetrics(): Promise<VocMetricsResult> {
+  try {
+    return {
+      status: "ok",
+      metrics: await readVocMetrics({
+        manualMinutesPerRecord: ASSUMED_MANUAL_MINUTES_PER_RECORD,
+      }),
+    };
+  } catch (error) {
+    console.error(
+      "Landing metrics read failed:",
+      error instanceof Error ? error.message : String(error),
+    );
+    return { status: "unavailable" };
+  }
 }
