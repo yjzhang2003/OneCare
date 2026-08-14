@@ -6,21 +6,19 @@
 // the "react-dom" root export, where React 19 no longer puts it, and then
 // silently falls back to the deleted ReactDOM.render — so `Message.success()`
 // dies with "CopyReactDOM.render is not a function" at runtime, in production,
-// with a green build and a green type-check. The react-19-adapter import is
-// what prevents that, and nothing else in the codebase would notice its
-// removal. Hence this file.
+// with a green build and a green type-check. arco-runtime is what prevents
+// that, and nothing else in the codebase would notice its removal. Hence this
+// file.
 //
 // Every component here is one the workbench write actions use, chosen because
 // it drives a transition, a portal, or an imperative mount — the three paths
 // that break without the adapter.
-// Arco reads createRoot off the "react-dom" root export, which React 19 no
-// longer exposes, so its imperative APIs silently fall back to the deleted
-// ReactDOM.render. This adapter is Arco's own fix — it re-registers createRoot
-// from react-dom/client — and it must be imported before any Arco component.
-import "@arco-design/web-react/lib/_util/react-19-adapter";
+import "./arco-runtime";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { afterEach, expect, test } from "vitest";
 import { Button, Message, Modal, Select, Table } from "@arco-design/web-react";
+import { render as esRender } from "@arco-design/web-react/es/_util/react-dom";
+import { render as libRender } from "@arco-design/web-react/lib/_util/react-dom";
 
 afterEach(cleanup);
 
@@ -60,6 +58,22 @@ test("Modal renders through a portal", () => {
 test("Message mounts imperatively", () => {
   Message.success("已更新");
   expect(true).toBe(true);
+});
+
+// The test above passes with only half the fix, which is how the product shipped a
+// console whose toasts all threw. Arco has two builds — lib (what Node resolves, so what
+// this file's `Message` is) and es (what the bundler resolves, so what the browser's
+// `Message` is) — each holding its own createRoot. Registering the adapter on one leaves
+// the other falling back to the deleted ReactDOM.render, and only the browser finds out.
+// So both imperative mounts are driven here, by the same paths Message.success takes.
+test.each([
+  ["es", esRender],
+  ["lib", libRender],
+])("%s build mounts imperatively, not through the deleted ReactDOM.render", (_name, mount) => {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  expect(() => mount(<span>已更新</span>, container)).not.toThrow();
+  document.body.removeChild(container);
 });
 
 test("Button renders", () => {

@@ -2,7 +2,7 @@
 
 // Must precede every Arco import. Arco reads createRoot off the "react-dom" root export,
 // where React 19 no longer puts it, and falls back to the deleted ReactDOM.render.
-import "@arco-design/web-react/lib/_util/react-19-adapter";
+import "../src/features/workbench/arco-runtime";
 import "@arco-design/web-react/dist/css/arco.css";
 
 import { Button, Card, Message, Space, Tag, Typography } from "@arco-design/web-react";

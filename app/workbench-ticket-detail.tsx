@@ -2,7 +2,7 @@
 
 // Must precede every Arco import. Arco's React 19 adapter installs createRoot
 // before any component or toast can fall back to the removed ReactDOM.render.
-import "@arco-design/web-react/lib/_util/react-19-adapter";
+import "../src/features/workbench/arco-runtime";
 import "@arco-design/web-react/dist/css/arco.css";
 
 import {

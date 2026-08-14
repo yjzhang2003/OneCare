@@ -5,7 +5,7 @@
 // to the deleted ReactDOM.render — so Message.success() dies at runtime with a
 // green build and a green typecheck. src/features/workbench/arco-react19.test.tsx
 // exists to fail if this line is ever removed.
-import "@arco-design/web-react/lib/_util/react-19-adapter";
+import "../src/features/workbench/arco-runtime";
 import "@arco-design/web-react/dist/css/arco.css";
 
 import {
