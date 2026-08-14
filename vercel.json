@@ -9,7 +9,8 @@
     "app/api/voc/tickets/[recordId]/action/route.ts": { "regions": ["hkg1"] },
     "app/api/voc/tickets/[recordId]/analyze/route.ts": { "regions": ["hkg1"] },
     "app/api/voc/profiles/[kind]/[id]/analyze/route.ts": { "regions": ["hkg1"] },
-    "app/api/voc/profiles/[kind]/[id]/war-room/route.ts": { "regions": ["hkg1"] }
+    "app/api/voc/profiles/[kind]/[id]/war-room/route.ts": { "regions": ["hkg1"] },
+    "app/api/voc/demo/rehearsal/route.ts": { "regions": ["hkg1"] }
   },
   "crons": [{ "path": "/api/voc/analyze", "schedule": "0 18 * * *" }]
 }
