@@ -118,6 +118,42 @@ A real click today does create a Feishu group, write `协同群 ID`, and post th
 
 Playwright browser checks cover the public experience page and role-entry layout at desktop and mobile widths. A persistent non-personal enterprise identity is still required to automate the real OAuth and bot-conversation path; those external acceptance checks remain manual.
 
+## Measuring production timings from a mainland network (2026-08-14)
+
+Timings taken from a developer machine in mainland China against the Vercel-hosted
+domain are not measurements of the application. They were mistaken for such twice in
+one session, producing three claims in code comments that had to be withdrawn.
+
+What was observed during one window: TTFB of 2–14s across unrelated routes, response
+bodies truncated at ~25KB of 164KB, some connections answering nothing at all, and a
+browser unable to reach `domContentLoaded` in 120s on the landing page.
+
+What that window was not:
+
+- Not the application, and not the database. The truncated bodies already contained the
+  live aggregate values, so the server had finished the work before the transfer stalled.
+- Not Vercel function cold starts. `/api/voc/dashboard` — whose entire job is to read a
+  cookie and return 401 — took 14s in that window and 1.19s afterwards. `/login`
+  returned nothing at all, then 1.82s.
+- Not the PPR/`cacheComponents` streaming model. The same landing page later closed its
+  stream in 674ms, `domContentLoaded` at 677ms, `load` at 901ms.
+
+What it was: the cross-border leg. `traceroute` leaves the local network, crosses China
+Unicom's backbone, and exits through an international gateway (`219.158.3.102`, 451ms
+even in a healthy window) before reaching Vercel's addresses. During the bad window an
+independent network — a server-side fetcher outside China — retrieved the complete page
+with live data, which is the single measurement that separates path from application.
+
+Afterwards, 64 consecutive samples from the same machine were all complete: the landing
+page p50 0.83s, max 1.40s, always the full 163,840 bytes; a CDN-served static asset
+p50 0.42s. The page is 48KB compressed on the wire, which is not the problem.
+
+So: to judge whether production is healthy, measure from outside the mainland network
+(or from Vercel's own logs), and treat any local number as an upper bound containing an
+unknown amount of path. `curl`'s `%{time_total}` on a streamed response is especially
+misleading — it includes waiting for a stream that a stalled path never finishes, so it
+can read as 60s while the browser has already painted the page.
+
 ## Deferred Decisions
 
 - queue and background-job implementation;

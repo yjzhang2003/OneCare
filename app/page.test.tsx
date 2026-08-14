@@ -42,8 +42,9 @@ vi.mock("./api/voc/dashboard/route", () => ({
   // getVocDashboardMetrics is the Bitable full-table read the landing page used to
   // make: 2.5s of a 2.6s page, against 125ms for the whole page once the numbers came
   // from the same Postgres aggregate the console's 数据概览 uses (both measured with
-  // `next start` on one machine against the real data). Throwing here fails loudly if
-  // that regresses, rather than quietly getting slow again.
+  // `next start` on one machine against the real data — production timings from a
+  // mainland network are dominated by the cross-border path and cannot be compared).
+  // Throwing here fails loudly if that regresses, rather than quietly getting slow.
   readWorkbenchCached: vi.fn(async () => {
     throw new Error(
       "readWorkbenchCached must never be called for a visitor with no session",

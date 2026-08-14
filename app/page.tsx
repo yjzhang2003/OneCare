@@ -85,10 +85,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 //
 // Measured with `next start` on one machine against the real data, so the two numbers
 // are comparable: the whole page went from 2.5s to 125ms, of which this read is
-// 117–124ms (411ms on the first call after a boot). Production totals are not
-// comparable to either — every entry point there costs seconds on a cold hit,
-// including a route whose entire job is to return 401, which is a separate problem
-// this change neither causes nor fixes.
+// 117–124ms (411ms on the first call after a boot).
+//
+// Production, measured separately: 64 consecutive samples all complete, this page
+// p50 0.83s, and a browser reaching domContentLoaded in 677ms. An earlier round of
+// measurements from the same machine showed multi-second and stalled responses; that
+// was the cross-border leg of the path degrading — see docs/TECH_STACK.md — and not
+// cold starts, which is what a first version of this comment guessed.
 //
 // The aggregate is the same one the console's 数据概览 uses, so the two now agree by
 // construction rather than by both happening to run the same in-memory reducer.
