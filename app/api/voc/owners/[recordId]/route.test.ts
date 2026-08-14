@@ -14,6 +14,7 @@ const RULES: readonly OwnerRuleRecord[] = [
     openId: "ou_a",
     ownerName: "黄齐",
     fallback: false,
+    role: "客服" as const,
   },
   {
     recordId: "rec-2",
@@ -21,6 +22,7 @@ const RULES: readonly OwnerRuleRecord[] = [
     openId: "ou_b",
     ownerName: "张禹健",
     fallback: true,
+    role: "客服" as const,
   },
 ];
 
@@ -69,6 +71,7 @@ describe("PATCH /api/voc/owners/[recordId]", () => {
         category: "洗衣机",
         openId: "ou_c",
         fallback: false,
+        role: "客服" as const,
       }),
       params("rec-1"),
     );
@@ -78,6 +81,7 @@ describe("PATCH /api/voc/owners/[recordId]", () => {
       scope: "400 客服/洗衣机",
       openId: "ou_c",
       fallback: false,
+      role: "客服" as const,
     });
   });
 
@@ -91,6 +95,7 @@ describe("PATCH /api/voc/owners/[recordId]", () => {
         category: "冰箱",
         openId: "ou_a",
         fallback: false,
+        role: "客服" as const,
       }),
       params("rec-1"),
     );
@@ -107,6 +112,7 @@ describe("PATCH /api/voc/owners/[recordId]", () => {
         category: "",
         openId: "ou_a",
         fallback: false,
+        role: "客服" as const,
       }),
       params("rec-1"),
     );
@@ -123,6 +129,7 @@ describe("PATCH /api/voc/owners/[recordId]", () => {
         category: "",
         openId: "ou_b",
         fallback: true,
+        role: "客服" as const,
       }),
       params("rec-2"),
     );
@@ -134,6 +141,7 @@ describe("PATCH /api/voc/owners/[recordId]", () => {
         category: "冰箱",
         openId: "ou_a",
         fallback: true,
+        role: "客服" as const,
       }),
       params("rec-1"),
     );
@@ -148,6 +156,7 @@ describe("PATCH /api/voc/owners/[recordId]", () => {
         category: "冰箱",
         openId: "ou_a",
         fallback: false,
+        role: "客服" as const,
       }),
       params("rec-gone"),
     );
@@ -205,6 +214,7 @@ describe("DELETE /api/voc/owners/[recordId]", () => {
             openId: "ou_c",
             ownerName: "李四",
             fallback: true,
+            role: "客服" as const,
           },
         ],
       }),

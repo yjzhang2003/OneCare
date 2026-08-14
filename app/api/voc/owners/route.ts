@@ -7,7 +7,9 @@ import {
   listOwnerRuleRecords,
 } from "../../../../src/features/voc/owner-directory";
 import {
+  adminOpenIds,
   composeScope,
+  toOwnerRole,
   validateOwnerRule,
   type OwnerRuleDraft,
   type OwnerRuleRecord,
@@ -28,6 +30,7 @@ export type OwnerRoutesDependencies = Readonly<{
     scope: string;
     openId: string;
     fallback: boolean;
+    role: OwnerRuleDraft["role"];
   }) => Promise<string>;
   // The real values a scope can be built from, and who may be named. Both are read for
   // validation rather than trusted from the request.
@@ -46,11 +49,36 @@ export function parseDraft(body: unknown): OwnerRuleDraft | null {
     return null;
   }
   return {
+    // An unknown or missing 角色 reads as 客服, the same way an empty cell in the Base
+    // does — this table was three routing rules before roles existed.
+    role: toOwnerRole(raw.role),
     channel: raw.channel,
     category: typeof raw.category === "string" ? raw.category : "",
     openId: raw.openId,
     fallback: raw.fallback === true,
   };
+}
+
+// Who may change this table. The 管理员 rows in the table itself decide, which leaves
+// one bootstrap問題: a table with no 管理员 row could never grow one. Until such a row
+// exists, any signed-in member may edit — after it exists, only admins. Stated in one
+// place so the three write routes cannot drift apart.
+export function mayManage(
+  rules: readonly OwnerRuleRecord[],
+  openId: string,
+): boolean {
+  const admins = adminOpenIds(rules);
+  return admins.length === 0 || admins.includes(openId);
+}
+
+export function refuseNonAdmin(): Response {
+  return Response.json(
+    {
+      error: "forbidden",
+      message: "只有管理员可以修改人员与路由配置",
+    },
+    { status: 403 },
+  );
 }
 
 export function createOwnerListRoute(dependencies: OwnerRoutesDependencies) {
@@ -99,6 +127,10 @@ export function createOwnerCreateRoute(dependencies: OwnerRoutesDependencies) {
         dependencies.assignableOpenIds(),
       ]);
 
+      if (!mayManage(existing, user.openId)) {
+        return refuseNonAdmin();
+      }
+
       const problems = validateOwnerRule({
         draft,
         existing,
@@ -118,9 +150,14 @@ export function createOwnerCreateRoute(dependencies: OwnerRoutesDependencies) {
         scope: composeScope(draft.channel, draft.category),
         openId: draft.openId,
         fallback: draft.fallback,
+        role: draft.role,
       });
 
-      return Response.json({ ok: true, recordId, message: "已新增路由规则" });
+      return Response.json({
+        ok: true,
+        recordId,
+        message: draft.role === "客服" ? "已新增路由规则" : `已新增${draft.role}`,
+      });
     } catch {
       return Response.json(
         { error: "internal", message: "写入负责人表失败，请稍后重试" },

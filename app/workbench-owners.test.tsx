@@ -18,6 +18,7 @@ function rule(overrides: Partial<OwnerRuleRecord> = {}): OwnerRuleRecord {
     openId: "ou_a",
     ownerName: "黄齐",
     fallback: false,
+    role: "客服" as const,
     ...overrides,
   };
 }
@@ -58,6 +59,23 @@ describe("OwnersPane", () => {
     expect(screen.getByText(/电商评价、小红书 没有专属规则/)).toBeInTheDocument();
   });
 
+  // 派工 offers exactly the 工程师 rows in this table, so an empty list is a broken
+  // button on every ticket rather than a cosmetic gap.
+  it("says when there is no 工程师 to dispatch to", () => {
+    pane([rule({ fallback: true })]);
+    expect(screen.getByText("还没有工程师——工单上的「派工」会没有人可选。")).toBeInTheDocument();
+  });
+
+  it("shows an engineer as a person rather than as a routing rule", () => {
+    pane([
+      rule({ fallback: true }),
+      rule({ recordId: "rec-e", scope: "", role: "工程师", ownerName: "张睿哲" }),
+    ]);
+    expect(screen.getByText("工程师")).toBeInTheDocument();
+    expect(screen.getByText("派工时可以选到他，收上门任务卡")).toBeInTheDocument();
+    expect(screen.queryByText(/还没有工程师/)).not.toBeInTheDocument();
+  });
+
   it("names a duplicated scope, which is dead the moment it is written", () => {
     pane([rule({ fallback: true }), rule({ recordId: "rec-2" })]);
     expect(screen.getByText(/重复范围：400 客服\/冰箱/)).toBeInTheDocument();
@@ -74,16 +92,15 @@ describe("OwnersPane", () => {
     pane([rule({ fallback: true })]);
     fireEvent.click(screen.getByText("编辑"));
 
-    expect(screen.getByText("编辑路由规则")).toBeInTheDocument();
+    expect(screen.getByText("编辑人员")).toBeInTheDocument();
     expect(screen.getByText("设为兜底负责人（匹配不到任何规则的工单归他，只能有一个）"))
       .toBeInTheDocument();
   });
 
   it("cannot save a new rule until a channel and a person are chosen", () => {
     pane([rule({ fallback: true })]);
-    fireEvent.click(screen.getByText("新增规则"));
+    fireEvent.click(screen.getByText("新增人员"));
 
-    expect(screen.getByText("新增路由规则")).toBeInTheDocument();
     const ok = screen.getByRole("button", { name: "确定" });
     expect(ok).toBeDisabled();
   });

@@ -40,6 +40,8 @@ import {
 } from "../src/features/workbench/query";
 import { availableActions } from "../src/features/workbench/write-actions";
 import { AnalyzeButton } from "./workbench-analyze-button";
+import { DispatchPanel } from "./workbench-dispatch";
+import { WarRoomButton } from "./workbench-war-room-button";
 import { WorkbenchActions } from "./workbench-actions";
 import { ConsoleSider } from "./workbench-sider";
 
@@ -47,6 +49,9 @@ export type TicketDetailPageViewProps = Readonly<{
   // Who may be named as an owner. Empty when the directory read failed, which hides
   // the 改派 control rather than offering a picker with nothing in it.
   members: readonly Member[];
+  // The 工程师 rows from 人员管理 — who this ticket can be dispatched to. Empty when the
+  // roster could not be read, or when nobody has been made an engineer yet.
+  engineers: readonly Readonly<{ openId: string; name: string }>[];
   user: AuthUser;
   ticket: WorkbenchTicket;
   now: number;
@@ -153,20 +158,23 @@ function BackLabel() {
 function ActionPanel({
   ticket,
   members,
-}: Readonly<{ ticket: WorkbenchTicket; members: readonly Member[] }>) {
+}: Readonly<{
+  ticket: WorkbenchTicket;
+  members: readonly Member[];
+}>) {
   const actions = availableActions(ticket);
   const canClaim = !ticket.hasOwner;
 
   return (
     <Card size="small" title="可执行操作">
-      {actions.length === 0 && !canClaim ? (
-        <Typography.Text type="secondary">
-          {ticket.state === "已闭环" || ticket.state === "无需跟进"
-            ? `${ticket.state}是终态，没有后续动作。`
-            : `${ticket.state}下没有可由人执行的动作，等打标流水线处理。`}
-        </Typography.Text>
-      ) : (
-        <Space direction="vertical" size="small" style={{ width: "100%" }}>
+      <Space direction="vertical" size="small" style={{ width: "100%" }}>
+        {actions.length === 0 && !canClaim ? (
+          <Typography.Text type="secondary">
+            {ticket.state === "已闭环" || ticket.state === "无需跟进"
+              ? `${ticket.state}是终态，没有后续动作。`
+              : `${ticket.state}下没有可由人执行的动作，等打标流水线处理。`}
+          </Typography.Text>
+        ) : (
           <WorkbenchActions
             recordId={ticket.recordId}
             members={members}
@@ -175,8 +183,12 @@ function ActionPanel({
             actions={actions}
             canClaim={canClaim}
           />
-        </Space>
-      )}
+        )}
+        {/* Outside the branch above on purpose: 拉群 is not a state transition, so it is
+            offered on every ticket — including the terminal ones, where a group is
+            sometimes exactly what a post-mortem needs. */}
+        <WarRoomButton recordId={ticket.recordId} hasWarRoom={ticket.hasWarRoom} />
+      </Space>
     </Card>
   );
 }
@@ -185,6 +197,7 @@ export function TicketDetailPageView({
   user,
   ticket,
   members,
+  engineers,
   now,
   backHref,
   query,
@@ -408,6 +421,19 @@ export function TicketDetailPageView({
               </Card>
 
               <ActionPanel ticket={ticket} members={members} />
+
+              {/* 上门: its own card rather than a row in 可执行操作, because it is not a
+                  state transition — it is handing the ticket to a second person who
+                  works it from Feishu and never opens this console. */}
+              <Card size="small" title="上门">
+                <DispatchPanel
+                  recordId={ticket.recordId}
+                  engineers={engineers}
+                  engineerNames={ticket.engineerNames}
+                  dispatchedAt={ticket.dispatchedAt}
+                  state={ticket.state}
+                />
+              </Card>
             </div>
 
             <div className="oc-ticket-detail__key-fields">

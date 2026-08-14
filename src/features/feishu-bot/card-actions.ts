@@ -126,6 +126,13 @@ const NOTE_COLUMN: Readonly<
   voc_confirm_closure: "closingNote",
 };
 
+// What a dispatched engineer may do from their 上门任务卡: arrive, and report. Not
+// 确认闭环, and not 无需建单 — both are the owner's call on whether the ticket is done.
+const ENGINEER_ACTIONS: readonly VocCardAction[] = [
+  "voc_start_follow_up",
+  "voc_submit_follow_up",
+];
+
 export type ResolveVocCardActionInput = Readonly<{
   action: VocCardAction;
   recordId: string;
@@ -195,8 +202,17 @@ export async function resolveVocCardAction(
     return errorToast("记录不存在或已被删除");
   }
 
-  if (!record.ownerOpenIds.includes(input.operatorOpenId)) {
+  // Two people can act on a ticket from a card: the 客服 who owns it, and the 工程师 it
+  // was dispatched to. The engineer's half is deliberately narrower — they report what
+  // happened on site; whether that closes the ticket is the owner's judgement, and the
+  // 上门任务卡 never offers them the button.
+  const isOwner = record.ownerOpenIds.includes(input.operatorOpenId);
+  const isEngineer = record.engineerOpenIds.includes(input.operatorOpenId);
+  if (!isOwner && !isEngineer) {
     return errorToast("只有该记录的负责人可以操作");
+  }
+  if (!isOwner && !ENGINEER_ACTIONS.includes(input.action)) {
+    return errorToast("上门工程师可以回填处理结果，闭环由负责人确认");
   }
 
   const transitionAction = ACTION_TO_TRANSITION[input.action];

@@ -10,7 +10,9 @@ import {
 } from "../../../../src/features/store/workbench-query";
 import { listAssignableMembers } from "../../../../src/features/directory/members";
 import { createTenantTokenProvider } from "../../../../src/features/bitable/client";
-import { readBotEnv } from "../../../../src/lib/env";
+import { listOwnerRuleRecords } from "../../../../src/features/voc/owner-directory";
+import { engineerRules } from "../../../../src/features/voc/owner-rules";
+import { readBitableEnv, readBotEnv } from "../../../../src/lib/env";
 import {
   TicketDetailPageView,
   TicketDetailState,
@@ -49,7 +51,7 @@ export default async function TicketDetailPage({
   // the 改派 control; counts that cannot be read leave the sider's tags off. Neither
   // may take the whole ticket down with it, because everything else on this page
   // works without them.
-  const [members, queueCounts, profileCounts] = await Promise.all([
+  const [members, queueCounts, profileCounts, engineers] = await Promise.all([
     listAssignableMembers({
       tenantToken: () => {
         const botEnv = readBotEnv();
@@ -75,6 +77,27 @@ export default async function TicketDetailPage({
         error instanceof Error ? error.message : String(error),
       );
       return null;
+    }),
+    // Who can be dispatched to, straight from 人员管理. An unreadable roster hides the
+    // 派工 control rather than offering a picker with nobody in it. Wrapped in an async
+    // function so a *synchronous* throw — a missing env var, which is how this reads in
+    // a unit test — becomes a rejection this catch can contain like any other failure.
+    (async () => {
+      const botEnv = readBotEnv();
+      const rules = await listOwnerRuleRecords({
+        bitable: readBitableEnv(),
+        token: createTenantTokenProvider(botEnv.appId, botEnv.appSecret),
+      });
+      return engineerRules(rules).map((rule) => ({
+        openId: rule.openId,
+        name: rule.ownerName,
+      }));
+    })().catch((error: unknown) => {
+      console.error(
+        "Engineer roster read failed:",
+        error instanceof Error ? error.message : String(error),
+      );
+      return [];
     }),
   ]);
   const backHref = listHref(query);
@@ -120,6 +143,7 @@ export default async function TicketDetailPage({
       user={user}
       ticket={ticket}
       members={members}
+      engineers={engineers}
       now={now}
       backHref={backHref}
       query={query}

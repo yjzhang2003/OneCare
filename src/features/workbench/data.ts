@@ -52,6 +52,10 @@ export type WorkbenchTicket = Readonly<{
   retryCount: number;
   hasOwner: boolean;
   hasWarRoom: boolean;
+  // 派工: who is going on site and when they were sent. Names, not open_ids, for the
+  // same reason ownerNames is — this row comes from a cache every viewer shares.
+  engineerNames: readonly string[];
+  dispatchedAt: string | null;
   // Recovered from the source export. sourceTicketNo is the one that adds a
   // capability rather than a column: ~856 of the 3628 rows share a source case
   // number with another row, so "the other records from this same 400 case" is a
@@ -104,6 +108,8 @@ export function toWorkbenchTicket(record: VocRecord): WorkbenchTicket {
     retryCount: record.retryCount,
     hasOwner: record.ownerOpenIds.length > 0,
     hasWarRoom: warRoomDecision(record.warRoomChatId) === "exists",
+    engineerNames: record.engineerNames,
+    dispatchedAt: record.dispatchedAt,
     userRef: record.userRef,
     deviceRef: record.deviceRef,
     sourceTicketNo: record.sourceTicketNo,

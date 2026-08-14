@@ -75,6 +75,14 @@ const COLUMNS: Readonly<Record<string, Column>> = {
     column: "war_room_chat_id",
     convert: asText,
   },
+  [VOC_FIELD_NAMES.engineer]: {
+    column: "engineer_open_ids",
+    convert: asOpenIds,
+  },
+  [VOC_FIELD_NAMES.dispatchedAt]: {
+    column: "dispatched_at",
+    convert: asTimestamp,
+  },
   [VOC_FIELD_NAMES.polarity]: { column: "polarity", convert: asText },
   [VOC_FIELD_NAMES.dimensions]: { column: "dimensions", convert: asStringArray },
   [VOC_FIELD_NAMES.summary]: { column: "summary", convert: asText },
@@ -131,7 +139,12 @@ export const UNMIRRORED_FIELDS: readonly string[] = [
 // path re-reads the record from the Bitable afterwards, which resolves the names, and
 // only then clears pending_push. Named here because "the optimistic write is
 // incomplete" is the kind of thing that is obvious for a week and mysterious after.
-export const OPTIMISTIC_ONLY: readonly string[] = [VOC_FIELD_NAMES.owner];
+// 上门工程师 joins 负责人 for the same reason: a people write carries ids, so
+// engineer_names stays stale until the push path re-reads the record.
+export const OPTIMISTIC_ONLY: readonly string[] = [
+  VOC_FIELD_NAMES.owner,
+  VOC_FIELD_NAMES.engineer,
+];
 
 
 // The reverse direction: a mirror row expressed as Bitable fields.
@@ -151,6 +164,7 @@ export function toBitableFields(record: VocRecord): BitableFields {
     [VOC_FIELD_NAMES.owner]: record.ownerOpenIds.map((id) => ({ id })),
     [VOC_FIELD_NAMES.retryCount]: record.retryCount,
     [VOC_FIELD_NAMES.warRoomChatId]: record.warRoomChatId,
+    [VOC_FIELD_NAMES.engineer]: record.engineerOpenIds.map((id) => ({ id })),
     ...(record.polarity ? { [VOC_FIELD_NAMES.polarity]: record.polarity } : {}),
     ...(record.severity ? { [VOC_FIELD_NAMES.severity]: record.severity } : {}),
     ...(record.dimensions.length > 0
@@ -164,6 +178,9 @@ export function toBitableFields(record: VocRecord): BitableFields {
       : {}),
     ...(record.closedAt
       ? { [VOC_FIELD_NAMES.closedAt]: Date.parse(record.closedAt) }
+      : {}),
+    ...(record.dispatchedAt
+      ? { [VOC_FIELD_NAMES.dispatchedAt]: Date.parse(record.dispatchedAt) }
       : {}),
   };
 }

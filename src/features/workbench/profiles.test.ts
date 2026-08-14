@@ -22,6 +22,8 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
     retryCount: 0,
     hasOwner: false,
     hasWarRoom: false,
+    engineerNames: [],
+    dispatchedAt: null,
     userRef: "U-A",
     deviceRef: "D-A",
     sourceTicketNo: "CAS-1",

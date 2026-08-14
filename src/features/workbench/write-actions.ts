@@ -96,6 +96,11 @@ export function resolveWorkbenchWrite(
   operatorOpenId: string,
   request: WorkbenchWriteRequest,
   now: number,
+  // 管理员 rows in 人员管理. They are not owners of anything and are deliberately not
+  // given a route; what the role means is that the person holding it can act on any
+  // ticket — which is what "拥有所有权限" has to mean if it is to mean anything.
+  // Defaults to false so every existing call site keeps its exact behaviour.
+  isAdmin = false,
 ): WorkbenchWriteOutcome {
   // First, before authorization and before any action-specific reasoning: the
   // operator picked this action against the state the page showed them, and
@@ -146,6 +151,7 @@ export function resolveWorkbenchWrite(
     // *unowned* ticket stays open to everyone, because an unowned ticket has no
     // owner whose judgement could be overridden.
     const authorised =
+      isAdmin ||
       record.ownerOpenIds.includes(operatorOpenId) ||
       record.ownerOpenIds.length === 0;
     if (!authorised) {
@@ -171,7 +177,7 @@ export function resolveWorkbenchWrite(
   // Verbatim the predicate resolveVocCardAction applies, wording included. A
   // web path that also accepted the fallback owner would make the same
   // transition mean two different things depending on where it was clicked.
-  if (!record.ownerOpenIds.includes(operatorOpenId)) {
+  if (!isAdmin && !record.ownerOpenIds.includes(operatorOpenId)) {
     return { kind: "forbidden", message: "只有该记录的负责人可以操作" };
   }
 

@@ -47,6 +47,7 @@ import {
   type OwnerRule,
 } from "../../../../src/features/voc/assignment";
 import { OWNER_FIELDS } from "../../../../src/features/voc/owner-directory";
+import { toOwnerRole } from "../../../../src/features/voc/owner-rules";
 import {
   transition,
   type TransitionContext,
@@ -801,6 +802,10 @@ async function listPendingRecords(
 export function parseOwnerRules(items: readonly unknown[]): readonly OwnerRule[] {
   return items.flatMap((item) => {
     if (!isRecord(item) || !isRecord(item.fields)) return [];
+    // 工程师 and 管理员 share this table but route nothing: a ticket is never assigned
+    // to someone because they are an engineer. Dropping them here keeps resolveOwner
+    // and fallbackOwnerOpenIds seeing exactly what they saw before the column existed.
+    if (toOwnerRole(item.fields[OWNER_FIELDS.role]) !== "客服") return [];
     return [
       {
         scope: text(item.fields[OWNER_FIELDS.scope]),

@@ -24,8 +24,10 @@ import { useRef, useState } from "react";
 
 import type { Member } from "../src/features/directory/members";
 import {
+  OWNER_ROLES,
   routingHealth,
   splitScope,
+  type OwnerRole,
   type OwnerRuleRecord,
 } from "../src/features/voc/owner-rules";
 
@@ -50,6 +52,7 @@ export type OwnersPaneProps = Readonly<{
 
 type Draft = Readonly<{
   recordId: string | null;
+  role: OwnerRole;
   channel: string;
   category: string;
   openId: string;
@@ -58,10 +61,23 @@ type Draft = Readonly<{
 
 const EMPTY: Draft = {
   recordId: null,
+  role: "客服",
   channel: "",
   category: "",
   openId: "",
   fallback: false,
+};
+
+const ROLE_COLOR: Readonly<Record<OwnerRole, string>> = {
+  客服: "arcoblue",
+  工程师: "green",
+  管理员: "orange",
+};
+
+const ROLE_HINT: Readonly<Record<OwnerRole, string>> = {
+  客服: "按渠道/品类接工单，可设兜底",
+  工程师: "派工时可以选到他，收上门任务卡",
+  管理员: "不受工单负责人限制，也是唯一能改这张表的人",
 };
 
 export function OwnersPane({
@@ -126,11 +142,15 @@ export function OwnersPane({
   async function save() {
     if (!draft) return;
     setSaving(true);
+    // A 工程师 or 管理员 row is a person, not a route: the scope and the 兜底 flag are
+    // dropped here rather than sent and rejected.
+    const route = draft.role === "客服";
     const body = {
-      channel: draft.channel,
-      category: draft.category,
+      role: draft.role,
+      channel: route ? draft.channel : "",
+      category: route ? draft.category : "",
       openId: draft.openId,
-      fallback: draft.fallback,
+      fallback: route && draft.fallback,
     };
     const done = draft.recordId
       ? await send(`/api/voc/owners/${encodeURIComponent(draft.recordId)}`, "PATCH", body)
@@ -147,9 +167,20 @@ export function OwnersPane({
 
   const columns = [
     {
+      title: "角色",
+      dataIndex: "role",
+      width: 100,
+      render: (_: unknown, row: OwnerRuleRecord) => (
+        <Tag color={ROLE_COLOR[row.role]}>{row.role}</Tag>
+      ),
+    },
+    {
       title: "负责范围",
       dataIndex: "scope",
       render: (_: unknown, row: OwnerRuleRecord) => {
+        if (row.role !== "客服") {
+          return <Typography.Text type="secondary">{ROLE_HINT[row.role]}</Typography.Text>;
+        }
         const { channel, category } = splitScope(row.scope);
         return (
           <Space size={4}>
@@ -162,7 +193,7 @@ export function OwnersPane({
       },
     },
     {
-      title: "负责人",
+      title: "人员",
       dataIndex: "ownerName",
       width: 160,
       render: (_: unknown, row: OwnerRuleRecord) =>
@@ -193,6 +224,7 @@ export function OwnersPane({
               const { channel, category } = splitScope(row.scope);
               setDraft({
                 recordId: row.recordId,
+                role: row.role,
                 channel,
                 category,
                 openId: row.openId,
@@ -242,15 +274,22 @@ export function OwnersPane({
               content={`重复范围：${health.shadowed.join("、")}——匹配只取第一条，后面的不会生效。`}
             />
           )}
+          {/* 派工 picks from this table's 工程师 rows and nowhere else, so an empty list
+              is not a cosmetic gap: the button on every ticket would have nobody to
+              offer. */}
+          {health.engineers === 0 && (
+            <Alert type="warning" content="还没有工程师——工单上的「派工」会没有人可选。" />
+          )}
         </>
       )}
 
       <Space>
         <Button type="primary" icon={<IconPlus />} onClick={() => setDraft(EMPTY)}>
-          新增规则
+          新增人员
         </Button>
         <Typography.Text type="secondary">
-          共 {health.total} 条；工单按「渠道/品类」优先匹配，其次「渠道」，都不中则走兜底
+          客服路由 {health.total} 条 · 工程师 {health.engineers} 人 · 管理员 {health.admins} 人；
+          工单按「渠道/品类」优先匹配，其次「渠道」，都不中则走兜底
         </Typography.Text>
       </Space>
 
@@ -265,16 +304,29 @@ export function OwnersPane({
       />
 
       <Modal
-        title={draft?.recordId ? "编辑路由规则" : "新增路由规则"}
+        title={draft?.recordId ? "编辑人员" : "新增人员"}
         visible={draft !== null}
         unmountOnExit
         confirmLoading={saving}
-        okButtonProps={{ disabled: !draft?.channel || !draft?.openId }}
+        okButtonProps={{
+          disabled: !draft?.openId || (draft?.role === "客服" && !draft?.channel),
+        }}
         onCancel={() => setDraft(null)}
         onOk={() => void save()}
       >
         {draft && (
           <Space direction="vertical" size="medium" style={{ width: "100%" }}>
+            <div>
+              <Typography.Text type="secondary">角色（必填）</Typography.Text>
+              <Select
+                value={draft.role}
+                style={{ width: "100%" }}
+                options={OWNER_ROLES.map((role) => ({ label: role, value: role }))}
+                onChange={(value) => setDraft({ ...draft, role: value as OwnerRole })}
+              />
+              <Typography.Text type="secondary">{ROLE_HINT[draft.role]}</Typography.Text>
+            </div>
+            {draft.role === "客服" && (
             <div>
               <Typography.Text type="secondary">渠道（必填）</Typography.Text>
               {/* Chosen from the values the data contains, never typed: an exact-match
@@ -287,6 +339,8 @@ export function OwnersPane({
                 onChange={(value) => setDraft({ ...draft, channel: value as string })}
               />
             </div>
+            )}
+            {draft.role === "客服" && (
             <div>
               <Typography.Text type="secondary">品类（留空表示该渠道全部品类）</Typography.Text>
               <Select
@@ -300,8 +354,9 @@ export function OwnersPane({
                 }
               />
             </div>
+            )}
             <div>
-              <Typography.Text type="secondary">负责人（必填）</Typography.Text>
+              <Typography.Text type="secondary">人员（必填）</Typography.Text>
               <Select
                 showSearch
                 placeholder={
@@ -317,12 +372,14 @@ export function OwnersPane({
                 onChange={(value) => setDraft({ ...draft, openId: value as string })}
               />
             </div>
-            <Checkbox
-              checked={draft.fallback}
-              onChange={(checked) => setDraft({ ...draft, fallback: checked })}
-            >
-              设为兜底负责人（匹配不到任何规则的工单归他，只能有一个）
-            </Checkbox>
+            {draft.role === "客服" && (
+              <Checkbox
+                checked={draft.fallback}
+                onChange={(checked) => setDraft({ ...draft, fallback: checked })}
+              >
+                设为兜底负责人（匹配不到任何规则的工单归他，只能有一个）
+              </Checkbox>
+            )}
           </Space>
         )}
       </Modal>

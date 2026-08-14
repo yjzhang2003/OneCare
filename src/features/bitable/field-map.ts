@@ -36,6 +36,11 @@ export const VOC_FIELD_NAMES = {
   closedAt: "闭环时间",
   closingNote: "闭环结论",
   warRoomChatId: "协同群 ID",
+  // 派工: who is going on site, and when they were sent. A second person column
+  // beside 负责人 rather than a reuse of it — the 客服 owner keeps the ticket and
+  // stays accountable for closing it; the engineer is who actually goes.
+  engineer: "上门工程师",
+  dispatchedAt: "派工时间",
   // Recovered from the source export, which carried them all along: the original
   // import mapped five of its twenty columns and dropped these. 来源单号 is the
   // interesting one — 3629 rows carry only 2773 distinct values, so ~856 of them
@@ -101,6 +106,12 @@ export type VocRecord = Readonly<{
   // no group yet — the same missing-column-reads-as-"" convention text()
   // already gives every other plain-text field in this record.
   warRoomChatId: string;
+  // Empty until someone dispatches this ticket. The engineer is not the owner: the
+  // card path authorises 回填 by this list, and the workbench renders it beside the
+  // owner rather than instead of them.
+  engineerOpenIds: readonly string[];
+  engineerNames: readonly string[];
+  dispatchedAt: string | null;
   // The source system's own case or review number (a 400 工单号 like
   // CAS-42567239-Q7Q8Q, or an e-commerce review id). Not a user and not a device:
   // the export contains no user identity of any kind, so this is the only
@@ -271,6 +282,9 @@ export function toVocRecord(
     ticketOpenedAt: isoDate(safeFields[VOC_FIELD_NAMES.ticketOpenedAt]),
     closedAt: isoDate(safeFields[VOC_FIELD_NAMES.closedAt]),
     warRoomChatId: text(safeFields[VOC_FIELD_NAMES.warRoomChatId]),
+    engineerOpenIds: openIds(safeFields[VOC_FIELD_NAMES.engineer]),
+    engineerNames: personNames(safeFields[VOC_FIELD_NAMES.engineer]),
+    dispatchedAt: isoDate(safeFields[VOC_FIELD_NAMES.dispatchedAt]),
     userRef: text(safeFields[VOC_FIELD_NAMES.userRef]),
     deviceRef: text(safeFields[VOC_FIELD_NAMES.deviceRef]),
     sourceTicketNo: text(safeFields[VOC_FIELD_NAMES.sourceTicketNo]),

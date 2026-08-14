@@ -90,6 +90,9 @@ const record: VocRecord = {
   ticketOpenedAt: "2026-01-23T02:00:00.000Z",
   closedAt: null,
   warRoomChatId: "",
+  engineerOpenIds: [],
+  engineerNames: [],
+  dispatchedAt: null,
   sourceTicketNo: "CAS-42567239-Q7Q8Q",
   userRef: "U-3878645B",
   deviceRef: "D-91C2A70E",
@@ -145,6 +148,48 @@ describe("resolveVocCardAction", () => {
     expect(result.response.toast?.type).toBe("error");
     expect(result.response.toast?.content).toContain("负责人");
     expect(result.response.card).toBeUndefined();
+    expect(bitable.updateRecord).not.toHaveBeenCalled();
+  });
+
+  // 派工 gives a second person a claim on the ticket. The engineer's claim is narrower
+  // than the owner's on purpose: they report what happened on site, and whether that
+  // closes the ticket stays the owner's judgement.
+  it("lets the dispatched engineer report from their 上门任务卡", async () => {
+    const bitable = client({
+      record: { ...record, state: "跟进中", engineerOpenIds: ["ou_engineer"] },
+    });
+
+    const result = await resolveVocCardAction({
+      action: "voc_submit_follow_up",
+      recordId: "rec1",
+      operatorOpenId: "ou_engineer",
+      note: "换了压缩机启动器，现场复测正常",
+      bitable,
+    });
+
+    expect(result.kind).toBe("update");
+    expect(bitable.updateRecord).toHaveBeenCalledWith(
+      "rec1",
+      expect.objectContaining({ 流程状态: "待闭环" }),
+    );
+  });
+
+  it("refuses to let the engineer close the ticket", async () => {
+    const bitable = client({
+      record: { ...record, state: "待闭环", engineerOpenIds: ["ou_engineer"] },
+    });
+
+    const result = await resolveVocCardAction({
+      action: "voc_confirm_closure",
+      recordId: "rec1",
+      operatorOpenId: "ou_engineer",
+      note: "已修复",
+      bitable,
+    });
+
+    expect(result.kind).toBe("update");
+    if (result.kind !== "update") return;
+    expect(result.response.toast?.content).toContain("闭环由负责人确认");
     expect(bitable.updateRecord).not.toHaveBeenCalled();
   });
 

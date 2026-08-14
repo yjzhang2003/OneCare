@@ -31,6 +31,9 @@ function record(overrides: Partial<VocRecord> = {}): VocRecord {
     ticketOpenedAt: null,
     closedAt: null,
     warRoomChatId: "",
+    engineerOpenIds: [],
+    engineerNames: [],
+    dispatchedAt: null,
     userRef: "U-1",
     deviceRef: "D-1",
     sourceTicketNo: "CAS-1",
@@ -93,6 +96,9 @@ describe("resetTo", () => {
         ownerNames: ["黄齐"],
         ticketOpenedAt: "2026-08-14T06:00:00.000Z",
         warRoomChatId: "oc_chat",
+        engineerOpenIds: [],
+        engineerNames: [],
+        dispatchedAt: null,
       }),
     );
 

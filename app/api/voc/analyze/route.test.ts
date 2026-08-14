@@ -58,6 +58,9 @@ function deps(overrides: Record<string, unknown> = {}) {
         // fixture (see the "war room escalation" describe block below), so
         // there is no equivalent "severity" default to set here.
         warRoomChatId: "",
+        engineerOpenIds: [],
+        engineerNames: [],
+        dispatchedAt: null,
         sourceTicketNo: "CAS-42567239-Q7Q8Q",
         userRef: "U-3878645B",
         deviceRef: "D-91C2A70E",
@@ -177,6 +180,9 @@ const highSeverityRecord = {
   state: "待分析" as const,
   retryCount: 0,
   warRoomChatId: "",
+  engineerOpenIds: [],
+  engineerNames: [],
+  dispatchedAt: null,
   sourceTicketNo: "CAS-42567239-Q7Q8Q",
   userRef: "U-3878645B",
   deviceRef: "D-91C2A70E",
@@ -1192,6 +1198,9 @@ function pendingRecord(overrides: Record<string, unknown> = {}) {
     // own tests care about this column, so it gets the value that means "no
     // group yet" and every existing call site below keeps working unchanged.
     warRoomChatId: "",
+    engineerOpenIds: [],
+    engineerNames: [],
+    dispatchedAt: null,
     sourceTicketNo: "CAS-42567239-Q7Q8Q",
     userRef: "U-3878645B",
     deviceRef: "D-91C2A70E",
@@ -1272,6 +1281,9 @@ const fullVocRecord: VocRecord = {
   ticketOpenedAt: null,
   closedAt: null,
   warRoomChatId: "",
+  engineerOpenIds: [],
+  engineerNames: [],
+  dispatchedAt: null,
   sourceTicketNo: "CAS-42567239-Q7Q8Q",
   userRef: "U-3878645B",
   deviceRef: "D-91C2A70E",

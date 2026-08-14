@@ -880,6 +880,98 @@ export function createVocTicketCard(
   });
 }
 
+// 上门任务卡: what the engineer sees in Feishu when a ticket is dispatched to them.
+//
+// This is the engineer's whole surface. They do not open the workbench — the console is
+// for the 客服 who owns the ticket — so everything they need to go on site has to be on
+// this card: the machine, the customer's own words, what the analysis concluded, and
+// how many times this same device has been reported before. The last one is the reason
+// 命题 gives for "多次上门、多次描述、反复等待": nobody arriving on site knew.
+//
+// 由 names the engine behind 复发判断 and 建议动作 for the same reason every other
+// surface does — today that is the rule engine, not a model, and an unlabelled machine
+// judgement is exactly what gets repeated on site as fact.
+export type EngineerTaskCardInput = Readonly<{
+  record: VocTicketCardRecord;
+  tag: VocTicketCardTag;
+  // Who sent them, so a question has an obvious address.
+  dispatcherName: string;
+  model: string;
+  userRef: string;
+  deviceRef: string;
+  // This device's own history, from the same records the 设备追踪 page groups by.
+  deviceTotal: number;
+  deviceOpen: number;
+  // The device analysis, when there is a device to analyse. Null for a ticket whose
+  // 设备标识 is empty — better an absent block than an invented one.
+  recurrence: Readonly<{
+    level: string;
+    headline: string;
+    actions: readonly string[];
+    producedBy: string;
+  }> | null;
+}>;
+
+export function createEngineerTaskCard(input: EngineerTaskCardInput): FeishuCard {
+  const { record, tag, recurrence } = input;
+  return cardRoot({
+    title: "上门任务",
+    subtitle: `${record.channel} · ${record.category}`,
+    status: record.state,
+    statusColor: STATUS_COLOR_BY_STATE[record.state],
+    template: recurrence?.level === "高" ? "red" : "turquoise",
+    summary: `上门任务 · ${record.recordNumber}`,
+    elements: [
+      detailBlock(tag.summary || truncateContent(record.content), [
+        ["工单号", record.recordNumber || "—"],
+        ["机型", input.model || "—"],
+        ["设备标识", input.deviceRef || "—"],
+        ["用户标识", input.userRef || "—"],
+      ]),
+      field("用户原话", record.content),
+      field(
+        "问题维度",
+        tag.dimensions.length > 0 ? tag.dimensions.join("、") : "—",
+      ),
+      field("严重度", record.severity ?? "—"),
+      field(
+        "这台设备的历史",
+        input.deviceRef
+          ? `共 ${input.deviceTotal} 条反馈，其中未闭环 ${input.deviceOpen} 条`
+          : "这条记录没有设备标识，无法回溯同一台机器",
+      ),
+      ...(recurrence
+        ? [
+            field("复发判断", `${recurrence.level} · ${recurrence.headline}`),
+            field(
+              "上门前建议",
+              recurrence.actions.length > 0
+                ? recurrence.actions.map((action) => `· ${action}`).join("\n")
+                : "—",
+            ),
+            note(`复发判断与建议由 ${recurrence.producedBy} 生成，请以现场判断为准。`),
+          ]
+        : []),
+      field("派单人", input.dispatcherName || "—"),
+      // The two actions an engineer has. 确认闭环 is deliberately absent: closing is
+      // the 客服 owner's call, and card-actions refuses it from an engineer anyway.
+      ...(record.state === "待跟进"
+        ? [columns(vocActionButton("已到场，开始处理", "voc_start_follow_up", record.recordId))]
+        : record.state === "跟进中"
+          ? [
+              noteForm(
+                "处理结果",
+                "现场做了什么、换了什么件、还需要什么",
+                "回填处理结果",
+                "voc_submit_follow_up",
+                record.recordId,
+              ),
+            ]
+          : [note(`工单当前是「${record.state}」，无需现场操作。`)]),
+    ],
+  });
+}
+
 // The outbound-message wrapper for the ticket card, mirroring
 // createCardMessage's role for the demo views. It exists so the shard job can
 // hand a ready-to-send message to whatever delivers it, keeping the card's

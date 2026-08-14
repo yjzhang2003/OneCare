@@ -60,6 +60,8 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
     retryCount: 0,
     hasOwner: true,
     hasWarRoom: false,
+    engineerNames: [],
+    dispatchedAt: null,
     sourceTicketNo: "CAS-1",
     userRef: "U-A",
     deviceRef: "D-A",

@@ -6,11 +6,14 @@ import {
 import {
   composeScope,
   validateOwnerRule,
+  type OwnerRole,
 } from "../../../../../src/features/voc/owner-rules";
 import { readBitableEnv, readBotEnv } from "../../../../../src/lib/env";
 import {
+  mayManage,
   ownerDependencies,
   parseDraft,
+  refuseNonAdmin,
   type OwnerRoutesDependencies,
 } from "../route";
 
@@ -22,7 +25,7 @@ export type OwnerMutationDependencies = OwnerRoutesDependencies &
   Readonly<{
     update: (
       recordId: string,
-      input: { scope: string; openId: string; fallback: boolean },
+      input: { scope: string; openId: string; fallback: boolean; role: OwnerRole },
     ) => Promise<void>;
     remove: (recordId: string) => Promise<void>;
   }>;
@@ -56,6 +59,10 @@ export function createOwnerUpdateRoute(dependencies: OwnerMutationDependencies) 
         dependencies.assignableOpenIds(),
       ]);
 
+      if (!mayManage(existing, user.openId)) {
+        return refuseNonAdmin();
+      }
+
       if (!existing.some((rule) => rule.recordId === recordId)) {
         return Response.json(
           { error: "not_found", message: "这条规则不存在或已被删除" },
@@ -83,6 +90,7 @@ export function createOwnerUpdateRoute(dependencies: OwnerMutationDependencies) 
         scope: composeScope(draft.channel, draft.category),
         openId: draft.openId,
         fallback: draft.fallback,
+        role: draft.role,
       });
 
       return Response.json({ ok: true, message: "已保存" });
@@ -118,6 +126,10 @@ export function createOwnerDeleteRoute(dependencies: OwnerMutationDependencies) 
       }
 
       const existing = await dependencies.list();
+      if (!mayManage(existing, user.openId)) {
+        return refuseNonAdmin();
+      }
+
       const target = existing.find((rule) => rule.recordId === recordId);
       if (!target) {
         return Response.json(

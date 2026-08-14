@@ -15,7 +15,7 @@
 import { BITABLE_TIMEOUT_MS, type TenantTokenProvider } from "../bitable/client";
 import { openIds, text } from "../bitable/field-map";
 import type { BitableEnv } from "../../lib/env";
-import type { OwnerRuleRecord } from "./owner-rules";
+import { toOwnerRole, type OwnerRole, type OwnerRuleRecord } from "./owner-rules";
 
 const BASE_URL = "https://open.feishu.cn/open-apis";
 
@@ -26,6 +26,7 @@ export const OWNER_FIELDS = {
   scope: "负责范围",
   owner: "负责人",
   fallback: "兜底",
+  role: "角色",
 } as const;
 
 export type OwnerDirectoryEnv = Readonly<{
@@ -38,6 +39,7 @@ export type OwnerRuleInput = Readonly<{
   scope: string;
   openId: string;
   fallback: boolean;
+  role: OwnerRole;
 }>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -77,6 +79,7 @@ function fieldsFor(input: OwnerRuleInput): Record<string, unknown> {
     // this repository uses for 负责人.
     [OWNER_FIELDS.owner]: input.openId ? [{ id: input.openId }] : [],
     [OWNER_FIELDS.fallback]: input.fallback,
+    [OWNER_FIELDS.role]: input.role,
   };
 }
 
@@ -113,6 +116,7 @@ export async function listOwnerRuleRecords(
         openId: openIds(fields[OWNER_FIELDS.owner])[0] ?? "",
         ownerName: nameOf(fields[OWNER_FIELDS.owner]),
         fallback: fields[OWNER_FIELDS.fallback] === true,
+        role: toOwnerRole(fields[OWNER_FIELDS.role]),
       },
     ];
   });

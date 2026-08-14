@@ -34,6 +34,11 @@ CREATE TABLE IF NOT EXISTS voc_records (
   ticket_opened_at  TIMESTAMPTZ,
   closed_at         TIMESTAMPTZ,
   war_room_chat_id  TEXT NOT NULL DEFAULT '',
+  -- 派工: the engineer sent on site, and when. Separate from owner_* because the two
+  -- answer different questions — who owns closing this ticket, and who is going.
+  engineer_open_ids TEXT[] NOT NULL DEFAULT '{}',
+  engineer_names    TEXT[] NOT NULL DEFAULT '{}',
+  dispatched_at     TIMESTAMPTZ,
   user_ref          TEXT NOT NULL DEFAULT '',
   device_ref        TEXT NOT NULL DEFAULT '',
   source_ticket_no  TEXT NOT NULL DEFAULT '',
@@ -57,6 +62,11 @@ CREATE TABLE IF NOT EXISTS voc_records (
 // a migration framework, which this one table does not warrant.
 export const ALTER_STATEMENTS = [
   `ALTER TABLE voc_records ADD COLUMN IF NOT EXISTS pending_push BOOLEAN NOT NULL DEFAULT FALSE;`,
+  // 派工 arrived after the table existed, so these three are added the same way
+  // pending_push was: idempotent statements rather than a migration framework.
+  `ALTER TABLE voc_records ADD COLUMN IF NOT EXISTS engineer_open_ids TEXT[] NOT NULL DEFAULT '{}';`,
+  `ALTER TABLE voc_records ADD COLUMN IF NOT EXISTS engineer_names TEXT[] NOT NULL DEFAULT '{}';`,
+  `ALTER TABLE voc_records ADD COLUMN IF NOT EXISTS dispatched_at TIMESTAMPTZ;`,
 ];
 
 // Indexes for what the console actually filters and groups by. Created separately

@@ -50,6 +50,8 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
     retryCount: 0,
     hasOwner: true,
     hasWarRoom: false,
+    engineerNames: [],
+    dispatchedAt: null,
     sourceTicketNo: "CAS-1",
     userRef: "U-A",
     deviceRef: "D-A",
@@ -79,6 +81,7 @@ function renderDetail(
     <TicketDetailPageView
       user={{ openId: "ou_operator", name: "运营" }}
       members={members}
+      engineers={[{ openId: "ou_zhang", name: "张睿哲" }]}
       ticket={ticket(overrides)}
       now={NOW}
       backHref="/?queue=all&sort=feedback_desc"
@@ -197,6 +200,8 @@ describe("TicketDetailPageView", () => {
       summary: "疑似传感器异常",
       replies: [{ tone: "安抚", text: "已记录问题。" }],
       hasWarRoom: true,
+      engineerNames: [],
+      dispatchedAt: null,
     });
     expect(screen.getByText("冷藏室温度持续偏高")).toBeInTheDocument();
     // Twice on purpose: the subject line at the top is the summary, in full, and

@@ -28,6 +28,9 @@ function record(overrides: Partial<VocRecord> = {}): VocRecord {
     ticketOpenedAt: null,
     closedAt: null,
     warRoomChatId: "",
+    engineerOpenIds: [],
+    engineerNames: [],
+    dispatchedAt: null,
     sourceTicketNo: "CAS-42567239-Q7Q8Q",
     userRef: "U-3878645B",
     deviceRef: "D-91C2A70E",
@@ -55,6 +58,7 @@ function route(
   ]);
   const handler = createTicketActionRoute({
     listMembers,
+    listAdmins: async () => [],
     session: async () =>
       overrides.user === undefined
         ? { openId: OWNER, name: "张禹健" }
@@ -84,7 +88,8 @@ describe("ticket action route — gating", () => {
     const getRecord = vi.fn(async () => record());
     const handler = createTicketActionRoute({
       session: async () => null,
-      listMembers: async () => [],
+      listAdmins: async () => [],
+    listMembers: async () => [],
       getRecord,
       updateRecord: async () => undefined,
       revalidate: () => {},
@@ -260,7 +265,8 @@ describe("ticket action route — outcomes", () => {
   test("a read failure is a 500, not an unhandled rejection", async () => {
     const handler = createTicketActionRoute({
       session: async () => ({ openId: OWNER, name: "张禹健" }),
-      listMembers: async () => [],
+      listAdmins: async () => [],
+    listMembers: async () => [],
       getRecord: async () => {
         throw new Error("bitable down");
       },

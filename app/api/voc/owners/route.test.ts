@@ -15,6 +15,7 @@ const RULES: readonly OwnerRuleRecord[] = [
     openId: "ou_a",
     ownerName: "黄齐",
     fallback: false,
+    role: "客服" as const,
   },
   {
     recordId: "rec-2",
@@ -22,6 +23,7 @@ const RULES: readonly OwnerRuleRecord[] = [
     openId: "ou_b",
     ownerName: "张禹健",
     fallback: true,
+    role: "客服" as const,
   },
 ];
 
@@ -55,6 +57,7 @@ const DRAFT = {
   category: "洗衣机",
   openId: "ou_c",
   fallback: false,
+  role: "客服" as const,
 };
 
 describe("parseDraft", () => {
@@ -64,6 +67,7 @@ describe("parseDraft", () => {
       category: "",
       openId: "ou_a",
       fallback: false,
+      role: "客服" as const,
     });
   });
 
@@ -115,6 +119,7 @@ describe("POST /api/voc/owners", () => {
       scope: "400 客服/洗衣机",
       openId: "ou_c",
       fallback: false,
+      role: "客服" as const,
     });
   });
 

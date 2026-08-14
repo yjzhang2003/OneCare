@@ -17,6 +17,7 @@ function rule(overrides: Partial<OwnerRuleRecord> = {}): OwnerRuleRecord {
     openId: "ou_a",
     ownerName: "黄齐",
     fallback: false,
+    role: "客服",
     ...overrides,
   };
 }
@@ -30,6 +31,7 @@ function validate(
 ) {
   return validateOwnerRule({
     draft: {
+      role: "客服",
       channel: "400 客服",
       category: "",
       openId: "ou_a",

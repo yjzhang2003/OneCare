@@ -16,6 +16,8 @@ import {
   type Member,
 } from "../../../../../../src/features/directory/members";
 import { writeRecord } from "../../../../../../src/features/store/mirror";
+import { listOwnerRuleRecords } from "../../../../../../src/features/voc/owner-directory";
+import { adminOpenIds } from "../../../../../../src/features/voc/owner-rules";
 import { VOC_STATES, type VocState } from "../../../../../../src/features/voc/service-event";
 import {
   resolveWorkbenchWrite,
@@ -44,6 +46,10 @@ export type TicketActionDependencies = Readonly<{
   // per request rather than cached: a colleague added to the app's scope should be
   // assignable without a redeploy.
   listMembers: () => Promise<readonly Member[]>;
+  // The 管理员 open_ids from 人员管理. Read per request like the directory is, and
+  // contained the same way: a roster that cannot be read means nobody is treated as an
+  // admin, which is the safe direction — an owner can still act on their own ticket.
+  listAdmins: () => Promise<readonly string[]>;
   now: () => number;
 }>;
 
@@ -180,11 +186,15 @@ export function createTicketActionRoute(dependencies: TicketActionDependencies) 
         );
       }
 
+      const admins: readonly string[] = await dependencies
+        .listAdmins()
+        .catch(() => []);
       const outcome = resolveWorkbenchWrite(
         record,
         user.openId,
         resolved,
         dependencies.now(),
+        admins.includes(user.openId),
       );
 
       if (outcome.kind !== "write") {
@@ -264,6 +274,13 @@ export const POST = createTicketActionRoute({
       },
     }),
   getRecord: (recordId) => getBitableClient().getRecord(recordId),
+  listAdmins: async () =>
+    adminOpenIds(
+      await listOwnerRuleRecords({
+        bitable: readBitableEnv(),
+        token: getTokenProvider(),
+      }),
+    ),
   updateRecord: async (recordId, fields) => {
     // Postgres first: reads answer from there, so this is what makes the operator's
     // own change visible. The Bitable push is awaited too — this path has no external

@@ -53,6 +53,9 @@ describe("listOwnerRuleRecords", () => {
         openId: "ou_a",
         ownerName: "黄齐",
         fallback: true,
+        // An empty 角色 cell reads as 客服 — the three rows that predate the column are
+        // routing rules, which is what 客服 means.
+        role: "客服",
       },
     ]);
     // The record id is what makes edit and delete possible at all — the pipeline's own
@@ -100,6 +103,7 @@ describe("createOwnerRule", () => {
       scope: "社媒",
       openId: "ou_a",
       fallback: false,
+      role: "客服",
     });
 
     expect(id).toBe("recNew");
@@ -111,6 +115,7 @@ describe("createOwnerRule", () => {
         [OWNER_FIELDS.scope]: "社媒",
         [OWNER_FIELDS.owner]: [{ id: "ou_a" }],
         [OWNER_FIELDS.fallback]: false,
+        [OWNER_FIELDS.role]: "客服",
       },
     });
   });
@@ -120,7 +125,7 @@ describe("createOwnerRule", () => {
       jsonResponse({ code: 0, data: { record: { record_id: "recNew" } } }),
     );
 
-    await createOwnerRule(env(fetcher), { scope: "社媒", openId: "", fallback: false });
+    await createOwnerRule(env(fetcher), { scope: "社媒", openId: "", fallback: false, role: "客服" });
     const body = JSON.parse(fetcher.mock.calls[0]![1]?.body as string) as {
       fields: Record<string, unknown>;
     };
@@ -130,7 +135,7 @@ describe("createOwnerRule", () => {
   it("throws when the create is rejected", async () => {
     const fetcher = vi.fn(async () => jsonResponse({ code: 1254005 }));
     await expect(
-      createOwnerRule(env(fetcher), { scope: "社媒", openId: "ou_a", fallback: false }),
+      createOwnerRule(env(fetcher), { scope: "社媒", openId: "ou_a", fallback: false, role: "客服" }),
     ).rejects.toThrow(/1254005/);
   });
 
@@ -139,7 +144,7 @@ describe("createOwnerRule", () => {
   it("throws when the response carries no record id", async () => {
     const fetcher = vi.fn(async () => jsonResponse({ code: 0, data: {} }));
     await expect(
-      createOwnerRule(env(fetcher), { scope: "社媒", openId: "ou_a", fallback: false }),
+      createOwnerRule(env(fetcher), { scope: "社媒", openId: "ou_a", fallback: false, role: "客服" }),
     ).rejects.toThrow(/record_id/);
   });
 });
@@ -154,6 +159,7 @@ describe("updateOwnerRule / deleteOwnerRule", () => {
       scope: "电商评价",
       openId: "ou_b",
       fallback: true,
+      role: "客服",
     });
 
     const [url, init] = fetcher.mock.calls[0]!;
@@ -177,7 +183,7 @@ describe("updateOwnerRule / deleteOwnerRule", () => {
   it("throws on a rejected update or delete", async () => {
     const rejecting = vi.fn(async () => jsonResponse({ code: 1254043 }));
     await expect(
-      updateOwnerRule(env(rejecting), "recA", { scope: "x", openId: "", fallback: false }),
+      updateOwnerRule(env(rejecting), "recA", { scope: "x", openId: "", fallback: false, role: "客服" }),
     ).rejects.toThrow(/1254043/);
     await expect(deleteOwnerRule(env(rejecting), "recA")).rejects.toThrow(/1254043/);
   });

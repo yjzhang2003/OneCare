@@ -38,6 +38,9 @@ function record(overrides: Partial<VocRecord> = {}): VocRecord {
     ticketOpenedAt: null,
     closedAt: null,
     warRoomChatId: "",
+    engineerOpenIds: [],
+    engineerNames: [],
+    dispatchedAt: null,
     sourceTicketNo: "CAS-42567239-Q7Q8Q",
     userRef: "U-3878645B",
     deviceRef: "D-91C2A70E",
@@ -412,5 +415,48 @@ describe("resolveWorkbenchWrite — reassigning", () => {
       NOW,
     );
     expect(outcome.kind).toBe("conflict");
+  });
+});
+
+// 管理员 in 人员管理 means "拥有所有权限", and the only place that can be true is here:
+// every other check on this path keys off ownership. The flag defaults to false, so a
+// missing roster read leaves the old behaviour rather than opening the door.
+describe("admin override", () => {
+  test("lets an admin act on a ticket owned by someone else", () => {
+    const outcome = resolveWorkbenchWrite(
+      record({ state: "待跟进", ownerOpenIds: ["ou_owner"], ownerNames: ["黄齐"] }),
+      "ou_admin",
+      { kind: "transition", action: "开始跟进", seenState: "待跟进" },
+      NOW,
+      true,
+    );
+    expect(outcome.kind).toBe("write");
+  });
+
+  test("still refuses a non-admin who is not the owner", () => {
+    const outcome = resolveWorkbenchWrite(
+      record({ state: "待跟进", ownerOpenIds: ["ou_owner"], ownerNames: ["黄齐"] }),
+      "ou_stranger",
+      { kind: "transition", action: "开始跟进", seenState: "待跟进" },
+      NOW,
+      false,
+    );
+    expect(outcome.kind).toBe("forbidden");
+  });
+
+  test("lets an admin 改派 a ticket they do not own", () => {
+    const outcome = resolveWorkbenchWrite(
+      record({ state: "待跟进", ownerOpenIds: ["ou_owner"], ownerNames: ["黄齐"] }),
+      "ou_admin",
+      {
+        kind: "assign",
+        seenState: "待跟进",
+        assigneeOpenId: "ou_new",
+        assigneeName: "张睿哲",
+      },
+      NOW,
+      true,
+    );
+    expect(outcome.kind).toBe("write");
   });
 });
