@@ -43,9 +43,21 @@ CREATE TABLE IF NOT EXISTS voc_records (
   category_level1   TEXT NOT NULL DEFAULT '',
   -- When this row last came from Bitable. A stale mirror is a real failure mode,
   -- so the freshness has to be answerable from the data rather than assumed.
-  synced_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+  synced_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- Set when this app has written the row locally and the corresponding Bitable
+  -- write has not been confirmed yet. The periodic pull skips these: without it, a
+  -- sync landing in that window would overwrite a fresh local row with the older
+  -- Bitable values and silently undo an operator's action.
+  pending_push      BOOLEAN NOT NULL DEFAULT FALSE
 );
 `;
+
+// Existing deployments were created before pending_push existed, and CREATE TABLE IF
+// NOT EXISTS will not add it. Written as a separate idempotent statement rather than
+// a migration framework, which this one table does not warrant.
+export const ALTER_STATEMENTS = [
+  `ALTER TABLE voc_records ADD COLUMN IF NOT EXISTS pending_push BOOLEAN NOT NULL DEFAULT FALSE;`,
+];
 
 // Indexes for what the console actually filters and groups by. Created separately
 // because Postgres does not accept INDEX inside CREATE TABLE.
@@ -55,4 +67,5 @@ export const CREATE_INDEXES = [
   `CREATE INDEX IF NOT EXISTS idx_voc_user_ref ON voc_records (user_ref);`,
   `CREATE INDEX IF NOT EXISTS idx_voc_device_ref ON voc_records (device_ref);`,
   `CREATE INDEX IF NOT EXISTS idx_voc_source_ticket ON voc_records (source_ticket_no);`,
+  `CREATE INDEX IF NOT EXISTS idx_voc_pending_push ON voc_records (pending_push) WHERE pending_push;`,
 ];

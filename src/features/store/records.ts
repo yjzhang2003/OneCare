@@ -5,7 +5,7 @@ import type { VocReply } from "../tagging/contracts";
 import { VOC_DIMENSIONS, VOC_POLARITIES, VOC_SEVERITIES } from "../voc/triage";
 import type { VocDimension, VocPolarity, VocSeverity } from "../voc/triage";
 import { VOC_STATES, type VocState } from "../voc/service-event";
-import { CREATE_INDEXES, CREATE_TABLE } from "./schema";
+import { ALTER_STATEMENTS, CREATE_INDEXES, CREATE_TABLE } from "./schema";
 
 // Lazy, and never at module scope: neon() throws when DATABASE_URL is unset, and
 // Next evaluates top-level module code during `next build`, so a module-level call
@@ -26,6 +26,9 @@ export function getSql(): Sql {
 export async function migrate(): Promise<void> {
   const sql = getSql();
   await sql.query(CREATE_TABLE);
+  for (const statement of ALTER_STATEMENTS) {
+    await sql.query(statement);
+  }
   for (const statement of CREATE_INDEXES) {
     await sql.query(statement);
   }
@@ -112,6 +115,24 @@ export async function readAllRecords(): Promise<readonly VocRecord[]> {
     `SELECT * FROM voc_records ORDER BY feedback_at DESC NULLS LAST`,
   );
   return (rows as Record<string, unknown>[]).map(toVocRecord);
+}
+
+// One record by its Bitable id. The card callback path reads through this rather than
+// the Bitable directly: writes land in Postgres first now, so a card reading the
+// Bitable would decide against state the web has already changed.
+//
+// No fallback to the Bitable when this fails. A fallback would read *stale* data and
+// then act on it — approving a war room for a ticket already declined, or advancing a
+// state twice — which is worse than the card reporting an error the operator can retry.
+export async function readRecordById(
+  recordId: string,
+): Promise<VocRecord | null> {
+  const rows = (await getSql().query(
+    `SELECT * FROM voc_records WHERE record_id = $1 LIMIT 1`,
+    [recordId],
+  )) as Record<string, unknown>[];
+  const row = rows[0];
+  return row ? toVocRecord(row) : null;
 }
 
 export async function countRecords(): Promise<number> {
@@ -224,4 +245,58 @@ export async function upsertRecords(
     written += chunk.length;
   }
   return written;
+}
+
+// Pulls every Bitable record into the mirror. Rows this app has written locally and
+// not yet confirmed in the Bitable are skipped: overwriting one with the older
+// Bitable values would silently undo an operator's action, which is the failure a
+// periodic pull invites and the reason pending_push exists.
+export type SyncDependencies = Readonly<{
+  listRecords: () => Promise<readonly VocRecord[]>;
+  // Injected rather than called through the module, matching how every route in this
+  // codebase takes its IO — and because a module-internal call cannot be substituted
+  // in a test, which is what makes the skip rule below untestable otherwise.
+  pendingIds: () => Promise<ReadonlySet<string>>;
+  upsert: (records: readonly VocRecord[]) => Promise<number>;
+}>;
+
+export async function readPendingPushIds(): Promise<ReadonlySet<string>> {
+  const rows = (await getSql().query(
+    `SELECT record_id FROM voc_records WHERE pending_push`,
+  )) as { record_id: string }[];
+  return new Set(rows.map((row) => row.record_id));
+}
+
+export async function syncFromBitable(
+  dependencies: SyncDependencies,
+): Promise<Readonly<{ read: number; written: number; skipped: number }>> {
+  const [records, pending] = await Promise.all([
+    dependencies.listRecords(),
+    dependencies.pendingIds(),
+  ]);
+
+  const writable = records.filter((record) => !pending.has(record.recordId));
+  const written = await dependencies.upsert(writable);
+  return {
+    read: records.length,
+    written,
+    skipped: records.length - writable.length,
+  };
+}
+
+// Marks a row as locally written and awaiting its Bitable push, and clears it once
+// the push lands. Separate from upsertRecords because the flag's lifetime is owned by
+// the write path, not by whoever happens to be refreshing a row.
+export async function markPendingPush(recordId: string): Promise<void> {
+  await getSql().query(
+    `UPDATE voc_records SET pending_push = TRUE WHERE record_id = $1`,
+    [recordId],
+  );
+}
+
+export async function clearPendingPush(recordId: string): Promise<void> {
+  await getSql().query(
+    `UPDATE voc_records SET pending_push = FALSE WHERE record_id = $1`,
+    [recordId],
+  );
 }

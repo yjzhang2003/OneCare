@@ -49,9 +49,11 @@ describe("aggregateVocMetrics", () => {
   });
 
   it("counts records per channel", () => {
+    // Equal counts order by channel name, not by which record appeared first —
+    // the latter is unreproducible in SQL and was never a property worth promising.
     expect(aggregateVocMetrics(records).byChannel).toEqual([
-      { channel: "电商评价", count: 2 },
       { channel: "APP", count: 2 },
+      { channel: "电商评价", count: 2 },
       { channel: "400 客服", count: 1 },
     ]);
   });

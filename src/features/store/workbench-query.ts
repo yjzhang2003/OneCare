@@ -14,6 +14,8 @@ import {
   userProfiles,
   type IdentityProfile,
 } from "../workbench/profiles";
+import type { VocMetrics } from "../voc/metrics";
+import type { VocDimension } from "../voc/triage";
 import { getSql, toVocRecord } from "./records";
 
 // The same triage semantics as applyWorkbenchQuery, expressed in SQL.
@@ -356,4 +358,106 @@ export async function readProfile(
   const grouped =
     kind === "user" ? userProfiles(tickets) : deviceProfiles(tickets);
   return grouped[0] ?? null;
+}
+
+// aggregateVocMetrics in SQL: one statement for the scalars, two small ones for the
+// dimension and channel breakdowns. This was the last surface reading all 3628 rows
+// to render a page.
+//
+// A transcription, field by field:
+//   total              COUNT(*)
+//   byPolarity         three FILTERed counts, always all three keys present
+//   negativeShare      (中评 + 差评) / tagged, where tagged = the three polarity counts
+//   ticketsOpened      records with a 建单时间
+//   ticketsClosed      of those, records with a 闭环时间
+//   closureRate        closed / opened, 0 when opened is 0
+//   averageClosureHours mean over closed records only
+//   taggingAttempted   COUNT(*) — the reference counts every record, not just tagged
+//   taggingSucceeded   the six post-tagging states
+//   taggingFailed      分析失败
+//   taggingPending     待分析
+//   effort             taggedRecords × minutes / 60, only when a baseline is supplied
+export async function readVocMetrics(
+  options: Readonly<{ manualMinutesPerRecord?: number }> = {},
+): Promise<VocMetrics> {
+  const sql = getSql();
+
+  const [scalars, dimensionRows, channelRows] = await Promise.all([
+    sql.query(`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE polarity = '好评')::int AS good,
+        COUNT(*) FILTER (WHERE polarity = '中评')::int AS neutral,
+        COUNT(*) FILTER (WHERE polarity = '差评')::int AS bad,
+        COUNT(*) FILTER (WHERE ticket_opened_at IS NOT NULL)::int AS opened,
+        COUNT(*) FILTER (WHERE ticket_opened_at IS NOT NULL AND closed_at IS NOT NULL)::int AS closed,
+        COALESCE(AVG(
+          EXTRACT(EPOCH FROM (closed_at - ticket_opened_at)) / 3600.0
+        ) FILTER (WHERE ticket_opened_at IS NOT NULL AND closed_at IS NOT NULL), 0) AS avg_closure_hours,
+        COUNT(*) FILTER (
+          WHERE state IN ('已分析', '无需跟进', '待跟进', '跟进中', '待闭环', '已闭环')
+        )::int AS tagged,
+        COUNT(*) FILTER (WHERE state = '分析失败')::int AS failed,
+        COUNT(*) FILTER (WHERE state = '待分析')::int AS pending
+      FROM voc_records
+    `),
+    sql.query(`
+      SELECT d AS key, COUNT(*)::int AS count
+      FROM voc_records, unnest(dimensions) AS d
+      GROUP BY d
+      ORDER BY COUNT(*) DESC, d ASC
+    `),
+    sql.query(`
+      SELECT channel AS key, COUNT(*)::int AS count
+      FROM voc_records
+      GROUP BY channel
+      ORDER BY COUNT(*) DESC, channel ASC
+    `),
+  ]);
+
+  const row = (scalars as Record<string, unknown>[])[0] ?? {};
+  const num = (value: unknown): number => Number(value ?? 0);
+  const ratio = (numerator: number, denominator: number): number =>
+    denominator === 0 ? 0 : numerator / denominator;
+
+  const byPolarity = {
+    好评: num(row.good),
+    中评: num(row.neutral),
+    差评: num(row.bad),
+  };
+  const taggedTotal = byPolarity.好评 + byPolarity.中评 + byPolarity.差评;
+  const opened = num(row.opened);
+  const closed = num(row.closed);
+  const taggedCount = num(row.tagged);
+
+  const metrics: VocMetrics = {
+    total: num(row.total),
+    byPolarity,
+    dimensionTop: (dimensionRows as { key: string; count: number }[]).map(
+      (item) => ({ dimension: item.key as VocDimension, count: item.count }),
+    ),
+    byChannel: (channelRows as { key: string; count: number }[]).map((item) => ({
+      channel: item.key,
+      count: item.count,
+    })),
+    negativeShare: ratio(byPolarity.差评 + byPolarity.中评, taggedTotal),
+    ticketsOpened: opened,
+    ticketsClosed: closed,
+    closureRate: ratio(closed, opened),
+    averageClosureHours: num(row.avg_closure_hours),
+    taggingAttempted: num(row.total),
+    taggingSucceeded: taggedCount,
+    taggingFailed: num(row.failed),
+    taggingPending: num(row.pending),
+  };
+
+  if (options.manualMinutesPerRecord === undefined) return metrics;
+  return {
+    ...metrics,
+    effort: {
+      taggedRecords: taggedCount,
+      manualMinutesPerRecord: options.manualMinutesPerRecord,
+      savedHours: (taggedCount * options.manualMinutesPerRecord) / 60,
+    },
+  };
 }

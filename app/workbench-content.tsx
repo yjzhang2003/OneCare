@@ -5,9 +5,10 @@ import {
   readFilterOptions,
   readProfile,
   readProfiles,
+  readVocMetrics,
   readWorkbenchPage,
 } from "../src/features/store/workbench-query";
-import { readWorkbenchCached } from "./api/voc/dashboard/route";
+import { ASSUMED_MANUAL_MINUTES_PER_RECORD } from "./api/voc/dashboard/route";
 import { WorkbenchConsole } from "./workbench-console";
 
 type RawSearchParams = Readonly<Record<string, string | string[] | undefined>>;
@@ -58,12 +59,14 @@ export async function WorkbenchContent({
   // GROUP BY, and neither transfers rows nobody will read.
   const view = await readWorkbenchPage(query, now);
 
-  // Fetched per section, and only the overview still reads the whole table — its
-  // aggregate (aggregateVocMetrics) has a wider surface than the profile grouping and
-  // is the one section an operator rarely opens, so it keeps the cached full read
-  // rather than a rushed transcription into SQL.
-  const needsFullSet = query.section === "metrics";
-  const data = needsFullSet ? await readWorkbenchCached() : null;
+  // Nothing here reads the whole table any more. The overview was the last one, and
+  // its thirteen fields are now aggregates rather than a pass over 3628 rows.
+  const metrics =
+    query.section === "metrics"
+      ? await readVocMetrics({
+          manualMinutesPerRecord: ASSUMED_MANUAL_MINUTES_PER_RECORD,
+        })
+      : null;
 
   // Profiles are a GROUP BY now, not a pass over 3628 rows.
   const users =
@@ -83,13 +86,7 @@ export async function WorkbenchContent({
   return (
     <WorkbenchConsole
       user={user}
-      metrics={
-        data === null
-          ? null
-          : data.metrics.status === "ok"
-            ? data.metrics.metrics
-            : null
-      }
+      metrics={metrics}
       view={view}
       query={query}
       now={now}

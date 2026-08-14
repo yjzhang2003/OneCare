@@ -68,9 +68,13 @@ function countBy<T extends string>(
   for (const value of values) {
     counts.set(value, (counts.get(value) ?? 0) + 1);
   }
+  // Ties break on the key, so the order is total. Previously equal counts kept Map
+  // insertion order — "whichever record happened to come first" — which is fine in
+  // isolation and impossible to reproduce in SQL, and therefore impossible to hold a
+  // SQL implementation to.
   return [...counts.entries()]
     .map(([key, count]) => ({ key, count }))
-    .sort((a, b) => b.count - a.count);
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
 }
 
 export function aggregateVocMetrics(

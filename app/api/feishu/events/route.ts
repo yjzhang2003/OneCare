@@ -1,6 +1,7 @@
 import { after } from "next/server";
 
-import { mirrorRecordDeferred } from "../../../../src/features/store/mirror";
+import { writeRecord } from "../../../../src/features/store/mirror";
+import { readRecordById } from "../../../../src/features/store/records";
 
 import type { VocRecord } from "../../../../src/features/bitable/field-map";
 import {
@@ -174,6 +175,29 @@ function getBitableClient(): BitableClient {
     bitableClient = createBitableClient(readBitableEnv(), getTokenProvider());
   }
   return bitableClient;
+}
+
+// What card actions read and write through in production: reads from the Postgres
+// mirror, writes Postgres-first with the Bitable push deferred past Feishu's three
+// second deadline.
+//
+// Both halves have to move together. A card reading the Bitable while the web writes
+// to Postgres would evaluate its state machine one step behind — approving a war room
+// for a ticket already declined, or advancing a state twice.
+//
+// Supplied here rather than inside createResolveAction so the injected boundary stays
+// a boundary: that function takes `bitable` precisely so its tests can drive the real
+// resolver over a fake, and hardcoding the store inside it broke sixteen of them.
+function storeBackedBitable(): VocActionBitable {
+  return {
+    getRecord: (recordId) => readRecordById(recordId),
+    updateRecord: (recordId, fields) =>
+      writeRecord(
+        { bitable: getBitableClient(), defer: (task) => after(task) },
+        recordId,
+        fields,
+      ),
+  };
 }
 
 // Feeds event-handler.ts's mention check (see ParseFeishuEventInput there for
@@ -498,18 +522,7 @@ export function createResolveAction(
         recordId: input.recordId,
         operatorOpenId: input.operatorOpenId,
         getRecord: (recordId) => bitable().getRecord(recordId),
-        updateRecord: async (recordId, fields) => {
-          await bitable().updateRecord(recordId, fields);
-          // Deferred, not awaited: this callback answers to Feishu's 3s deadline and
-          // the war room path already measured 2725ms of it.
-          //
-          // Through `schedule`, not after() directly. after() throws outside a
-          // request scope, so calling it here killed the war room's own background
-          // task in tests — and `schedule` is the deferral primitive this function
-          // already takes, wired to after() in production and to an inspectable
-          // array in tests.
-          mirrorRecordDeferred(bitable(), recordId, schedule);
-        },
+        updateRecord: (recordId, fields) => bitable().updateRecord(recordId, fields),
         fallbackOpenIds: warRoom.fallbackOpenIds,
         createChat: warRoom.createChat,
         sendToChat: warRoom.sendToChat,
@@ -587,7 +600,7 @@ const defaultDependencies: FeishuEventRouteDependencies = {
   replyMessage: replyToFeishuMessage,
   sendMessage: sendFeishuMessage,
   sendDirectMessage: sendFeishuMessage,
-  resolveAction: createResolveAction(getBitableClient),
+  resolveAction: createResolveAction(storeBackedBitable),
   answerGroupQuestion: createAnswerGroupQuestion(getBitableClient, async (question, facts) => {
     const provider = getAnswerProvider();
     return provider ? provider.answer(question, facts) : null;

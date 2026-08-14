@@ -31,6 +31,9 @@ function notifyOwnerSpy() {
 function deps(overrides: Record<string, unknown> = {}) {
   return {
     cronSecret: "s3cret",
+    // The mirror pull that now runs before every shard. A no-op here: these tests
+    // drive the tagging loop, and its own tests cover the sync.
+    syncStore: vi.fn(async () => ({ read: 0, written: 0, skipped: 0 })),
     shardSize: 2,
     tagSource: "field-shortcut",
     notifyOwner: notifyOwnerSpy(),

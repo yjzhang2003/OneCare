@@ -11,7 +11,7 @@ import { getCurrentSession } from "../../../../../../src/features/auth/current-s
 import type { AuthUser } from "../../../../../../src/features/auth/types";
 import { readBitableEnv, readBotEnv } from "../../../../../../src/lib/env";
 import { VOC_RECORDS_CACHE_TAG } from "../../../../../../src/features/voc/cache-tags";
-import { mirrorRecord } from "../../../../../../src/features/store/mirror";
+import { writeRecord } from "../../../../../../src/features/store/mirror";
 import { VOC_STATES, type VocState } from "../../../../../../src/features/voc/service-event";
 import {
   resolveWorkbenchWrite,
@@ -220,11 +220,17 @@ export const POST = createTicketActionRoute({
   session: getCurrentSession,
   getRecord: (recordId) => getBitableClient().getRecord(recordId),
   updateRecord: async (recordId, fields) => {
-    await getBitableClient().updateRecord(recordId, fields);
-    // Awaited: reads come from the mirror, so skipping this would show the operator
-    // their own change as not having happened. Costs one getRecord (~650ms measured)
-    // on a path with no external deadline.
-    await mirrorRecord(getBitableClient(), recordId);
+    // Postgres first: reads answer from there, so this is what makes the operator's
+    // own change visible. The Bitable push is awaited too — this path has no external
+    // deadline, and finishing it here means the row is not left flagged for the cron
+    // to retry.
+    const pushes: Promise<void>[] = [];
+    await writeRecord(
+      { bitable: getBitableClient(), defer: (task) => pushes.push(task()) },
+      recordId,
+      fields,
+    );
+    await Promise.all(pushes);
   },
   // { expire: 0 } — immediate expiration — rather than a named profile, and the
   // difference is the whole feature working or appearing not to. Read from

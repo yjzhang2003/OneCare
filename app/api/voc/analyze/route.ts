@@ -5,7 +5,13 @@ import {
   type BitableClient,
   type TenantTokenProvider,
 } from "../../../../src/features/bitable/client";
-import { mirrorRecord } from "../../../../src/features/store/mirror";
+import { pushPending, writeRecord } from "../../../../src/features/store/mirror";
+import {
+  migrate,
+  readPendingPushIds,
+  syncFromBitable,
+  upsertRecords,
+} from "../../../../src/features/store/records";
 import {
   VOC_FIELD_NAMES,
   openIds,
@@ -153,6 +159,9 @@ type EscalateInput = Readonly<{
 
 type AnalyzeRouteDependencies = Readonly<{
   cronSecret: string;
+  // Bitable -> Postgres. Injected like every other IO boundary in this route so a
+  // test can drive the shard without a database.
+  syncStore: () => Promise<Readonly<{ read: number; written: number; skipped: number }>>;
   shardSize: number;
   listPending: (shardSize: number) => Promise<readonly PendingRecord[]>;
   tag: (
@@ -425,6 +434,27 @@ function serviceUnavailable(
 async function runShard(
   dependencies: AnalyzeRouteDependencies,
 ): Promise<Response> {
+  // Pull the Bitable into the Postgres mirror before tagging anything. Every read
+  // surface now answers from the mirror, so without this an operator editing a record
+  // in the Bitable UI — assigning an owner with the person picker, say — would never
+  // appear in the console. Individual writes made *by this app* refresh their own row
+  // immediately; this is the only path that notices changes made outside it.
+  //
+  // Failing to sync must not cost the day's tagging, so it reports and continues
+  // rather than aborting the shard: a stale mirror is bad, a day with no tagging is
+  // worse.
+  try {
+    const sync = await dependencies.syncStore();
+    console.info(
+      `Store sync: read ${sync.read}, wrote ${sync.written}, skipped ${sync.skipped} pending push`,
+    );
+  } catch (error) {
+    console.error(
+      "Store sync failed:",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
   let records: readonly PendingRecord[];
   try {
     records = await dependencies.listPending(dependencies.shardSize);
@@ -995,6 +1025,23 @@ export async function escalateToWarRoom(input: EscalateInput): Promise<void> {
 }
 
 const defaultDependencies: AnalyzeRouteDependencies = {
+  syncStore: async () => {
+    await migrate();
+    // Retry outstanding pushes before pulling. A row whose Bitable write failed keeps
+    // pending_push and is skipped by the pull, so without this it would stay flagged
+    // and diverged indefinitely.
+    const pushed = await pushPending(getBitableClient());
+    if (pushed.attempted > 0) {
+      console.info(
+        `Retried ${pushed.pushed} of ${pushed.attempted} outstanding Bitable pushes`,
+      );
+    }
+    return syncFromBitable({
+      listRecords: () => getBitableClient().listRecords(),
+      pendingIds: readPendingPushIds,
+      upsert: upsertRecords,
+    });
+  },
   get cronSecret() {
     return readCronSecret();
   },
@@ -1003,10 +1050,15 @@ const defaultDependencies: AnalyzeRouteDependencies = {
   tag: (records) => getTaggingProvider().tag(records),
   ownerRules: () => listOwnerRules(readBitableEnv(), getTokenProvider()),
   updateRecord: async (recordId, fields) => {
-    await getBitableClient().updateRecord(recordId, fields);
-    // Awaited: this shard runs under a 300s maxDuration, and a tagged record that
-    // never reaches the mirror is invisible in the console until the next full sync.
-    await mirrorRecord(getBitableClient(), recordId);
+    // Awaited end to end: this shard runs under a 300s maxDuration, and a tagged
+    // record that never reaches the mirror is invisible in the console.
+    const pushes: Promise<void>[] = [];
+    await writeRecord(
+      { bitable: getBitableClient(), defer: (task) => pushes.push(task()) },
+      recordId,
+      fields,
+    );
+    await Promise.all(pushes);
   },
   // readBotEnv() is called here, not hoisted: this module is imported at build
   // time and must never touch process.env on import (the same discipline the

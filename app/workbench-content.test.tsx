@@ -253,9 +253,10 @@ describe("WorkbenchContent source", () => {
   it("keeps query evaluation on the server, in SQL", () => {
     expect(source).not.toContain("use client");
     expect(source).toContain("readWorkbenchPage");
-    // The full-set read is still reachable for the profile and overview sections,
-    // but it must not be what the ticket list depends on.
-    expect(source).toContain("needsFullSet");
+    // No section pulls the whole table any more — the ticket list is a page query,
+    // profiles are a GROUP BY and the overview is an aggregate. A reintroduced
+    // readWorkbenchCached here would silently restore a 6–7 second read.
+    expect(source).not.toContain("readWorkbenchCached");
   });
 
   // The page shipped able to write while still telling the operator, in its own
