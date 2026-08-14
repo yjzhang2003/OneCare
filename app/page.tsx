@@ -81,10 +81,16 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 }
 
 // The pitch page's numbers, from Postgres. This was the last surface still reading all
-// 3628 records out of the Bitable, on the one page an outside visitor sees first:
-// measured on the same machine against the same data, the whole page went from 2.5s
-// warm (and far worse on a cold cache) to 125ms, of which this read is 117–124ms. The
-// aggregate is the same one the console's 数据概览 uses, so the two now agree by
+// 3628 records out of the Bitable, on the one page an outside visitor sees first.
+//
+// Measured with `next start` on one machine against the real data, so the two numbers
+// are comparable: the whole page went from 2.5s to 125ms, of which this read is
+// 117–124ms (411ms on the first call after a boot). Production totals are not
+// comparable to either — every entry point there costs seconds on a cold hit,
+// including a route whose entire job is to return 401, which is a separate problem
+// this change neither causes nor fixes.
+//
+// The aggregate is the same one the console's 数据概览 uses, so the two now agree by
 // construction rather than by both happening to run the same in-memory reducer.
 //
 // Never throws, for the reason getVocDashboardMetrics gave: this is awaited in the
