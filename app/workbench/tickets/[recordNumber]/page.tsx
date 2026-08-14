@@ -4,6 +4,9 @@ import { getCurrentSession } from "../../../../src/features/auth/current-session
 import { listHref, ticketDetailHref } from "../../../../src/features/workbench/href";
 import { parseWorkbenchQuery } from "../../../../src/features/workbench/query";
 import { readTicketByNumber } from "../../../../src/features/store/workbench-query";
+import { listAssignableMembers } from "../../../../src/features/directory/members";
+import { createTenantTokenProvider } from "../../../../src/features/bitable/client";
+import { readBotEnv } from "../../../../src/lib/env";
 import {
   TicketDetailPageView,
   TicketDetailState,
@@ -32,6 +35,21 @@ export default async function TicketDetailPage({
     searchParams,
   ]);
   const query = parseWorkbenchQuery(rawQuery);
+
+  // A directory that cannot be read hides the 改派 control; it must not take the whole
+  // ticket down with it, because everything else on this page still works without it.
+  const members = await listAssignableMembers({
+    tenantToken: () => {
+      const botEnv = readBotEnv();
+      return createTenantTokenProvider(botEnv.appId, botEnv.appSecret)();
+    },
+  }).catch((error: unknown) => {
+    console.error(
+      "Directory read failed:",
+      error instanceof Error ? error.message : String(error),
+    );
+    return [];
+  });
   const backHref = listHref(query);
   const retryHref = ticketDetailHref(query, recordNumber);
   // One record by its number, not 3628 records filtered down to one. The read this
@@ -74,6 +92,7 @@ export default async function TicketDetailPage({
     <TicketDetailPageView
       user={user}
       ticket={ticket}
+      members={members}
       now={currentTimestamp()}
       backHref={backHref}
     />

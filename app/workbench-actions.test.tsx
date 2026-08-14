@@ -42,6 +42,8 @@ function panel(
   return render(
     <WorkbenchActions
       recordId="rec1"
+      members={[{ openId: "ou_huang", name: "黄齐" }]}
+      ownerNames={["张禹健"]}
       seenState="待闭环"
       actions={["确认闭环"]}
       canClaim={false}

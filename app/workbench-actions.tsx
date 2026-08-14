@@ -8,10 +8,18 @@
 import "@arco-design/web-react/lib/_util/react-19-adapter";
 import "@arco-design/web-react/dist/css/arco.css";
 
-import { Button, Input, Message, Modal, Space } from "@arco-design/web-react";
+import {
+  Button,
+  Input,
+  Message,
+  Modal,
+  Select,
+  Space,
+} from "@arco-design/web-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import type { Member } from "../src/features/directory/members";
 import type { VocState } from "../src/features/voc/service-event";
 import {
   NOTE_LABELS,
@@ -24,6 +32,11 @@ import {
 // refreshes the page after a write.
 export type WorkbenchActionsProps = Readonly<{
   recordId: string;
+  // Who can be named as an owner, resolved on the server from Feishu contacts. Empty
+  // when the directory could not be read, which hides the control rather than
+  // offering a picker with nothing in it.
+  members: readonly Member[];
+  ownerNames: readonly string[];
   // The state the server rendered. Sent back with every request so the handler
   // can refuse an action decided against a view that has since gone stale.
   seenState: VocState;
@@ -35,6 +48,8 @@ type Pending = Readonly<{ action: WorkbenchAction; label: string }> | null;
 
 export function WorkbenchActions({
   recordId,
+  members,
+  ownerNames,
   seenState,
   actions,
   canClaim,
@@ -44,11 +59,13 @@ export function WorkbenchActions({
   // spinner on every button at once, which reads as "all of these are happening".
   // Everything is still disabled while one runs — that part guards against a
   // double submit — but only the button actually waiting spins.
-  const [inFlight, setInFlight] = useState<WorkbenchAction | "claim" | null>(
-    null,
-  );
+  const [inFlight, setInFlight] = useState<
+    WorkbenchAction | "claim" | "assign" | null
+  >(null);
   const [pending, setPending] = useState<Pending>(null);
   const [note, setNote] = useState("");
+  const [assigning, setAssigning] = useState(false);
+  const [assignee, setAssignee] = useState<string | undefined>(undefined);
   const busy = inFlight !== null;
 
   // Resolves true when this intent is finished with — either it landed, or it
@@ -57,7 +74,7 @@ export function WorkbenchActions({
   // note modal must not discard a paragraph of typed 闭环结论 because the Base
   // write timed out.
   async function submit(
-    intent: WorkbenchAction | "claim",
+    intent: WorkbenchAction | "claim" | "assign",
     body: unknown,
   ): Promise<boolean> {
     setInFlight(intent);
@@ -148,7 +165,60 @@ export function WorkbenchActions({
             {action}
           </Button>
         ))}
+        {members.length > 0 && (
+          <Button
+            loading={inFlight === "assign"}
+            disabled={busy && inFlight !== "assign"}
+            onClick={() => setAssigning(true)}
+          >
+            改派
+          </Button>
+        )}
       </Space>
+
+      <Modal
+        title="改派负责人"
+        visible={assigning}
+        unmountOnExit
+        confirmLoading={busy}
+        okButtonProps={{ disabled: assignee === undefined }}
+        cancelButtonProps={{ disabled: busy }}
+        maskClosable={!busy}
+        escToExit={!busy}
+        onCancel={() => {
+          setAssigning(false);
+          setAssignee(undefined);
+        }}
+        onOk={() => {
+          if (assignee === undefined) return;
+          void submit("assign", {
+            kind: "assign",
+            seenState,
+            assigneeOpenId: assignee,
+          }).then((done) => {
+            if (done) {
+              setAssigning(false);
+              setAssignee(undefined);
+            }
+          });
+        }}
+      >
+        <Select
+          showSearch
+          placeholder={
+            ownerNames.length > 0
+              ? `当前负责人：${ownerNames.join("、")}`
+              : "选择负责人"
+          }
+          value={assignee}
+          style={{ width: "100%" }}
+          options={members.map((member) => ({
+            label: member.name,
+            value: member.openId,
+          }))}
+          onChange={(value) => setAssignee(value as string)}
+        />
+      </Modal>
 
       <Modal
         title={pending?.label}

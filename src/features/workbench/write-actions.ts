@@ -32,7 +32,17 @@ export type WorkbenchWriteRequest =
       seenState: VocState;
       note?: string;
     }>
-  | Readonly<{ kind: "claim"; seenState: VocState }>;
+  | Readonly<{ kind: "claim"; seenState: VocState }>
+  // Assigning someone other than yourself. Only became expressible once the contacts
+  // permission landed: before it, this app could not turn a name into an open_id at
+  // all, so the Bitable's person picker was the only way to name anyone but the
+  // person clicking.
+  | Readonly<{
+      kind: "assign";
+      seenState: VocState;
+      assigneeOpenId: string;
+      assigneeName: string;
+    }>;
 
 export type WorkbenchWriteOutcome =
   | Readonly<{
@@ -110,13 +120,14 @@ export function resolveWorkbenchWrite(
     if (record.ownerOpenIds.includes(operatorOpenId)) {
       return { kind: "noop", message: "你已经是这条工单的负责人" };
     }
-    // Claiming can only ever fill an empty owner, never replace someone. The
-    // permission to reassign lives in the Bitable UI, where the person picker
-    // resolves names for us and the per-user edit permission still applies.
+    // Claiming still only ever fills an empty owner. Taking a ticket off a colleague
+    // is a different act with a different name — 改派 — and it says who it is going
+    // to; "claim" quietly reassigning would let someone remove an owner without ever
+    // choosing a replacement.
     if (record.ownerOpenIds.length > 0) {
       return {
         kind: "forbidden",
-        message: "该工单已有负责人，改派请在多维表格里操作",
+        message: "该工单已有负责人，请用「改派」指定新的负责人",
       };
     }
     // [{id}] is the write shape verified against the live Base while seeding
@@ -126,6 +137,34 @@ export function resolveWorkbenchWrite(
       nextState: record.state,
       fields: { [VOC_FIELD_NAMES.owner]: [{ id: operatorOpenId }] },
       message: "已认领，你是这条工单的负责人",
+    };
+  }
+
+  if (request.kind === "assign") {
+    // Reassignment is an owner's or a fallback owner's call, not anyone's: the
+    // gate alone would let any tenant member move a colleague's work. Claiming an
+    // *unowned* ticket stays open to everyone, because an unowned ticket has no
+    // owner whose judgement could be overridden.
+    const authorised =
+      record.ownerOpenIds.includes(operatorOpenId) ||
+      record.ownerOpenIds.length === 0;
+    if (!authorised) {
+      return {
+        kind: "forbidden",
+        message: "只有该工单的负责人可以改派",
+      };
+    }
+    if (record.ownerOpenIds.includes(request.assigneeOpenId)) {
+      return {
+        kind: "noop",
+        message: `${request.assigneeName}已经是这条工单的负责人`,
+      };
+    }
+    return {
+      kind: "write",
+      nextState: record.state,
+      fields: { [VOC_FIELD_NAMES.owner]: [{ id: request.assigneeOpenId }] },
+      message: `已改派给${request.assigneeName}`,
     };
   }
 

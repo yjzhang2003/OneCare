@@ -11,6 +11,10 @@ import { getCurrentSession } from "../../../../../../src/features/auth/current-s
 import type { AuthUser } from "../../../../../../src/features/auth/types";
 import { readBitableEnv, readBotEnv } from "../../../../../../src/lib/env";
 import { VOC_RECORDS_CACHE_TAG } from "../../../../../../src/features/voc/cache-tags";
+import {
+  listAssignableMembers,
+  type Member,
+} from "../../../../../../src/features/directory/members";
 import { writeRecord } from "../../../../../../src/features/store/mirror";
 import { VOC_STATES, type VocState } from "../../../../../../src/features/voc/service-event";
 import {
@@ -36,6 +40,10 @@ export type TicketActionDependencies = Readonly<{
   // happening leaves a UI that reports success and shows stale data, which is
   // the hardest kind of bug to notice from the outside.
   revalidate: () => void;
+  // Who may be named as an owner. Injected like every other boundary here, and read
+  // per request rather than cached: a colleague added to the app's scope should be
+  // assignable without a redeploy.
+  listMembers: () => Promise<readonly Member[]>;
   now: () => number;
 }>;
 
@@ -60,6 +68,17 @@ function parseRequest(body: unknown): WorkbenchWriteRequest | null {
 
   if (raw.kind === "claim") {
     return { kind: "claim", seenState: seen };
+  }
+
+  if (raw.kind === "assign") {
+    const assigneeOpenId = raw.assigneeOpenId;
+    if (typeof assigneeOpenId !== "string" || assigneeOpenId.length === 0) {
+      return null;
+    }
+    // The name is resolved server-side from the directory, never taken from the
+    // request: a browser-supplied name would let the confirmation message and the
+    // Bitable write disagree about who the ticket went to.
+    return { kind: "assign", seenState: seen, assigneeOpenId, assigneeName: "" };
   }
 
   if (raw.kind === "transition") {
@@ -134,6 +153,25 @@ export function createTicketActionRoute(dependencies: TicketActionDependencies) 
         );
       }
 
+      // An assignee is checked against the directory before anything is written. The
+      // open_id arrives from a browser, and writing an unverified one would put an
+      // id the app cannot see into the owner field — which the Bitable rejects, after
+      // the local write has already landed.
+      let resolved = parsed;
+      if (parsed.kind === "assign") {
+        const members = await dependencies.listMembers();
+        const member = members.find(
+          (candidate) => candidate.openId === parsed.assigneeOpenId,
+        );
+        if (!member) {
+          return Response.json(
+            { error: "bad_request", message: "找不到该成员，请重新选择" },
+            { status: 400 },
+          );
+        }
+        resolved = { ...parsed, assigneeName: member.name };
+      }
+
       const record = await dependencies.getRecord(recordId);
       if (!record) {
         return Response.json(
@@ -145,7 +183,7 @@ export function createTicketActionRoute(dependencies: TicketActionDependencies) 
       const outcome = resolveWorkbenchWrite(
         record,
         user.openId,
-        parsed,
+        resolved,
         dependencies.now(),
       );
 
@@ -218,6 +256,13 @@ function getBitableClient(): BitableClient {
 
 export const POST = createTicketActionRoute({
   session: getCurrentSession,
+  listMembers: () =>
+    listAssignableMembers({
+      tenantToken: () => {
+        const botEnv = readBotEnv();
+        return createTenantTokenProvider(botEnv.appId, botEnv.appSecret)();
+      },
+    }),
   getRecord: (recordId) => getBitableClient().getRecord(recordId),
   updateRecord: async (recordId, fields) => {
     // Postgres first: reads answer from there, so this is what makes the operator's

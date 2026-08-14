@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 
 import type { AuthUser } from "../src/features/auth/types";
+import type { Member } from "../src/features/directory/members";
 import type { WorkbenchTicket } from "../src/features/workbench/data";
 import {
   ABSENT,
@@ -44,6 +45,9 @@ const SECTIONS = [
 ] as const;
 
 export type TicketDetailPageViewProps = Readonly<{
+  // Who may be named as an owner. Empty when the directory read failed, which hides
+  // the 改派 control rather than offering a picker with nothing in it.
+  members: readonly Member[];
   user: AuthUser;
   ticket: WorkbenchTicket;
   now: number;
@@ -114,7 +118,10 @@ function DetailShell({
   );
 }
 
-function ActionPanel({ ticket }: Readonly<{ ticket: WorkbenchTicket }>) {
+function ActionPanel({
+  ticket,
+  members,
+}: Readonly<{ ticket: WorkbenchTicket; members: readonly Member[] }>) {
   const actions = availableActions(ticket);
   const canClaim = !ticket.hasOwner;
 
@@ -130,13 +137,12 @@ function ActionPanel({ ticket }: Readonly<{ ticket: WorkbenchTicket }>) {
         <Space direction="vertical" size="small" style={{ width: "100%" }}>
           <WorkbenchActions
             recordId={ticket.recordId}
+            members={members}
+            ownerNames={ticket.ownerNames}
             seenState={ticket.state}
             actions={actions}
             canClaim={canClaim}
           />
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            状态流转只有负责人本人能做，其他人点击会被服务端拒绝。改派负责人请在多维表格里操作。
-          </Typography.Text>
         </Space>
       )}
     </Card>
@@ -146,6 +152,7 @@ function ActionPanel({ ticket }: Readonly<{ ticket: WorkbenchTicket }>) {
 export function TicketDetailPageView({
   user,
   ticket,
+  members,
   now,
   backHref,
 }: TicketDetailPageViewProps) {
@@ -315,7 +322,7 @@ export function TicketDetailPageView({
                 </div>
               </Card>
 
-              <ActionPanel ticket={ticket} />
+              <ActionPanel ticket={ticket} members={members} />
             </div>
 
             <div className="oc-ticket-detail__key-fields">

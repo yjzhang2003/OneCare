@@ -50,7 +50,11 @@ function route(
     overrides.updateRecord ?? (async () => undefined),
   );
   const revalidate = vi.fn();
+  const listMembers = vi.fn(async () => [
+    { openId: "ou_huang", name: "黄齐" },
+  ]);
   const handler = createTicketActionRoute({
+    listMembers,
     session: async () =>
       overrides.user === undefined
         ? { openId: OWNER, name: "张禹健" }
@@ -61,7 +65,7 @@ function route(
     revalidate,
     now: () => NOW,
   });
-  return { handler, updateRecord, revalidate };
+  return { handler, updateRecord, revalidate, listMembers };
 }
 
 function post(body: unknown): Request {
@@ -80,6 +84,7 @@ describe("ticket action route — gating", () => {
     const getRecord = vi.fn(async () => record());
     const handler = createTicketActionRoute({
       session: async () => null,
+      listMembers: async () => [],
       getRecord,
       updateRecord: async () => undefined,
       revalidate: () => {},
@@ -255,6 +260,7 @@ describe("ticket action route — outcomes", () => {
   test("a read failure is a 500, not an unhandled rejection", async () => {
     const handler = createTicketActionRoute({
       session: async () => ({ openId: OWNER, name: "张禹健" }),
+      listMembers: async () => [],
       getRecord: async () => {
         throw new Error("bitable down");
       },
@@ -267,5 +273,88 @@ describe("ticket action route — outcomes", () => {
       params,
     );
     expect(response.status).toBe(500);
+  });
+});
+
+describe("ticket action route — reassigning", () => {
+  test("200 and the new owner on a valid reassignment", async () => {
+    const { handler, updateRecord } = route();
+
+    const response = await handler(
+      post({
+        kind: "assign",
+        seenState: "待跟进",
+        assigneeOpenId: "ou_huang",
+      }),
+      params,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ message: "已改派给黄齐" });
+    expect(updateRecord).toHaveBeenCalledWith("rec1", {
+      负责人: [{ id: "ou_huang" }],
+    });
+  });
+
+  // The name comes from the directory, never from the request. A browser-supplied
+  // name would let the confirmation message and the write disagree about who the
+  // ticket went to.
+  test("the assignee's name is resolved server-side, not taken from the body", async () => {
+    const { handler } = route();
+
+    const response = await handler(
+      post({
+        kind: "assign",
+        seenState: "待跟进",
+        assigneeOpenId: "ou_huang",
+        assigneeName: "某个冒充的名字",
+      }),
+      params,
+    );
+
+    expect(await response.json()).toMatchObject({ message: "已改派给黄齐" });
+  });
+
+  // An unverified open_id would land in the local write and then be rejected by the
+  // Bitable, leaving the two stores disagreeing about who owns the ticket.
+  test("400 for an assignee the app cannot see, with nothing written", async () => {
+    const { handler, updateRecord } = route();
+
+    const response = await handler(
+      post({
+        kind: "assign",
+        seenState: "待跟进",
+        assigneeOpenId: "ou_not_a_colleague",
+      }),
+      params,
+    );
+
+    expect(response.status).toBe(400);
+    expect(updateRecord).not.toHaveBeenCalled();
+  });
+
+  test("400 when no assignee is named at all", async () => {
+    const { handler, updateRecord } = route();
+
+    const response = await handler(
+      post({ kind: "assign", seenState: "待跟进" }),
+      params,
+    );
+
+    expect(response.status).toBe(400);
+    expect(updateRecord).not.toHaveBeenCalled();
+  });
+
+  // The directory is only consulted for reassignment; every other action must not pay
+  // a contacts round trip.
+  test("no directory lookup for a plain transition", async () => {
+    const { handler, listMembers } = route();
+
+    await handler(
+      post({ kind: "transition", action: "开始跟进", seenState: "待跟进" }),
+      params,
+    );
+
+    expect(listMembers).not.toHaveBeenCalled();
   });
 });

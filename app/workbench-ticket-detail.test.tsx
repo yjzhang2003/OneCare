@@ -48,10 +48,16 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
   };
 }
 
-function renderDetail(overrides: Partial<WorkbenchTicket> = {}) {
+function renderDetail(
+  overrides: Partial<WorkbenchTicket> = {},
+  members: readonly { openId: string; name: string }[] = [
+    { openId: "ou_huang", name: "黄齐" },
+  ],
+) {
   return render(
     <TicketDetailPageView
       user={{ openId: "ou_operator", name: "运营" }}
+      members={members}
       ticket={ticket(overrides)}
       now={NOW}
       backHref="/?queue=all&sort=feedback_desc"
@@ -145,7 +151,17 @@ describe("TicketDetailPageView", () => {
     renderDetail({ state: "待跟进", hasOwner: true });
     expect(screen.getByRole("button", { name: "开始跟进" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "确认闭环" })).not.toBeInTheDocument();
-    expect(screen.getByText(/只有负责人本人能做/)).toBeInTheDocument();
+    // 改派 replaces the note that used to send operators to the Bitable. It was the
+    // only way to name anyone but yourself while the contacts API was closed; with it
+    // open, reassignment is a control rather than an instruction to leave.
+    expect(screen.getByRole("button", { name: "改派" })).toBeInTheDocument();
+  });
+
+  // The picker is only offered when there is somebody to pick. A directory read that
+  // failed leaves it out rather than opening an empty dialog.
+  it("hides 改派 when the directory is empty", () => {
+    renderDetail({ state: "待跟进", hasOwner: true }, []);
+    expect(screen.queryByRole("button", { name: "改派" })).not.toBeInTheDocument();
   });
 
   it("offers claiming only with no owner", () => {

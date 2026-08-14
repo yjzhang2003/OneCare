@@ -252,7 +252,9 @@ describe("resolveWorkbenchWrite — claiming", () => {
     });
   });
 
-  // Claiming must never be usable to take a ticket off someone.
+  // Claiming must never be usable to take a ticket off someone. It used to send them
+  // to the Bitable, because its person picker was the only thing that could resolve a
+  // name to an open_id; with contacts available it points at 改派 instead.
   test("a ticket that already has an owner cannot be claimed", () => {
     const outcome = resolveWorkbenchWrite(
       record({ state: "待跟进" }),
@@ -262,7 +264,7 @@ describe("resolveWorkbenchWrite — claiming", () => {
     );
     expect(outcome).toEqual({
       kind: "forbidden",
-      message: "该工单已有负责人，改派请在多维表格里操作",
+      message: "该工单已有负责人，请用「改派」指定新的负责人",
     });
   });
 
@@ -320,5 +322,95 @@ describe("resolveWorkbenchWrite — replays", () => {
       );
       expect(reachable, `${action} is unreachable from every state`).toBe(true);
     }
+  });
+});
+
+describe("resolveWorkbenchWrite — reassigning", () => {
+  const HUANG = { assigneeOpenId: "ou_huang", assigneeName: "黄齐" };
+
+  test("the current owner may hand a ticket to someone else", () => {
+    const outcome = resolveWorkbenchWrite(
+      record({ state: "待跟进" }),
+      OWNER,
+      { kind: "assign", seenState: "待跟进", ...HUANG },
+      NOW,
+    );
+
+    expect(outcome).toEqual({
+      kind: "write",
+      nextState: "待跟进",
+      fields: { 负责人: [{ id: "ou_huang" }] },
+      message: "已改派给黄齐",
+    });
+  });
+
+  // An unowned ticket has no owner whose judgement could be overridden, so anyone
+  // past the gate may route it — the same reasoning that lets anyone claim one.
+  test("anyone may route an unassigned ticket to a colleague", () => {
+    const outcome = resolveWorkbenchWrite(
+      record({ ownerOpenIds: [], ownerNames: [] }),
+      STRANGER,
+      { kind: "assign", seenState: "待跟进", ...HUANG },
+      NOW,
+    );
+    expect(outcome.kind).toBe("write");
+  });
+
+  // Without this, the gate alone would let any tenant member move a colleague's work.
+  test("a bystander may not reassign someone else's ticket", () => {
+    const outcome = resolveWorkbenchWrite(
+      record({ state: "待跟进" }),
+      STRANGER,
+      { kind: "assign", seenState: "待跟进", ...HUANG },
+      NOW,
+    );
+
+    expect(outcome).toEqual({
+      kind: "forbidden",
+      message: "只有该工单的负责人可以改派",
+    });
+  });
+
+  test("reassigning to the current owner changes nothing", () => {
+    const outcome = resolveWorkbenchWrite(
+      record({ state: "待跟进" }),
+      OWNER,
+      {
+        kind: "assign",
+        seenState: "待跟进",
+        assigneeOpenId: OWNER,
+        assigneeName: "张禹健",
+      },
+      NOW,
+    );
+    expect(outcome).toEqual({
+      kind: "noop",
+      message: "张禹健已经是这条工单的负责人",
+    });
+  });
+
+  // Claiming must stay the act of taking an unowned ticket. If it quietly reassigned,
+  // someone could remove an owner without ever naming a replacement.
+  test("claiming still refuses an owned ticket, and points at 改派", () => {
+    const outcome = resolveWorkbenchWrite(
+      record({ state: "待跟进" }),
+      STRANGER,
+      { kind: "claim", seenState: "待跟进" },
+      NOW,
+    );
+    expect(outcome).toEqual({
+      kind: "forbidden",
+      message: "该工单已有负责人，请用「改派」指定新的负责人",
+    });
+  });
+
+  test("a stale view blocks a reassignment too", () => {
+    const outcome = resolveWorkbenchWrite(
+      record({ state: "跟进中" }),
+      OWNER,
+      { kind: "assign", seenState: "待跟进", ...HUANG },
+      NOW,
+    );
+    expect(outcome.kind).toBe("conflict");
   });
 });
