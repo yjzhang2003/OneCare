@@ -223,16 +223,28 @@ describe("WorkbenchConsole", () => {
     expect(screen.queryByText(/工单详情 ·/)).not.toBeInTheDocument();
   });
 
-  it("reports an unavailable aggregation instead of rendering zeroes", () => {
+  // Reported inside 数据概览 and nowhere else. It used to appear on the main view on
+  // the reasoning that a failed read emptied the ticket list too — true when both came
+  // from one full-table read, and false once each section fetched its own data. The
+  // banner then rendered on every section that simply had no metrics to fetch, which
+  // is what put a permanent "读取失败" across the whole console.
+  it("reports an unavailable aggregation inside the overview", () => {
+    renderWorkbench({
+      metrics: { status: "unavailable" },
+      searchParams: { section: "metrics" },
+    });
+
+    expect(screen.getByText(/指标暂时读不出来/)).toBeInTheDocument();
+  });
+
+  it("says nothing about metrics on the sections that do not fetch them", () => {
     renderWorkbench({
       metrics: { status: "unavailable" },
       searchParams: { queue: "all" },
     });
 
-    // On the main view, not inside the 数据概览 tab: a failed read empties the
-    // ticket list too, and an empty table is indistinguishable from an empty
-    // queue unless the failure is stated where the operator already is.
-    expect(screen.getByText(/读取多维表格失败/)).toBeInTheDocument();
+    expect(screen.queryByText(/读不出来/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/失败/)).not.toBeInTheDocument();
   });
 });
 

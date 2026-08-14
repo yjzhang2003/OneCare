@@ -5967,6 +5967,15 @@ a {
   .oc-ticket-detail .arco-descriptions-body {
     overflow-x: auto;
   }
+}
+/* ^ closes the mobile breakpoint opened above, which shipped unclosed. Every rule
+   appended to this file afterwards silently became mobile-only — that is where the
+   sider alignment rules and the whole chart stylesheet had ended up, which is why
+   both looked like CSS written wrong rather than CSS never applied.
+
+   The literal media-query text is deliberately absent from this comment:
+   fullscreen-showcase-styles.test.ts locates that block with lastIndexOf, and a
+   mention here would make it slice from the comment instead. */
 .oc-console__sider .arco-menu .arco-menu-item .arco-tag {
   margin-left: 8px;
 }
@@ -5997,3 +6006,83 @@ a {
   flex: 0 0 auto;
 }
 
+
+/* ---------------------------------------------------------------------------
+   概览的条形图
+
+   Hand-drawn rather than pulled from a charting library: five charts of one shape
+   over data already aggregated in SQL do not justify the hundreds of kilobytes
+   G2Plot or Recharts would add to a bundle that exists to render one console.
+--------------------------------------------------------------------------- */
+.oc-charts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.oc-chart-card {
+  flex: 1 1 300px;
+  min-width: 280px;
+}
+
+.oc-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* A three-column grid, so labels and values line up across rows and the bars all
+   start and end on the same two verticals — the comparison the chart exists for. */
+.oc-chart__row {
+  display: grid;
+  grid-template-columns: 5.5em 1fr 4.5em;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.oc-chart__label {
+  color: var(--color-text-2, #4e5969);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oc-chart__track {
+  /* A span is inline by default, and height on an inline box does nothing — the
+     track collapsed to zero and took every bar with it. */
+  display: block;
+  width: 100%;
+  background: var(--color-fill-2, #f2f3f5);
+  border-radius: 3px;
+  height: 16px;
+  overflow: hidden;
+}
+
+.oc-chart__bar {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: rgb(var(--primary-6));
+  /* A zero-count bar still renders a hairline, so an empty bucket reads as "zero"
+     rather than as a missing row. */
+  min-width: 2px;
+  transition: width 240ms ease;
+}
+
+.oc-chart__value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-1, #1d2129);
+}
+
+.oc-chart__share {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--color-text-3, #86909c);
+}
+
+.oc-chart__note {
+  margin-top: 10px;
+}

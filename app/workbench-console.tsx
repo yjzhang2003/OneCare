@@ -509,19 +509,6 @@ export function WorkbenchConsole({
                 />
               )}
 
-              {metrics === null && (
-                // Raised out of the 数据概览 tab and onto the main view. A failed
-                // Bitable read empties `tickets` as well as the aggregates, and an
-                // empty table reads as "no work here" — indistinguishable from a
-                // genuinely empty queue. The operator has to be told the
-                // difference without going looking for it.
-                <Alert
-                  type="warning"
-                  style={{ marginBottom: 12 }}
-                  content="读取多维表格失败，当前页面的数字和列表都不完整，请稍后重试。"
-                />
-              )}
-
               {query.section === "tickets" && (
                 <>
                   <Space wrap style={{ marginBottom: 12 }}>
@@ -636,7 +623,7 @@ export function WorkbenchConsole({
                 (metrics ? (
                   <MetricsPane metrics={metrics} />
                 ) : (
-                  <Alert type="warning" content="指标暂不可用，请稍后重试。" />
+                  <Alert type="warning" content="指标暂时读不出来，请稍后重试。" />
                 ))}
             </Spin>
           </Card>
@@ -924,11 +911,73 @@ function ProfileDetail({
   );
 }
 
+// Horizontal bars rather than columns of numbers. A distribution is a comparison —
+// "which dimension dominates" — and a table of counts makes the reader do that
+// comparison in their head.
+//
+// Drawn with divs, not a charting library. The five charts here are one shape, the
+// data is already aggregated in SQL, and G2Plot or Recharts would add hundreds of
+// kilobytes to a page whose entire client bundle exists to render one console.
+function BarChart({
+  title,
+  rows,
+  note,
+}: Readonly<{
+  title: string;
+  rows: ReadonlyArray<{ label: string; count: number }>;
+  note?: string;
+}>) {
+  // Scaled against the largest bar, not the total: with 3600 records in one bucket and
+  // 3 in another, a total-based scale renders every minority bar as an invisible sliver.
+  const peak = rows.reduce((max, row) => Math.max(max, row.count), 0);
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
+
+  return (
+    <Card size="small" title={title} className="oc-chart-card">
+      {rows.length === 0 ? (
+        <Typography.Text type="secondary">暂无数据</Typography.Text>
+      ) : (
+        <div className="oc-chart">
+          {rows.map((row) => (
+            <div key={row.label} className="oc-chart__row">
+              <span className="oc-chart__label" title={row.label}>
+                {row.label}
+              </span>
+              <span className="oc-chart__track">
+                <span
+                  className="oc-chart__bar"
+                  style={{
+                    width: peak === 0 ? "0%" : `${(row.count / peak) * 100}%`,
+                  }}
+                />
+              </span>
+              <span className="oc-chart__value">
+                {row.count}
+                {total > 0 && (
+                  <em className="oc-chart__share">
+                    {Math.round((row.count / total) * 100)}%
+                  </em>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {note && (
+        <div className="oc-chart__note">
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {note}
+          </Typography.Text>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function MetricsPane({ metrics }: Readonly<{ metrics: VocMetrics }>) {
-  // Every percentage comes from a ratio aggregateVocMetrics already computed, or
-  // from a division whose denominator is spelled out in the label beside it —
-  // never from a count divided ad hoc where a reader cannot see what it was
-  // divided by.
+  // Every percentage comes from a ratio the aggregate already computed, or from a
+  // division whose denominator is spelled out in the label beside it — never from a
+  // count divided ad hoc where a reader cannot see what it was divided by.
   const attempted = metrics.taggingSucceeded + metrics.taggingFailed;
 
   return (
@@ -939,16 +988,8 @@ function MetricsPane({ metrics }: Readonly<{ metrics: VocMetrics }>) {
           title="负向占比（中评+差评 / 已打标）"
           value={percent(metrics.negativeShare)}
         />
-        <Statistic
-          title="已建单"
-          value={metrics.ticketsOpened}
-          groupSeparator
-        />
-        <Statistic
-          title="已闭环"
-          value={metrics.ticketsClosed}
-          groupSeparator
-        />
+        <Statistic title="已建单" value={metrics.ticketsOpened} groupSeparator />
+        <Statistic title="已闭环" value={metrics.ticketsClosed} groupSeparator />
         <Statistic
           title="闭环率（已闭环 / 已建单）"
           value={percent(metrics.closureRate)}
@@ -967,38 +1008,48 @@ function MetricsPane({ metrics }: Readonly<{ metrics: VocMetrics }>) {
         />
       </Space>
 
-      <Space size="large" align="start" wrap>
-        <Card size="small" title="情绪极性分布" style={{ minWidth: 260 }}>
-          <Descriptions
-            column={1}
-            size="small"
-            data={Object.entries(metrics.byPolarity).map(([label, value]) => ({
-              label,
-              value,
-            }))}
-          />
-        </Card>
-        <Card size="small" title="问题维度 Top 6" style={{ minWidth: 260 }}>
-          <Descriptions
-            column={1}
-            size="small"
-            data={metrics.dimensionTop.map((row) => ({
-              label: row.dimension,
-              value: row.count,
-            }))}
-          />
-        </Card>
-        <Card size="small" title="渠道分布" style={{ minWidth: 260 }}>
-          <Descriptions
-            column={1}
-            size="small"
-            data={metrics.byChannel.map((row) => ({
-              label: row.channel,
-              value: row.count,
-            }))}
-          />
-        </Card>
-      </Space>
+      <div className="oc-charts">
+        {/* Three stages rather than a ratio: "14%" does not say whether the
+            denominator is 7 or 7000. */}
+        <BarChart
+          title="闭环漏斗"
+          rows={[
+            { label: "全部反馈", count: metrics.total },
+            { label: "已建单", count: metrics.ticketsOpened },
+            { label: "已闭环", count: metrics.ticketsClosed },
+          ]}
+        />
+        <BarChart
+          title="打标进度"
+          rows={[
+            { label: "已打标", count: metrics.taggingSucceeded },
+            { label: "打标失败", count: metrics.taggingFailed },
+            { label: "待打标", count: metrics.taggingPending },
+          ]}
+        />
+        <BarChart
+          title="情绪极性分布"
+          rows={Object.entries(metrics.byPolarity).map(([label, count]) => ({
+            label,
+            count,
+          }))}
+          note="源数据全部是负向 VOC，这里的极性来自 AI 打标"
+        />
+        <BarChart
+          title="问题维度分布"
+          rows={metrics.dimensionTop.map((row) => ({
+            label: row.dimension,
+            count: row.count,
+          }))}
+        />
+        <BarChart
+          title="渠道分布"
+          rows={metrics.byChannel.map((row) => ({
+            label: row.channel,
+            count: row.count,
+          }))}
+        />
+      </div>
     </Space>
   );
 }

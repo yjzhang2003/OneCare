@@ -205,7 +205,7 @@ export function createTicketActionRoute(dependencies: TicketActionDependencies) 
         // unrecorded, so it says so plainly instead of reporting a generic
         // error: they need to know their click did nothing and can be repeated.
         return Response.json(
-          { error: "write_failed", message: "写回多维表格失败，请稍后重试" },
+          { error: "write_failed", message: "写入失败，请稍后重试" },
           { status: 502 },
         );
       }

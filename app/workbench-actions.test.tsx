@@ -102,7 +102,7 @@ describe("WorkbenchActions", () => {
   it("keeps the typed note when the write fails", async () => {
     vi.stubGlobal(
       "fetch",
-      respond(502, { error: "write_failed", message: "写回多维表格失败，请稍后重试" }),
+      respond(502, { error: "write_failed", message: "写入失败，请稍后重试" }),
     );
     panel();
 
@@ -110,7 +110,7 @@ describe("WorkbenchActions", () => {
     fireEvent.click(confirmButton());
 
     await waitFor(() =>
-      expect(screen.getByText("写回多维表格失败，请稍后重试")).toBeInTheDocument(),
+      expect(screen.getByText("写入失败，请稍后重试")).toBeInTheDocument(),
     );
     expect(textarea).toHaveValue("已联系用户，同意换新，等待仓库发货");
     expect(refresh).not.toHaveBeenCalled();
