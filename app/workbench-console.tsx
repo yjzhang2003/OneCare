@@ -15,7 +15,6 @@ import {
   Descriptions,
   Input,
   Layout,
-  Menu,
   Pagination,
   Select,
   Space,
@@ -26,17 +25,6 @@ import {
   Tooltip,
   Typography,
 } from "@arco-design/web-react";
-import {
-  IconApps,
-  IconBug,
-  IconClockCircle,
-  IconDashboard,
-  IconDesktop,
-  IconFile,
-  IconList,
-  IconUser,
-  IconUserAdd,
-} from "@arco-design/web-react/icon";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -62,6 +50,7 @@ import {
   type WorkbenchQuery,
 } from "../src/features/workbench/query";
 import type { IdentityProfile } from "../src/features/workbench/profiles";
+import { ConsoleSider } from "./workbench-sider";
 
 const ABSENT = "—";
 
@@ -129,9 +118,6 @@ const STATE_COLOR: Readonly<Record<string, string>> = {
   已闭环: "green",
 };
 
-// One icon per queue, so the sider is scannable by shape before it is read.
-// Keyed by QueueKey rather than by position: a reordered QUEUES array must not
-// silently reassign every icon.
 // The queue's own label stands in for the ticket section, since which queue you are
 // looking at is the more specific fact.
 const SECTION_TITLE: Readonly<Record<string, string | undefined>> = {
@@ -139,14 +125,6 @@ const SECTION_TITLE: Readonly<Record<string, string | undefined>> = {
   devices: "设备追踪",
   metrics: "数据概览",
   tickets: undefined,
-};
-
-const QUEUE_ICON: Readonly<Record<string, React.ReactNode>> = {
-  open: <IconList />,
-  overdue: <IconClockCircle />,
-  unassigned: <IconUserAdd />,
-  failed: <IconBug />,
-  all: <IconApps />,
 };
 
 export type WorkbenchConsoleProps = Readonly<{
@@ -164,6 +142,11 @@ export type WorkbenchConsoleProps = Readonly<{
   devices: readonly IdentityProfile[];
   userTotal: number;
   deviceTotal: number;
+  // The sider's own two counts, read on every section rather than taken from the
+  // lists above — those are empty unless their section is the one being shown, so
+  // deriving the counts from them made the sider report 0 users everywhere else.
+  userCount: number;
+  deviceCount: number;
   selectedProfile: IdentityProfile | null;
 }>;
 
@@ -178,6 +161,8 @@ export function WorkbenchConsole({
   devices,
   userTotal,
   deviceTotal,
+  userCount,
+  deviceCount,
   selectedProfile,
 }: WorkbenchConsoleProps) {
   const router = useRouter();
@@ -368,81 +353,20 @@ export function WorkbenchConsole({
   }
 
   return (
-    <Layout className="oc-console">
-      <Layout.Sider width={200} className="oc-console__sider">
-        <div className="oc-console__brand">万护 OneCare</div>
-        {/* Three top-level destinations, with the queues nested one level under
-            工单. An earlier version had no group heading at all, on the reasoning
-            that a second group would never exist — which lasted exactly until
-            these two arrived. The indentation that reasoning was really about
-            belongs on level two, which is where it now is. */}
-        <Menu
-          selectedKeys={[
-            query.section === "tickets" ? query.queue : query.section,
-          ]}
-          defaultOpenKeys={["tickets"]}
-          style={{ width: "100%" }}
-        >
-          <Menu.Item
-            key="metrics"
-            onClick={() => go(filterHref(query, { section: "metrics" }))}
-          >
-            <IconDashboard />
-            <span className="oc-console__nav-label">数据概览</span>
-          </Menu.Item>
-
-          <Menu.SubMenu
-            key="tickets"
-            title={
-              <>
-                <IconFile />
-                <span className="oc-console__nav-label">工单</span>
-              </>
-            }
-          >
-            {QUEUES.map((queue) => (
-              <Menu.Item
-                key={queue.key}
-                onClick={() =>
-                  go(
-                    filterHref(query, { section: "tickets", queue: queue.key }),
-                  )
-                }
-              >
-                {QUEUE_ICON[queue.key]}
-                <span className="oc-console__nav-label">{queue.label}</span>
-                <Tag size="small">{view.queueCounts[queue.key]}</Tag>
-              </Menu.Item>
-            ))}
-          </Menu.SubMenu>
-
-          <Menu.Item
-            key="users"
-            onClick={() => go(filterHref(query, { section: "users" }))}
-          >
-            <IconUser />
-            <span className="oc-console__nav-label">用户画像</span>
-            <Tag size="small">{users.length}</Tag>
-          </Menu.Item>
-
-          <Menu.Item
-            key="devices"
-            onClick={() => go(filterHref(query, { section: "devices" }))}
-          >
-            <IconDesktop />
-            <span className="oc-console__nav-label">设备追踪</span>
-            <Tag size="small">{devices.length}</Tag>
-          </Menu.Item>
-        </Menu>
-
-        {/* Pinned to the bottom of the sider by the flex rule on
-            .arco-layout-sider-children: it is navigation, so it belongs in the
-            navigation column, and it is the one destination that leaves the
-            workbench, so it belongs at the far end of it. */}
-        <div className="oc-console__sider-footer">
-          <Link href="/?view=showcase">方案展示厅 →</Link>
-        </div>
-      </Layout.Sider>
+    // hasSider is not optional here even though Arco calls it "generally unnecessary":
+    // it detects a sider by looking for Layout.Sider among its *direct* children, and
+    // ours arrives inside ConsoleSider. Without it the class that makes this a row is
+    // never applied, so the sider stacks on top of a zero-height main column — which
+    // is exactly what happened the moment the sider moved into its own component.
+    <Layout className="oc-console" hasSider>
+      <ConsoleSider
+        query={query}
+        queueCounts={view.queueCounts}
+        userCount={userCount}
+        deviceCount={deviceCount}
+        selectedKey={query.section === "tickets" ? query.queue : query.section}
+        navigate={go}
+      />
 
       <Layout className="oc-console__main">
         <Layout.Header className="oc-console__header">

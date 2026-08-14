@@ -5703,7 +5703,10 @@ a {
   align-items: center;
 }
 
-/* Full-page ticket workspace: navigation, reading surface, and action context. */
+/* Full-page ticket workspace: reading surface and action context, inside the same
+   console shell as every other page. It used to carry a third column of same-page
+   anchors where the console's sider belongs; the sider is back and the anchors are
+   gone, so this is two columns now. */
 .oc-ticket-detail__content {
   width: 100%;
   max-width: 1600px;
@@ -5713,18 +5716,19 @@ a {
 
 .oc-ticket-detail__grid {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 20px;
   align-items: start;
 }
 
-.oc-ticket-detail__nav,
+/* Sticky against the scroll container — .oc-console__content, which is the only part
+   of the console that scrolls — so top is 0 rather than an offset for a page-level
+   header that no longer sits above this box. */
 .oc-ticket-detail__aside {
   position: sticky;
-  top: 76px;
+  top: 0;
 }
 
-.oc-ticket-detail__nav,
 .oc-ticket-detail__main,
 .oc-ticket-detail__aside {
   min-width: 0;
@@ -5739,41 +5743,37 @@ a {
   padding: 0;
 }
 
-.oc-ticket-detail__nav {
-  display: grid;
-  gap: 12px;
-}
-
 .oc-ticket-detail__back,
-.oc-ticket-detail__anchors a,
 .oc-ticket-detail__state-action {
   color: rgb(var(--primary-7));
   font-weight: 600;
 }
 
-.oc-ticket-detail__anchors {
-  display: grid;
-  overflow: hidden;
-  background: #fff;
-  border: 1px solid var(--color-border-2, #e5e6eb);
-  border-radius: 4px;
-}
-
-.oc-ticket-detail__anchors a {
-  padding: 11px 14px;
-  color: var(--color-text-2, #4e5969);
+/* The one link the sider cannot replace: it returns to the exact filtered, sorted,
+   paged list this ticket was opened from, which no sider destination reproduces. */
+.oc-ticket-detail__back {
+  justify-self: start;
   font-size: 13px;
-  overflow-wrap: anywhere;
 }
 
-.oc-ticket-detail__anchors a + a {
-  border-top: 1px solid var(--color-border-2, #e5e6eb);
+/* The card header holds the 立即分析 control, or the sentence explaining why there
+   isn't one. Arco fixes a card header's height, and that sentence is longer than a
+   title — so this one is allowed to grow instead of clipping it. */
+.oc-ticket-detail__analysis .arco-card-header {
+  height: auto;
+  min-height: 46px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
-.oc-ticket-detail__anchors a:hover,
-.oc-ticket-detail__anchors a:focus-visible {
-  color: rgb(var(--primary-7));
-  background: rgb(var(--primary-1));
+.oc-ticket-detail__analysis .arco-card-header-extra {
+  padding-left: 16px;
+  text-align: right;
+}
+
+.oc-ticket-detail__analyze-note {
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .oc-ticket-detail__main,
@@ -5796,7 +5796,6 @@ a {
 }
 
 .oc-ticket-detail__section {
-  scroll-margin-top: 76px;
   overflow-wrap: anywhere;
 }
 
@@ -5882,25 +5881,6 @@ a {
   .oc-ticket-detail__grid {
     grid-template-columns: minmax(0, 1fr) 300px;
   }
-
-  .oc-ticket-detail__nav {
-    position: static;
-    grid-column: 1 / -1;
-  }
-
-  .oc-ticket-detail__anchors {
-    display: flex;
-    overflow-x: auto;
-  }
-
-  .oc-ticket-detail__anchors a {
-    min-width: max-content;
-  }
-
-  .oc-ticket-detail__anchors a + a {
-    border-top: 0;
-    border-left: 1px solid var(--color-border-2, #e5e6eb);
-  }
 }
 
 @media (max-width: 760px) {
@@ -5928,20 +5908,24 @@ a {
   .oc-ticket-detail__grid {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
-      "nav"
+      "back"
       "overview"
       "actions"
       "body"
       "key-fields";
   }
 
+  /* Both columns dissolve so their five children become rows of this one grid, which
+     is what lets the action panel sit above the long reading surface on a phone. Every
+     one of those children therefore needs an area of its own: an unplaced child is
+     auto-placed *after* every named row, which is where the back link would have gone. */
   .oc-ticket-detail__main,
   .oc-ticket-detail__aside {
     display: contents;
   }
 
-  .oc-ticket-detail__nav {
-    grid-area: nav;
+  .oc-ticket-detail__back {
+    grid-area: back;
   }
 
   .oc-ticket-detail__overview {

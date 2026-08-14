@@ -138,12 +138,29 @@ function renderWorkbench(
       devices={repeatOnly(devices)}
       userTotal={users.length}
       deviceTotal={devices.length}
+      // What the server reads for the sider on every section, which is why they are
+      // props rather than derived from the two lists above: those are empty unless
+      // their own section is the one being rendered.
+      userCount={repeatOnly(users).length}
+      deviceCount={repeatOnly(devices).length}
       selectedProfile={selectedProfile}
     />,
   );
 }
 
 describe("WorkbenchConsole", () => {
+  // The sider moved into its own component so the ticket page could render the same
+  // one. Arco detects a sider by looking for Layout.Sider among its *direct* children,
+  // so a wrapper defeats it and the whole console lays out as a column: sider on top,
+  // content at zero height. hasSider is what prevents that, and this is the assertion
+  // that notices it going away.
+  it("lays the shell out as a row despite the sider being a wrapper component", () => {
+    const { container } = renderWorkbench();
+    expect(container.querySelector(".oc-console")).toHaveClass(
+      "arco-layout-has-sider",
+    );
+  });
+
   it("names every queue with its count, over all records rather than the page", () => {
     renderWorkbench({
       tickets: [

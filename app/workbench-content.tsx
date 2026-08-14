@@ -4,6 +4,7 @@ import { parseWorkbenchQuery } from "../src/features/workbench/query";
 import {
   readFilterOptions,
   readProfile,
+  readProfileCounts,
   readProfiles,
   readVocMetrics,
   readWorkbenchPage,
@@ -53,35 +54,46 @@ export async function WorkbenchContent({
 }: WorkbenchContentProps) {
   const query = parseWorkbenchQuery(searchParams);
 
-  // Always: the sider's five queue counts, and — on the ticket section — one page of
-  // rows. Both come from aggregate SQL rather than from 3628 rows in memory, which
-  // is the whole point of having a database: a page is one query, the counts are one
-  // GROUP BY, and neither transfers rows nobody will read.
-  const view = await readWorkbenchPage(query, now);
+  // One Promise.all, not a chain of awaits. Every read below is an independent HTTP
+  // round trip to Neon, so awaiting them in sequence adds their latencies together:
+  // the section reads waited on the queue counts, which waited on nothing at all.
+  // Only the reads this section actually needs are dispatched; the rest resolve
+  // immediately to their empty values.
+  const [view, profileCounts, metrics, users, devices, selectedProfile, options] =
+    await Promise.all([
+      // Always: the sider's five queue counts, and — on the ticket section — one page
+      // of rows. Both come from aggregate SQL rather than from 3628 rows in memory,
+      // which is the whole point of having a database: a page is one query, the
+      // counts are one GROUP BY, and neither transfers rows nobody will read.
+      readWorkbenchPage(query, now),
 
-  // Nothing here reads the whole table any more. The overview was the last one, and
-  // its thirteen fields are now aggregates rather than a pass over 3628 rows.
-  const metrics =
-    query.section === "metrics"
-      ? await readVocMetrics({
-          manualMinutesPerRecord: ASSUMED_MANUAL_MINUTES_PER_RECORD,
-        })
-      : null;
+      // Read on every section, unlike the two lists below. The sider carries a count
+      // for 用户画像 and 设备追踪 on every page, and taking those numbers from the
+      // lists meant reporting 0 on every section that does not load them.
+      readProfileCounts(),
 
-  // Profiles are a GROUP BY now, not a pass over 3628 rows.
-  const users =
-    query.section === "users" ? await readProfiles("user") : EMPTY_PROFILES;
-  const devices =
-    query.section === "devices" ? await readProfiles("device") : EMPTY_PROFILES;
+      // Nothing here reads the whole table any more. The overview was the last one,
+      // and its thirteen fields are now aggregates rather than a pass over 3628 rows.
+      query.section === "metrics"
+        ? readVocMetrics({
+            manualMinutesPerRecord: ASSUMED_MANUAL_MINUTES_PER_RECORD,
+          })
+        : null,
 
-  // Looked up separately because the lists above carry only repeat profiles: a
-  // single-record identity would otherwise open to an empty page.
-  const selectedProfile =
-    query.userRef !== null
-      ? await readProfile("user", query.userRef)
-      : query.deviceRef !== null
-        ? await readProfile("device", query.deviceRef)
-        : null;
+      // Profiles are a GROUP BY now, not a pass over 3628 rows.
+      query.section === "users" ? readProfiles("user") : EMPTY_PROFILES,
+      query.section === "devices" ? readProfiles("device") : EMPTY_PROFILES,
+
+      // Looked up separately because the lists above carry only repeat profiles: a
+      // single-record identity would otherwise open to an empty page.
+      query.userRef !== null
+        ? readProfile("user", query.userRef)
+        : query.deviceRef !== null
+          ? readProfile("device", query.deviceRef)
+          : null,
+
+      query.section === "tickets" ? readFilterOptions() : NO_OPTIONS,
+    ]);
 
   return (
     <WorkbenchConsole
@@ -90,13 +102,13 @@ export async function WorkbenchContent({
       view={view}
       query={query}
       now={now}
-      options={
-        query.section === "tickets" ? await readFilterOptions() : NO_OPTIONS
-      }
+      options={options}
       users={users.profiles}
       devices={devices.profiles}
       userTotal={users.total}
       deviceTotal={devices.total}
+      userCount={profileCounts.users}
+      deviceCount={profileCounts.devices}
       selectedProfile={selectedProfile}
     />
   );

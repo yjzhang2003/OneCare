@@ -3,7 +3,11 @@ import { redirect } from "next/navigation";
 import { getCurrentSession } from "../../../../src/features/auth/current-session";
 import { listHref, ticketDetailHref } from "../../../../src/features/workbench/href";
 import { parseWorkbenchQuery } from "../../../../src/features/workbench/query";
-import { readTicketByNumber } from "../../../../src/features/store/workbench-query";
+import {
+  readProfileCounts,
+  readQueueCounts,
+  readTicketByNumber,
+} from "../../../../src/features/store/workbench-query";
 import { listAssignableMembers } from "../../../../src/features/directory/members";
 import { createTenantTokenProvider } from "../../../../src/features/bitable/client";
 import { readBotEnv } from "../../../../src/lib/env";
@@ -35,21 +39,44 @@ export default async function TicketDetailPage({
     searchParams,
   ]);
   const query = parseWorkbenchQuery(rawQuery);
+  const now = currentTimestamp();
 
-  // A directory that cannot be read hides the 改派 control; it must not take the whole
-  // ticket down with it, because everything else on this page still works without it.
-  const members = await listAssignableMembers({
-    tenantToken: () => {
-      const botEnv = readBotEnv();
-      return createTenantTokenProvider(botEnv.appId, botEnv.appSecret)();
-    },
-  }).catch((error: unknown) => {
-    console.error(
-      "Directory read failed:",
-      error instanceof Error ? error.message : String(error),
-    );
-    return [];
-  });
+  // Three independent reads, dispatched together: the directory is a Feishu round
+  // trip and the two count queries are Neon ones, so awaiting them in sequence would
+  // add three latencies to a page that shows one record.
+  //
+  // Each failure is contained to what it feeds. A directory that cannot be read hides
+  // the 改派 control; counts that cannot be read leave the sider's tags off. Neither
+  // may take the whole ticket down with it, because everything else on this page
+  // works without them.
+  const [members, queueCounts, profileCounts] = await Promise.all([
+    listAssignableMembers({
+      tenantToken: () => {
+        const botEnv = readBotEnv();
+        return createTenantTokenProvider(botEnv.appId, botEnv.appSecret)();
+      },
+    }).catch((error: unknown) => {
+      console.error(
+        "Directory read failed:",
+        error instanceof Error ? error.message : String(error),
+      );
+      return [];
+    }),
+    readQueueCounts(now).catch((error: unknown) => {
+      console.error(
+        "Queue counts read failed:",
+        error instanceof Error ? error.message : String(error),
+      );
+      return null;
+    }),
+    readProfileCounts().catch((error: unknown) => {
+      console.error(
+        "Profile counts read failed:",
+        error instanceof Error ? error.message : String(error),
+      );
+      return null;
+    }),
+  ]);
   const backHref = listHref(query);
   const retryHref = ticketDetailHref(query, recordNumber);
   // One record by its number, not 3628 records filtered down to one. The read this
@@ -93,8 +120,12 @@ export default async function TicketDetailPage({
       user={user}
       ticket={ticket}
       members={members}
-      now={currentTimestamp()}
+      now={now}
       backHref={backHref}
+      query={query}
+      queueCounts={queueCounts}
+      userCount={profileCounts === null ? null : profileCounts.users}
+      deviceCount={profileCounts === null ? null : profileCounts.devices}
     />
   );
 }

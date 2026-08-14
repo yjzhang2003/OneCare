@@ -1024,61 +1024,97 @@ export async function escalateToWarRoom(input: EscalateInput): Promise<void> {
   }
 }
 
-const defaultDependencies: AnalyzeRouteDependencies = {
-  syncStore: async () => {
-    await migrate();
-    // Retry outstanding pushes before pulling. A row whose Bitable write failed keeps
-    // pending_push and is skipped by the pull, so without this it would stay flagged
-    // and diverged indefinitely.
-    const pushed = await pushPending(getBitableClient());
-    if (pushed.attempted > 0) {
-      console.info(
-        `Retried ${pushed.pushed} of ${pushed.attempted} outstanding Bitable pushes`,
+// A function rather than a const because two callers now need this wiring with two
+// small differences: the daily Cron shard, and the workbench's "立即分析" button,
+// which runs one named record and skips the Bitable pull. Overrides are applied with
+// Object.assign onto the fresh object so the `cronSecret` and `tagSource` accessors
+// below survive — spreading the object would evaluate both getters at spread time,
+// which for cronSecret means throwing when CRON_SECRET is unset (a web button has no
+// business depending on that) and for tagSource means freezing one aily batch number.
+function productionDependencies(
+  overrides?: Partial<AnalyzeRouteDependencies>,
+): AnalyzeRouteDependencies {
+  const base: AnalyzeRouteDependencies = {
+    syncStore: async () => {
+      await migrate();
+      // Retry outstanding pushes before pulling. A row whose Bitable write failed keeps
+      // pending_push and is skipped by the pull, so without this it would stay flagged
+      // and diverged indefinitely.
+      const pushed = await pushPending(getBitableClient());
+      if (pushed.attempted > 0) {
+        console.info(
+          `Retried ${pushed.pushed} of ${pushed.attempted} outstanding Bitable pushes`,
+        );
+      }
+      return syncFromBitable({
+        listRecords: () => getBitableClient().listRecords(),
+        pendingIds: readPendingPushIds,
+        upsert: upsertRecords,
+      });
+    },
+    get cronSecret() {
+      return readCronSecret();
+    },
+    shardSize: SHARD_SIZE,
+    listPending: listPendingRecords,
+    tag: (records) => getTaggingProvider().tag(records),
+    ownerRules: () => listOwnerRules(readBitableEnv(), getTokenProvider()),
+    updateRecord: async (recordId, fields) => {
+      // Awaited end to end: this shard runs under a 300s maxDuration, and a tagged
+      // record that never reaches the mirror is invisible in the console.
+      const pushes: Promise<void>[] = [];
+      await writeRecord(
+        { bitable: getBitableClient(), defer: (task) => pushes.push(task()) },
+        recordId,
+        fields,
       );
-    }
-    return syncFromBitable({
-      listRecords: () => getBitableClient().listRecords(),
-      pendingIds: readPendingPushIds,
-      upsert: upsertRecords,
-    });
-  },
-  get cronSecret() {
-    return readCronSecret();
-  },
-  shardSize: SHARD_SIZE,
-  listPending: listPendingRecords,
-  tag: (records) => getTaggingProvider().tag(records),
-  ownerRules: () => listOwnerRules(readBitableEnv(), getTokenProvider()),
-  updateRecord: async (recordId, fields) => {
-    // Awaited end to end: this shard runs under a 300s maxDuration, and a tagged
-    // record that never reaches the mirror is invisible in the console.
-    const pushes: Promise<void>[] = [];
-    await writeRecord(
-      { bitable: getBitableClient(), defer: (task) => pushes.push(task()) },
-      recordId,
-      fields,
-    );
-    await Promise.all(pushes);
-  },
-  // readBotEnv() is called here, not hoisted: this module is imported at build
-  // time and must never touch process.env on import (the same discipline the
-  // rest of this wiring follows). A missing bot credential therefore surfaces
-  // as one record's notifyErrors, inside runShard's per-record try, rather
-  // than as a failed build or a dead shard.
-  notifyOwner: (delivery) =>
-    sendFeishuMessage({
-      env: readBotEnv(),
-      openId: delivery.openId,
-      message: delivery.message,
+      await Promise.all(pushes);
+    },
+    // readBotEnv() is called here, not hoisted: this module is imported at build
+    // time and must never touch process.env on import (the same discipline the
+    // rest of this wiring follows). A missing bot credential therefore surfaces
+    // as one record's notifyErrors, inside runShard's per-record try, rather
+    // than as a failed build or a dead shard.
+    notifyOwner: (delivery) =>
+      sendFeishuMessage({
+        env: readBotEnv(),
+        openId: delivery.openId,
+        message: delivery.message,
+      }),
+    escalate: escalateToWarRoom,
+    // A getter (like cronSecret) so each Cron tick — not each import — gets a
+    // fresh aily batch number; createAnalyzeRoute reads this once per request
+    // and reuses it for every record in the shard.
+    get tagSource() {
+      return resolveTagSource(readTaggingEnv());
+    },
+  };
+
+  return overrides ? Object.assign(base, overrides) : base;
+}
+
+// One named record, tagged now, because a person asked for it — the workbench's
+// 立即分析 button. Everything about *how* a record gets tagged stays in runShard:
+// the provider, the owner rules, the single write, the owner's card, the war-room
+// escalation. Only two things differ from a Cron tick:
+//
+//   - the shard is exactly this record, so nothing else is touched;
+//   - no Bitable pull first. That sync exists so edits made in the Bitable UI reach
+//     the mirror, which is the daily job's business; here it would spend seconds
+//     reading 3628 rows before starting the work the operator is waiting on.
+//
+// The caller is responsible for the record being in a state worth tagging —
+// analyzeEligibility is where that decision lives, and it is what turns a 分析失败
+// row's 重试 into the 待分析 state the shard needs to see.
+export function analyzeOneRecord(record: PendingRecord): Promise<Response> {
+  return runShard(
+    productionDependencies({
+      shardSize: 1,
+      listPending: async () => [record],
+      syncStore: async () => ({ read: 0, written: 0, skipped: 0 }),
     }),
-  escalate: escalateToWarRoom,
-  // A getter (like cronSecret) so each Cron tick — not each import — gets a
-  // fresh aily batch number; createAnalyzeRoute reads this once per request
-  // and reuses it for every record in the shard.
-  get tagSource() {
-    return resolveTagSource(readTaggingEnv());
-  },
-};
+  );
+}
 
 // Vercel Cron Jobs always invoke their target with an HTTP GET, not POST
 // (confirmed against vercel.com/docs/cron-jobs: "Vercel makes an HTTP GET
@@ -1090,6 +1126,6 @@ const defaultDependencies: AnalyzeRouteDependencies = {
 // verbs are wired to the same handler so a manual `curl -X POST` (used
 // during development and in this task's own verification) keeps working
 // too.
-const handler = createAnalyzeRoute(defaultDependencies);
+const handler = createAnalyzeRoute(productionDependencies());
 export const GET = handler;
 export const POST = handler;

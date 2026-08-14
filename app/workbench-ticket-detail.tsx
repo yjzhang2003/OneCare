@@ -12,10 +12,13 @@ import {
   Descriptions,
   Layout,
   Space,
+  Spin,
   Tag,
   Typography,
 } from "@arco-design/web-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 
 import type { AuthUser } from "../src/features/auth/types";
 import type { Member } from "../src/features/directory/members";
@@ -32,17 +35,13 @@ import {
 import {
   dwellHours,
   isOverdue,
+  type QueueKey,
+  type WorkbenchQuery,
 } from "../src/features/workbench/query";
 import { availableActions } from "../src/features/workbench/write-actions";
+import { AnalyzeButton } from "./workbench-analyze-button";
 import { WorkbenchActions } from "./workbench-actions";
-
-const SECTIONS = [
-  { id: "overview", label: "工单概览" },
-  { id: "feedback", label: "用户反馈" },
-  { id: "analysis", label: "AI 分析" },
-  { id: "replies", label: "回复话术" },
-  { id: "handling", label: "处理信息" },
-] as const;
+import { ConsoleSider } from "./workbench-sider";
 
 export type TicketDetailPageViewProps = Readonly<{
   // Who may be named as an owner. Empty when the directory read failed, which hides
@@ -52,6 +51,14 @@ export type TicketDetailPageViewProps = Readonly<{
   ticket: WorkbenchTicket;
   now: number;
   backHref: string;
+  // The list query this ticket was opened from. The sider's destinations are built
+  // from it, so a filtered list stays filtered when the operator navigates away.
+  query: WorkbenchQuery;
+  // The sider's counts, read on this page like on any other. Null when the count
+  // query failed — which shows no tag rather than a zero.
+  queueCounts: Readonly<Record<QueueKey, number>> | null;
+  userCount: number | null;
+  deviceCount: number | null;
 }>;
 
 export type TicketDetailStateProps = Readonly<{
@@ -80,11 +87,19 @@ function UserAvatar({ user }: Readonly<{ user: AuthUser }>) {
 function DetailHeader({
   user,
   recordNumber,
-}: Readonly<{ user: AuthUser; recordNumber: string | null }>) {
+  brand,
+}: Readonly<{
+  user: AuthUser;
+  recordNumber: string | null;
+  // The wordmark belongs to the sider, and the ticket page now has one. The two
+  // error states below do not — they are a single centred card with no navigation —
+  // so they keep it in the header rather than losing it entirely.
+  brand: boolean;
+}>) {
   return (
     <Layout.Header className="oc-console__header oc-ticket-detail__header">
       <Space size="large" className="oc-ticket-detail__header-context">
-        <div className="oc-console__brand">万护 OneCare</div>
+        {brand && <div className="oc-console__brand">万护 OneCare</div>}
         <Breadcrumb>
           <Breadcrumb.Item key="domain">服务运营</Breadcrumb.Item>
           <Breadcrumb.Item key="entity">VOC 工单</Breadcrumb.Item>
@@ -101,6 +116,8 @@ function DetailHeader({
   );
 }
 
+// The two error states' shell: no sider, because there is no data to navigate and
+// the one useful move is the 返回工单列表 link inside the card.
 function DetailShell({
   user,
   recordNumber,
@@ -112,7 +129,7 @@ function DetailShell({
 }>) {
   return (
     <Layout className="oc-console oc-ticket-detail">
-      <DetailHeader user={user} recordNumber={recordNumber} />
+      <DetailHeader user={user} recordNumber={recordNumber} brand />
       {children}
     </Layout>
   );
@@ -155,7 +172,16 @@ export function TicketDetailPageView({
   members,
   now,
   backHref,
+  query,
+  queueCounts,
+  userCount,
+  deviceCount,
 }: TicketDetailPageViewProps) {
+  const router = useRouter();
+  // Leaving this page is a server round trip like every other navigation in the
+  // console, so it gets the same treatment: the wait is shown over the content the
+  // operator is leaving, rather than nothing happening for a second.
+  const [leaving, startLeaving] = useTransition();
   const dwell = dwellHours(ticket, now);
   const overdue = isOverdue(ticket, now);
   const owner = ticket.ownerNames.length === 0 ? "未分配" : ticket.ownerNames.join("、");
@@ -163,25 +189,39 @@ export function TicketDetailPageView({
     [ticket.channel, ticket.category].filter(Boolean).join(" / ") || ABSENT;
 
   return (
-    <DetailShell user={user} recordNumber={ticket.recordNumber}>
-      <Layout.Content className="oc-ticket-detail__content">
+    // hasSider because ConsoleSider is a wrapper: Arco looks for Layout.Sider among
+    // its direct children and finds a function component, so without this the sider
+    // stacks above a zero-height content column. See the same note in the console.
+    <Layout className="oc-console oc-ticket-detail" hasSider>
+      {/* The same navigation as every other page in the console. It used to be
+          replaced here by a column of five same-page anchors, which meant opening a
+          ticket dropped the operator out of the workbench and gave them, in
+          exchange, links to five headings already visible on screen. */}
+      <ConsoleSider
+        query={query}
+        queueCounts={queueCounts}
+        userCount={userCount}
+        deviceCount={deviceCount}
+        // A ticket is not one of the sider's destinations. Highlighting the queue it
+        // came from would say the operator is looking at that list.
+        selectedKey={null}
+        navigate={(href) => startLeaving(() => router.push(href))}
+      />
+
+      <Layout className="oc-console__main">
+        <DetailHeader
+          user={user}
+          recordNumber={ticket.recordNumber}
+          brand={false}
+        />
+        <Layout.Content className="oc-console__content oc-ticket-detail__content">
+          <Spin loading={leaving} style={{ display: "block", width: "100%" }}>
         <div className="oc-ticket-detail__grid">
-          <nav className="oc-ticket-detail__nav" aria-label="工单章节">
+          <main className="oc-ticket-detail__main">
             <Link className="oc-ticket-detail__back" href={backHref}>
               ← 返回工单列表
             </Link>
-            <div className="oc-ticket-detail__anchors">
-              {SECTIONS.map((section) => (
-                <a key={section.id} href={`#${section.id}`}>
-                  {section.label}
-                </a>
-              ))}
-            </div>
-          </nav>
-
-          <main className="oc-ticket-detail__main">
             <section
-              id="overview"
               className="oc-ticket-detail__section oc-ticket-detail__overview"
             >
               <Card bordered={false}>
@@ -207,7 +247,7 @@ export function TicketDetailPageView({
             </section>
 
             <div className="oc-ticket-detail__body">
-              <section id="feedback" className="oc-ticket-detail__section">
+              <section className="oc-ticket-detail__section">
                 <Card title="用户反馈">
                   <Typography.Paragraph className="oc-ticket-detail__prose">
                     {ticket.content || ABSENT}
@@ -226,8 +266,21 @@ export function TicketDetailPageView({
                 </Card>
               </section>
 
-              <section id="analysis" className="oc-ticket-detail__section">
-                <Card title="AI 分析">
+              <section className="oc-ticket-detail__section">
+                <Card
+                  className="oc-ticket-detail__analysis"
+                  title="AI 分析"
+                  // The control sits in the card whose contents it produces, not with
+                  // the state transitions in 可执行操作: it does not move the ticket
+                  // through the service flow, it fills in the four fields below it.
+                  extra={
+                    <AnalyzeButton
+                      recordId={ticket.recordId}
+                      state={ticket.state}
+                      retryCount={ticket.retryCount}
+                    />
+                  }
+                >
                   <Typography.Text type="secondary">AI 摘要</Typography.Text>
                   <Typography.Paragraph className="oc-ticket-detail__prose">
                     {ticket.summary || ABSENT}
@@ -250,7 +303,7 @@ export function TicketDetailPageView({
                 </Card>
               </section>
 
-              <section id="replies" className="oc-ticket-detail__section">
+              <section className="oc-ticket-detail__section">
                 <Card title="回复话术">
                   <Typography.Text type="secondary">AI 回复话术</Typography.Text>
                   {ticket.replies.length === 0 ? (
@@ -268,7 +321,7 @@ export function TicketDetailPageView({
                 </Card>
               </section>
 
-              <section id="handling" className="oc-ticket-detail__section">
+              <section className="oc-ticket-detail__section">
                 <Card title="处理信息">
                   <Descriptions
                     column={2}
@@ -353,8 +406,10 @@ export function TicketDetailPageView({
             </div>
           </aside>
         </div>
-      </Layout.Content>
-    </DetailShell>
+          </Spin>
+        </Layout.Content>
+      </Layout>
+    </Layout>
   );
 }
 

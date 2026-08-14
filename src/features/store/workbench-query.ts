@@ -120,6 +120,57 @@ function filterClauses(query: WorkbenchQuery, from: number): Bound {
   };
 }
 
+// The five numbers on the sider. Its own function because the sider is now chrome
+// on every page rather than part of the list view: the ticket detail page renders
+// the same navigation and needs the same counts, without paying for a page of rows
+// it will not show.
+export async function readQueueCounts(
+  now: number,
+): Promise<Readonly<Record<QueueKey, number>>> {
+  // Always mentions $NOW, because the overdue predicate is one of the five it
+  // evaluates.
+  const rows = (await getSql().query(
+    `SELECT ${QUEUES.map(
+      (q, i) =>
+        `COUNT(*) FILTER (WHERE ${queuePredicate(q.key).replaceAll("$NOW", "$1")})::int AS q${i}`,
+    ).join(", ")}
+     FROM voc_records`,
+    [new Date(now).toISOString()],
+  )) as Record<string, number>[];
+  const counts = rows[0] ?? {};
+  return Object.fromEntries(
+    QUEUES.map((q, i) => [q.key, counts[`q${i}`] ?? 0]),
+  ) as Record<QueueKey, number>;
+}
+
+// How many repeat identities each profile view lists — the other two sider counts.
+//
+// Separate from readProfiles because the sider needs the numbers on every page while
+// the lists themselves are only needed on their own section. Before this, the sider
+// took its two counts from whichever list happened to be loaded, so 用户画像 and
+// 设备追踪 both read "0" everywhere else — a count of zero where the truth was 2772,
+// stated with the same confidence as the five that were right.
+//
+// `records > 1` is readProfiles' own filter for what those lists contain; a HAVING
+// clause is the same test, counted in the database instead of in memory.
+export async function readProfileCounts(): Promise<
+  Readonly<{ users: number; devices: number }>
+> {
+  const repeats = (column: string) =>
+    `(SELECT COUNT(*)::int FROM (
+        SELECT 1 FROM voc_records
+        WHERE ${column} <> ''
+        GROUP BY ${column}
+        HAVING COUNT(*) > 1
+      ) AS r)`;
+
+  const rows = (await getSql().query(
+    `SELECT ${repeats("user_ref")} AS users, ${repeats("device_ref")} AS devices`,
+  )) as Record<string, number>[];
+  const row = rows[0] ?? {};
+  return { users: row.users ?? 0, devices: row.devices ?? 0 };
+}
+
 export async function readWorkbenchPage(
   query: WorkbenchQuery,
   now: number,
@@ -127,20 +178,7 @@ export async function readWorkbenchPage(
   const sql = getSql();
   const nowIso = new Date(now).toISOString();
 
-  // The counts query always mentions $NOW, because the overdue predicate is one of
-  // the five it evaluates.
-  const countRows = (await sql.query(
-    `SELECT ${QUEUES.map(
-      (q, i) =>
-        `COUNT(*) FILTER (WHERE ${queuePredicate(q.key).replaceAll("$NOW", "$1")})::int AS q${i}`,
-    ).join(", ")}
-     FROM voc_records`,
-    [nowIso],
-  )) as Record<string, number>[];
-  const counts = countRows[0] ?? {};
-  const queueCounts = Object.fromEntries(
-    QUEUES.map((q, i) => [q.key, counts[`q${i}`] ?? 0]),
-  ) as Record<QueueKey, number>;
+  const queueCounts = await readQueueCounts(now);
 
   // Filters are numbered from $1 and `now` is appended only if the queue predicate
   // or the sort actually references it. Passing an unreferenced parameter is not

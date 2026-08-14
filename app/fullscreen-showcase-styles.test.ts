@@ -6,8 +6,12 @@ import { describe, expect, it } from "vitest";
 const css = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 
 describe("fullscreen showcase stylesheet", () => {
+  // Two columns, not three: the leftmost used to be a strip of same-page anchors, and
+  // is now the console's own sider, which sits outside this grid entirely. The mobile
+  // rows kept their shape — the anchor strip became the one link it always should have
+  // been, back to the list.
   it("lays out ticket detail across desktop, tablet and mobile", () => {
-    expect(css).toMatch(/\.oc-ticket-detail__grid\s*\{[^}]*grid-template-columns:\s*180px\s+minmax\(0,\s*1fr\)\s+320px/);
+    expect(css).toMatch(/\.oc-ticket-detail__grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+320px/);
     expect(css).toMatch(/@media\s*\(max-width:\s*1100px\)[\s\S]*?\.oc-ticket-detail__grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+300px/);
     const mobileTicketStart = css.lastIndexOf("@media (max-width: 760px)");
     expect(mobileTicketStart).toBeGreaterThan(-1);
@@ -15,13 +19,16 @@ describe("fullscreen showcase stylesheet", () => {
 
     expect(mobileTicketStyles).toMatch(/\.oc-ticket-detail__grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
     expect(mobileTicketStyles).toMatch(
-      /grid-template-areas:\s*"nav"\s*"overview"\s*"actions"\s*"body"\s*"key-fields"/,
+      /grid-template-areas:\s*"back"\s*"overview"\s*"actions"\s*"body"\s*"key-fields"/,
     );
     expect(mobileTicketStyles).toMatch(
       /\.oc-ticket-detail__main,\s*\.oc-ticket-detail__aside\s*\{[^}]*display:\s*contents/,
     );
+    // Every child of the two dissolved columns gets an area. One without would be
+    // auto-placed after all five named rows, which for the back link means the bottom
+    // of the page.
     for (const [className, area] of [
-      ["nav", "nav"],
+      ["back", "back"],
       ["overview", "overview"],
       ["actions", "actions"],
       ["body", "body"],

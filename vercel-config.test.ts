@@ -13,6 +13,11 @@ const BITABLE_MARKERS = [
   "readVocRecordsCached",
   "readWorkbenchCached",
   "getVocDashboardMetrics",
+  // Runs the whole tagging shard for one record: an aily call, a Bitable write and a
+  // Feishu push. A caller of it names no client of its own, so without this marker the
+  // manual-analyze route looked region-neutral to this check while doing the most
+  // cross-border work of anything in the repository.
+  "analyzeOneRecord",
 ];
 
 // Entry points Vercel turns into functions: route handlers and pages.
