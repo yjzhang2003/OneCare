@@ -20,7 +20,7 @@ import {
 } from "@arco-design/web-react/icon";
 import Link from "next/link";
 
-import { filterHref } from "../src/features/workbench/href";
+import { filterHref, type QueryPatch } from "../src/features/workbench/href";
 import {
   QUEUES,
   type QueueKey,
@@ -39,9 +39,10 @@ const QUEUE_ICON: Readonly<Record<QueueKey, React.ReactNode>> = {
 };
 
 export type ConsoleSiderProps = Readonly<{
-  // Carried through every destination so a filtered list stays filtered across a
-  // section switch, and so the detail page's sider links land back on the list the
-  // operator came from rather than on a default view.
+  // Carried through every destination so the nine filters, the search and the sort
+  // survive a section switch, and so the detail page's sider links land back on the
+  // list the operator came from rather than on a default view. The record-scoped
+  // drill-downs are the exception — see `destination` below.
   query: WorkbenchQuery;
   // Null when the page could not read them. A missing count renders as no tag at
   // all, never as 0: "no overdue tickets" and "we don't know" are different facts,
@@ -71,6 +72,17 @@ export function ConsoleSider({
   const count = (value: number | null) =>
     value === null ? null : <Tag size="small">{value}</Tag>;
 
+  // Every destination drops the three record-scoped drill-downs. They are not view
+  // state like the nine filters, the search or the sort — each one narrows the data to
+  // a single identity or a single source case, set by clicking into one, and carrying
+  // that into a top-level destination produced the worst kind of wrong screen: 待处理
+  // counted 11 in this sider and listed 0 rows, with nothing visible to explain it,
+  // because the identity filter is invisible on the ticket list. The same bug made
+  // 用户画像 a no-op while a user was open — it rebuilt the page already on screen
+  // instead of returning to the list.
+  const destination = (patch: QueryPatch) =>
+    filterHref(query, { user: null, device: null, ticketNo: null, ...patch });
+
   return (
     <Layout.Sider width={200} className="oc-console__sider">
       <div className="oc-console__brand">万护 OneCare</div>
@@ -86,7 +98,7 @@ export function ConsoleSider({
       >
         <Menu.Item
           key="metrics"
-          onClick={() => navigate(filterHref(query, { section: "metrics" }))}
+          onClick={() => navigate(destination({ section: "metrics" }))}
         >
           <IconDashboard />
           <span className="oc-console__nav-label">数据概览</span>
@@ -105,9 +117,7 @@ export function ConsoleSider({
             <Menu.Item
               key={queue.key}
               onClick={() =>
-                navigate(
-                  filterHref(query, { section: "tickets", queue: queue.key }),
-                )
+                navigate(destination({ section: "tickets", queue: queue.key }))
               }
             >
               {QUEUE_ICON[queue.key]}
@@ -119,7 +129,7 @@ export function ConsoleSider({
 
         <Menu.Item
           key="users"
-          onClick={() => navigate(filterHref(query, { section: "users" }))}
+          onClick={() => navigate(destination({ section: "users" }))}
         >
           <IconUser />
           <span className="oc-console__nav-label">用户画像</span>
@@ -128,7 +138,7 @@ export function ConsoleSider({
 
         <Menu.Item
           key="devices"
-          onClick={() => navigate(filterHref(query, { section: "devices" }))}
+          onClick={() => navigate(destination({ section: "devices" }))}
         >
           <IconDesktop />
           <span className="oc-console__nav-label">设备追踪</span>

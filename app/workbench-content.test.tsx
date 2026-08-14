@@ -307,6 +307,54 @@ describe("WorkbenchConsole", () => {
     expect(push).toHaveBeenCalledWith(expect.stringContaining("section=users"));
   });
 
+  // The bug this catches was reported from a screenshot: the sider counted 待处理 11
+  // and the list showed 0 条. Clicking a sider destination while a user was open kept
+  // `user` in the URL, so the ticket list was silently scoped to that identity — and
+  // unlike the nine filters, an identity filter is invisible there, so the two numbers
+  // just disagreed with no explanation. The same carry made 用户画像 a no-op: it
+  // rebuilt the detail page already on screen instead of returning to the list.
+  it.each([
+    ["open", "待处理"],
+    ["all", "全部"],
+  ] as const)("drops an open identity when the sider goes to %s", (_queue, label) => {
+    renderWorkbench({
+      searchParams: { section: "users", user: "U-3878645B", queue: "all" },
+    });
+
+    within(screen.getByRole("menu")).getByText(label).click();
+
+    expect(push).toHaveBeenCalledTimes(1);
+    const href = push.mock.calls[0]![0] as string;
+    expect(href).not.toContain("user=");
+    expect(href).toContain("section=");
+  });
+
+  it("returns to the profile list rather than rebuilding the open profile", () => {
+    renderWorkbench({
+      searchParams: { section: "users", user: "U-3878645B", queue: "all" },
+    });
+
+    within(screen.getByRole("menu")).getByText("用户画像").click();
+
+    const href = push.mock.calls[0]![0] as string;
+    expect(href).not.toContain("user=");
+    expect(href).toContain("section=users");
+  });
+
+  // The filters themselves are view state and do survive: they are visible, the
+  // operator set them, and the profile lists now use the same nine.
+  it("keeps the visible filters across a section switch", () => {
+    renderWorkbench({
+      searchParams: { section: "users", severity: "中", search: "噪音" },
+    });
+
+    within(screen.getByRole("menu")).getByText("全部").click();
+
+    const href = push.mock.calls[0]![0] as string;
+    expect(href).toContain("severity=");
+    expect(href).toContain("search=");
+  });
+
   // A profile detail page is one identity's records. Offering nine filters there would
   // invite narrowing a set of three rows, and the options behind them are not even
   // fetched for that page.
