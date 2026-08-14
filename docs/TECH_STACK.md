@@ -144,9 +144,15 @@ even in a healthy window) before reaching Vercel's addresses. During the bad win
 independent network — a server-side fetcher outside China — retrieved the complete page
 with live data, which is the single measurement that separates path from application.
 
-Afterwards, 64 consecutive samples from the same machine were all complete: the landing
-page p50 0.83s, max 1.40s, always the full 163,840 bytes; a CDN-served static asset
-p50 0.42s. The page is 48KB compressed on the wire, which is not the problem.
+Afterwards, 80 consecutive samples over nine minutes from the same machine were all
+complete — no failure, no truncation: the landing page p50 0.84s, p95 1.23s, max 1.40s,
+always the full 163,840 bytes; a CDN-served static asset p50 0.39s. The page is 48KB
+compressed on the wire, which is not the problem.
+
+The one thing this investigation could not do is instrument a bad window: by the time
+sampling started it had passed, and nine minutes of polling never reproduced it. So the
+attribution above rests on the contrast between vantage points during the window and on
+the healthy readings after it, not on a captured trace of the failing hop.
 
 So: to judge whether production is healthy, measure from outside the mainland network
 (or from Vercel's own logs), and treat any local number as an upper bound containing an
