@@ -14,7 +14,7 @@ import {
   readIdentityWarRoom,
 } from "../../../../../../../src/features/store/identity-war-rooms";
 import {
-  readIdentityOwnerOpenIds,
+  readIdentityResponderOpenIds,
   readIdentityRecords,
   readProfile,
 } from "../../../../../../../src/features/store/workbench-query";
@@ -224,7 +224,7 @@ export const POST = createProfileWarRoomRoute({
   session: getCurrentSession,
   getProfile: readProfile,
   getRecords: readIdentityRecords,
-  getOwnerOpenIds: readIdentityOwnerOpenIds,
+  getOwnerOpenIds: readIdentityResponderOpenIds,
   provider: ruleBasedProvider,
   existingChat: async (kind, id) => (await readIdentityWarRoom(kind, id))?.chatId ?? null,
   createChat: (name, memberOpenIds) =>

@@ -187,6 +187,35 @@ describe("resolveWarRoomAction — background section (createWarRoomInBackground
     expect(sendToChat).toHaveBeenCalledTimes(1);
   });
 
+  // 派工 gave a ticket a second person. The group is where the 客服, the 工程师 and
+  // whoever escalated it talk — leaving the engineer out made it the wrong room.
+  it("puts the dispatched engineer in the group alongside the owner", async () => {
+    const createChat = vi.fn(async () => "oc_new");
+    const outcome = await resolveWarRoomAction({
+      action: "voc_open_war_room",
+      recordId: "rec1",
+      operatorOpenId: "ou_operator",
+      getRecord: async () => ({
+        ...record,
+        ownerOpenIds: ["ou_owner"],
+        engineerOpenIds: ["ou_engineer"],
+      }),
+      updateRecord: async () => {},
+      fallbackOpenIds: async () => ["ou_operator"],
+      createChat,
+      sendToChat: async () => {},
+      notifyOperator: unusedNotifyOperator,
+    });
+
+    await outcome.background?.();
+
+    expect(createChat).toHaveBeenCalledWith(expect.any(String), [
+      "ou_owner",
+      "ou_engineer",
+      "ou_operator",
+    ]);
+  });
+
   it("writes the chat id and posts the ticket card into the new group once the background task runs", async () => {
     const writes: Array<Record<string, unknown>> = [];
     const posts: string[] = [];

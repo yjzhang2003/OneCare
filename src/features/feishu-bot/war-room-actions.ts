@@ -83,8 +83,13 @@ async function createWarRoomInBackground(
 
   let chatId: string;
   try {
+    // Everyone with a stake in this ticket: the 客服 who owns it, the 工程师 it was
+    // dispatched to (empty until someone dispatches one), and whoever asked for the
+    // group. Missing the engineer was the gap 派工 opened — the person standing in the
+    // customer's home was the one person the group did not contain.
     chatId = await input.createChat(warRoomName(record), [
       ...record.ownerOpenIds,
+      ...record.engineerOpenIds,
       input.operatorOpenId,
     ]);
   } catch {

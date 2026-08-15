@@ -585,17 +585,18 @@ export async function readVocMetrics(
   };
 }
 
-// The open_ids of whoever owns this identity's unfinished tickets — the people a 协同群
-// for it has to contain. Read separately from readIdentityRecords because WorkbenchTicket
-// deliberately drops owner open_ids: an open_id names a person, and those rows are served
-// from a cache entry shared by every viewer.
-export async function readIdentityOwnerOpenIds(
+// Everyone currently working this identity's unfinished tickets — both the 客服 who owns
+// them and the 工程师 they were dispatched to. These are the people a 协同群 for the
+// identity has to contain, and the people a 设备预警 is addressed to. Read separately from
+// readIdentityRecords because WorkbenchTicket deliberately drops open_ids: an open_id
+// names a person, and those rows are served from a cache entry shared by every viewer.
+export async function readIdentityResponderOpenIds(
   kind: "user" | "device",
   id: string,
 ): Promise<readonly string[]> {
   const column = kind === "user" ? "user_ref" : "device_ref";
   const rows = (await getSql().query(
-    `SELECT DISTINCT unnest(owner_open_ids) AS open_id
+    `SELECT DISTINCT unnest(owner_open_ids || engineer_open_ids) AS open_id
      FROM voc_records
      WHERE ${column} = $1
        AND ticket_opened_at IS NOT NULL

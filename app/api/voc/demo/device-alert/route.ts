@@ -14,7 +14,7 @@ import {
   type ProfileInsightProvider,
 } from "../../../../../src/features/profiles/insight";
 import {
-  readIdentityOwnerOpenIds,
+  readIdentityResponderOpenIds,
   readIdentityRecords,
   readProfile,
   readProfiles,
@@ -163,7 +163,7 @@ export const POST = createDeviceAlertRoute({
   candidates: async () => (await readProfiles("device", parseWorkbenchQuery({}))).profiles,
   getProfile: (id) => readProfile("device", id),
   getRecords: (id) => readIdentityRecords("device", id),
-  getOwnerOpenIds: (id) => readIdentityOwnerOpenIds("device", id),
+  getOwnerOpenIds: (id) => readIdentityResponderOpenIds("device", id),
   provider: ruleBasedProvider,
   sendCard: (openId, card) =>
     sendFeishuMessage({
