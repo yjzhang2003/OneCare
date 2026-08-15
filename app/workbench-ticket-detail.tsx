@@ -6,7 +6,6 @@ import "../src/features/workbench/arco-runtime";
 import "@arco-design/web-react/dist/css/arco.css";
 
 import {
-  Avatar,
   Breadcrumb,
   Card,
   Descriptions,
@@ -40,6 +39,7 @@ import {
 } from "../src/features/workbench/query";
 import { availableActions } from "../src/features/workbench/write-actions";
 import { AnalyzeButton } from "./workbench-analyze-button";
+import { AccountMenu } from "./workbench-account";
 import { NotificationBell } from "./workbench-notifications";
 import { TagEditButton } from "./workbench-tag-edit";
 import { DispatchPanel } from "./workbench-dispatch";
@@ -76,21 +76,6 @@ export type TicketDetailStateProps = Readonly<{
   retryHref: string;
 }>;
 
-function UserAvatar({ user }: Readonly<{ user: AuthUser }>) {
-  return (
-    <Avatar size={30} style={{ backgroundColor: "rgb(var(--primary-6))" }}>
-      {user.avatarUrl ? (
-        // OAuth controls the avatar host, so next/image cannot declare it at
-        // build time. This 30px identity image is intentionally a plain img.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img alt={user.name} src={user.avatarUrl} />
-      ) : (
-        user.name.slice(0, 1)
-      )}
-    </Avatar>
-  );
-}
-
 function DetailHeader({
   user,
   recordNumber,
@@ -123,8 +108,7 @@ function DetailHeader({
         {/* The detail page is where an operator spends the wait for a 23-second
             analysis; the inbox has to be reachable from here too. */}
         {inbox && !user.guest && <NotificationBell />}
-        <span className="oc-console__user">{user.name}</span>
-        <UserAvatar user={user} />
+        <AccountMenu user={user} />
       </Space>
     </Layout.Header>
   );

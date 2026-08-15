@@ -6222,3 +6222,21 @@ a {
   background: var(--color-bg-popup, #fff);
   box-shadow: 0 6px 24px rgb(0 0 0 / 20%);
 }
+
+/* The account menu in the header: the name and avatar are the trigger, so they need to
+   read as one clickable unit. */
+.oc-console__account {
+  cursor: pointer;
+}
+.oc-console__logout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}

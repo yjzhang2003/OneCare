@@ -9,7 +9,6 @@ import "@arco-design/web-react/dist/css/arco.css";
 
 import {
   Alert,
-  Avatar,
   Breadcrumb,
   Card,
   Descriptions,
@@ -56,6 +55,7 @@ import type {
   ProfilePage,
 } from "../src/features/workbench/profiles";
 import { NewTicketButton } from "./workbench-new-ticket";
+import { AccountMenu } from "./workbench-account";
 import { NotificationBell } from "./workbench-notifications";
 import { WorkbenchTour } from "./workbench-tour";
 import { WelcomeDialog } from "./workbench-welcome";
@@ -478,27 +478,7 @@ export function WorkbenchConsole({
           </Space>
           <Space size="small" align="center">
             {!readOnly && <NotificationBell />}
-            <span className="oc-console__user">{user.name}</span>
-            {/* avatarUrl is optional on AuthUser — Feishu does not always return
-                one — so the fallback is the name's first character rather than a
-                broken image. */}
-            <Avatar
-              size={30}
-              style={{ backgroundColor: "rgb(var(--primary-6))" }}
-            >
-              {user.avatarUrl ? (
-                // A plain <img>, not next/image: the avatar host is whatever
-                // Feishu's OAuth user-info returned, so it cannot be declared in
-                // images.remotePatterns at build time, and guessing a CDN
-                // hostname is exactly the kind of unverified external assumption
-                // this project has been burned by. At 30px the rule's LCP and
-                // bandwidth concerns do not apply.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img alt={user.name} src={user.avatarUrl} />
-              ) : (
-                user.name.slice(0, 1)
-              )}
-            </Avatar>
+            <AccountMenu user={user} />
           </Space>
         </Layout.Header>
 
