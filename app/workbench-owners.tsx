@@ -288,8 +288,7 @@ export function OwnersPane({
           新增人员
         </Button>
         <Typography.Text type="secondary">
-          客服路由 {health.total} 条 · 工程师 {health.engineers} 人 · 管理员 {health.admins} 人；
-          工单按「渠道/品类」优先匹配，其次「渠道」，都不中则走兜底
+          客服路由 {health.total} 条 · 工程师 {health.engineers} 人 · 管理员 {health.admins} 人
         </Typography.Text>
       </Space>
 

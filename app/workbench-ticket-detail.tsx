@@ -40,6 +40,7 @@ import {
 } from "../src/features/workbench/query";
 import { availableActions } from "../src/features/workbench/write-actions";
 import { AnalyzeButton } from "./workbench-analyze-button";
+import { TagEditButton } from "./workbench-tag-edit";
 import { DispatchPanel } from "./workbench-dispatch";
 import { WarRoomButton } from "./workbench-war-room-button";
 import { WorkbenchActions } from "./workbench-actions";
@@ -314,19 +315,31 @@ export function TicketDetailPageView({
               <section className="oc-ticket-detail__section">
                 <Card
                   className="oc-ticket-detail__analysis"
-                  title="AI 分析"
-                  // The control sits in the card whose contents it produces, not with
-                  // the state transitions in 可执行操作: it does not move the ticket
-                  // through the service flow, it fills in the four fields below it.
+                  // Not "AI 分析": most of these values came from the seeding script,
+                  // some from aily, and — since 修正结论 — some from a person. What the
+                  // card holds is the conclusion, whoever reached it.
+                  title="分析结论"
+                  // Both controls sit in the card whose contents they produce, not with
+                  // the state transitions in 可执行操作: neither moves the ticket
+                  // through the service flow.
                   extra={
-                    <AnalyzeButton
-                      recordId={ticket.recordId}
-                      state={ticket.state}
-                      retryCount={ticket.retryCount}
-                    />
+                    <Space size="small">
+                      <TagEditButton
+                        recordId={ticket.recordId}
+                        polarity={ticket.polarity}
+                        dimensions={ticket.dimensions}
+                        severity={ticket.severity}
+                        summary={ticket.summary}
+                      />
+                      <AnalyzeButton
+                        recordId={ticket.recordId}
+                        state={ticket.state}
+                        retryCount={ticket.retryCount}
+                      />
+                    </Space>
                   }
                 >
-                  <Typography.Text type="secondary">AI 摘要</Typography.Text>
+                  <Typography.Text type="secondary">摘要</Typography.Text>
                   <Typography.Paragraph className="oc-ticket-detail__prose">
                     {ticket.summary || ABSENT}
                   </Typography.Paragraph>
@@ -350,7 +363,7 @@ export function TicketDetailPageView({
 
               <section className="oc-ticket-detail__section">
                 <Card title="回复话术">
-                  <Typography.Text type="secondary">AI 回复话术</Typography.Text>
+                  <Typography.Text type="secondary">建议话术</Typography.Text>
                   {ticket.replies.length === 0 ? (
                     <Typography.Paragraph>{ABSENT}</Typography.Paragraph>
                   ) : (

@@ -7,7 +7,7 @@
 import "../src/features/workbench/arco-runtime";
 import "@arco-design/web-react/dist/css/arco.css";
 
-import { Button, Message, Space, Typography } from "@arco-design/web-react";
+import { Button, Message, Popconfirm } from "@arco-design/web-react";
 import { IconRobot } from "@arco-design/web-react/icon";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -15,11 +15,9 @@ import { useRef, useState } from "react";
 import type { VocState } from "../src/features/voc/service-event";
 import { analyzeEligibility } from "../src/features/workbench/analyze-eligibility";
 
-// Measured against the live aily skill on 2026-08-12: one record takes roughly 23
-// seconds. Stated on screen rather than left to a bare spinner, because a spinner
-// that runs for twenty seconds with no explanation reads as a hung page — and this
-// one is triggered by hand, so somebody is watching it the whole time.
-const EXPECTED_WAIT = "大约需要 20 秒";
+// The wait is roughly 23 seconds against the live aily skill (measured 2026-08-12).
+// The button's own spinner carries it — a line of prose next to the control explaining
+// what the control does belongs in the docs, not on the screen.
 
 export type AnalyzeButtonProps = Readonly<{
   recordId: string;
@@ -48,24 +46,13 @@ export function AnalyzeButton({
   const inFlight = useRef(false);
   const eligibility = analyzeEligibility({ state, retryCount });
 
-  // Not a disabled button with the reason hidden in a tooltip: this is a reading
-  // surface, and the reason a record cannot be re-analysed is the useful part
-  // ("重试次数已达上限 3" is a fact about the record, not about the control).
-  if (eligibility.kind === "refused") {
-    return (
-      <Typography.Text type="secondary" className="oc-ticket-detail__analyze-note">
-        {eligibility.reason}
-      </Typography.Text>
-    );
-  }
-
-  async function run() {
+  async function run(force: boolean) {
     if (inFlight.current) return;
     inFlight.current = true;
     setRunning(true);
     try {
       const response = await fetch(
-        `/api/voc/tickets/${encodeURIComponent(recordId)}/analyze`,
+        `/api/voc/tickets/${encodeURIComponent(recordId)}/analyze${force ? "?force=1" : ""}`,
         { method: "POST" },
       );
       const payload: unknown = await response.json().catch(() => null);
@@ -104,19 +91,31 @@ export function AnalyzeButton({
     }
   }
 
-  return (
-    <Space size="medium" align="center" className="oc-ticket-detail__analyze">
-      <Button
-        type="primary"
-        icon={<IconRobot />}
-        loading={running}
-        onClick={() => void run()}
-      >
-        立即分析
-      </Button>
-      <Typography.Text type="secondary">
-        {running ? `AI 正在分析，${EXPECTED_WAIT}` : `调用 aily 打标，${EXPECTED_WAIT}`}
-      </Typography.Text>
-    </Space>
+  const button = (
+    <Button
+      type="primary"
+      size="small"
+      icon={<IconRobot />}
+      loading={running}
+      onClick={eligibility.kind === "ready" ? () => void run(false) : undefined}
+    >
+      {eligibility.kind === "ready" ? "立即分析" : "重新分析"}
+    </Button>
+  );
+
+  // Always present, in every state. A record that has already been tagged can still be
+  // re-analysed — the reason it was hidden (it would overwrite a verdict a person may
+  // have corrected) is a reason to confirm, not a reason to have no button. The
+  // confirmation carries the state machine's own words for what will be overwritten.
+  return eligibility.kind === "ready" ? (
+    button
+  ) : (
+    <Popconfirm
+      title="重新分析？"
+      content={eligibility.reason}
+      onOk={() => void run(true)}
+    >
+      {button}
+    </Popconfirm>
   );
 }

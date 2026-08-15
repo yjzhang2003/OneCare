@@ -102,14 +102,29 @@ describe("AnalyzeButton", () => {
     );
   });
 
-  // The button is not offered at all for a record the route would refuse — and the
-  // reason takes its place, because "why not" is the useful part.
-  it("states the reason instead of a control when the record cannot be analysed", () => {
+  // The control is offered in every state — a tagged record can still be wrong. What
+  // changes is that it asks first, in the state machine's own words, and only then does
+  // it send the force flag the route requires to overwrite an existing verdict.
+  it("asks before overwriting a verdict a person may have corrected", async () => {
     render(<AnalyzeButton recordId="rec1" state="已闭环" retryCount={0} />);
 
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.getByText(/已闭环的工单已经打过标/)).toBeInTheDocument();
+    const button = screen.getByRole("button", { name: /重新分析/ });
+    expect(button).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
+
+    button.click();
+    await waitFor(() =>
+      expect(screen.getByText(/已闭环的工单已经打过标/)).toBeInTheDocument(),
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    screen.getByRole("button", { name: "确定" }).click();
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/voc/tickets/rec1/analyze?force=1",
+        { method: "POST" },
+      ),
+    );
   });
 
   // 23 seconds is long enough that a second click is a reasonable thing for a person to

@@ -15,9 +15,9 @@ import { formatShanghaiTime } from "../src/features/workbench/presentation";
 // 派工: who goes on site, chosen from the 工程师 rows in 人员管理 and nobody else.
 //
 // The engineer never opens this console — what this control produces is a card in their
-// Feishu with the machine, the customer's words, and this device's history on it. So the
-// panel says what will happen ("会给他发一张上门任务卡") rather than just naming a field:
-// dispatching is a message to a colleague, not a dropdown.
+// Feishu with the machine, the customer's words, and this device's history on it. The
+// panel itself stays bare: the button's own label says what it does, and a paragraph
+// under a control explaining the control is documentation on the wrong surface.
 export type DispatchPanelProps = Readonly<{
   recordId: string;
   // Names only — the engineer's open_id never reaches the browser for display, it is
@@ -127,9 +127,6 @@ export function DispatchPanel({
           </Button>
         </Space>
       )}
-      <Typography.Text type="secondary">
-        派工会给他的飞书发一张上门任务卡：机型、用户原话、这台设备修过几次、上门前建议。
-      </Typography.Text>
     </Space>
   );
 }

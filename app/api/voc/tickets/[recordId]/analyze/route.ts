@@ -50,7 +50,7 @@ export function createTicketAnalyzeRoute(
   dependencies: TicketAnalyzeDependencies,
 ) {
   return async function POST(
-    _request: Request,
+    request: Request,
     context: { params: Promise<{ recordId: string }> },
   ): Promise<Response> {
     // Every failure below carries a `message` the workbench shows verbatim. An
@@ -83,16 +83,28 @@ export function createTicketAnalyzeRoute(
 
       // Checked here and not only in the UI: the button is one caller, a POST is
       // another. A record that has already been tagged, or that has burned its retry
-      // attempts, is refused with the reason the state machine gives.
+      // attempts, is refused with the reason the state machine gives — unless the
+      // operator asked for it anyway.
+      //
+      // `force=1` is the operator saying "yes, overwrite it", which the console only
+      // sends after a confirmation naming what will be overwritten. It re-runs the
+      // pipeline **from the record's own state**, not from 待分析: every transition in
+      // buildTaggedWrite then falls through, so the AI columns are rewritten while
+      // 流程状态 and 负责人 stay exactly where the people working the ticket left them.
+      // Without that, re-analysing a 已闭环 row would reopen it.
+      const force = new URL(request.url).searchParams.get("force") === "1";
       const eligibility = analyzeEligibility(record);
-      if (eligibility.kind === "refused") {
+      if (eligibility.kind === "refused" && !force) {
         return Response.json(
           { error: "rejected", message: eligibility.reason },
           { status: 422 },
         );
       }
 
-      const response = await dependencies.analyze(record, eligibility.state);
+      const response = await dependencies.analyze(
+        record,
+        eligibility.kind === "ready" ? eligibility.state : record.state,
+      );
       const body: unknown = await response.json().catch(() => null);
 
       if (!response.ok) {

@@ -109,7 +109,7 @@ describe("TicketDetailPageView", () => {
     }
 
     // The headings are still there; what is gone is a link to each of them.
-    for (const name of ["用户反馈", "AI 分析", "回复话术", "处理信息"]) {
+    for (const name of ["用户反馈", "分析结论", "回复话术", "处理信息"]) {
       expect(screen.getByText(name)).toBeInTheDocument();
       expect(screen.queryByRole("link", { name })).not.toBeInTheDocument();
     }
@@ -187,7 +187,7 @@ describe("TicketDetailPageView", () => {
     expect(within(overview).getByText(/工单主题/)).toBeInTheDocument();
     expect(within(actions).getByText("当前处理")).toBeInTheDocument();
     expect(within(actions).getByRole("button", { name: "开始跟进" })).toBeInTheDocument();
-    for (const heading of ["用户反馈", "AI 分析", "回复话术", "处理信息"]) {
+    for (const heading of ["用户反馈", "分析结论", "回复话术", "处理信息"]) {
       expect(within(body).getByText(heading)).toBeInTheDocument();
     }
     expect(within(keyFields).getByText("关键字段")).toBeInTheDocument();
@@ -308,23 +308,23 @@ describe("TicketDetailPageView", () => {
       expect(
         within(analysis).getByRole("button", { name: /立即分析/ }),
       ).toBeInTheDocument();
-      // The wait is stated rather than left to a spinner: one record through the live
-      // aily skill takes roughly 23 seconds.
-      expect(within(analysis).getByText(/大约需要 20 秒/)).toBeInTheDocument();
     },
   );
 
-  it("replaces the button with its reason once a ticket has been tagged", () => {
+  // Both controls are always there, in every state: a conclusion can be re-run, and it
+  // can be corrected by hand. 已经打过标 changes the label and adds a confirmation, it
+  // does not take the control away.
+  it("keeps both controls on a ticket that has already been tagged", () => {
     const { container } = renderDetail({ state: "跟进中" });
     const analysis = container.querySelector<HTMLElement>(
       ".oc-ticket-detail__analysis",
     )!;
 
     expect(
-      within(analysis).queryByRole("button", { name: /立即分析/ }),
-    ).not.toBeInTheDocument();
+      within(analysis).getByRole("button", { name: /重新分析/ }),
+    ).toBeInTheDocument();
     expect(
-      within(analysis).getByText(/跟进中的工单已经打过标/),
+      within(analysis).getByRole("button", { name: /修正结论/ }),
     ).toBeInTheDocument();
   });
 });
