@@ -758,6 +758,9 @@ function liveDependencies(
           listRecords: async () => [],
         }),
         async () => null,
+        // The aggregates come from SQL in production; a unit test hands them over
+        // directly rather than reaching for a database.
+        async () => ({ sameDimension: { total: 0, closed: 0 }, sameModel: 0 }),
       ),
       schedule,
       reportFailure: vi.fn(),
@@ -1551,7 +1554,10 @@ function liveGroupDependencies(
           response: {},
         }),
       ),
-      answerGroupQuestion: createAnswerGroupQuestion(() => bitable, answer),
+      answerGroupQuestion: createAnswerGroupQuestion(() => bitable, answer, async () => ({
+        sameDimension: { total: 2, closed: 1 },
+        sameModel: 3,
+      })),
       schedule: (task: () => Promise<void>) => {
         scheduled.push(task);
       },

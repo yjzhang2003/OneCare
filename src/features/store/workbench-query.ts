@@ -261,6 +261,52 @@ export async function readTicketByNumber(
   return row ? toWorkbenchTicket(toVocRecord(row)) : null;
 }
 
+// The two aggregates a war-room answer is grounded in, computed in SQL.
+//
+// These used to come from computeFactsAggregates over `listRecords()` — a full 3628-row
+// pull from the Bitable, ~10s measured, inside a route Vercel kills at 10s. That is the
+// whole reason the bot never answered an @-mention: the reply was being assembled after
+// the function had already been terminated. Same numbers, one query, ~100ms.
+export async function readFactsAggregates(
+  input: Readonly<{
+    dimensions: readonly string[];
+    model: string;
+    now: number;
+  }>,
+): Promise<Readonly<{ sameDimension: { total: number; closed: number }; sameModel: number }>> {
+  const cutoff = new Date(input.now - 7 * 24 * 3_600_000).toISOString();
+  const dimensions = [...input.dimensions];
+  const model = input.model.trim();
+
+  const rows = (await getSql().query(
+    `SELECT
+       COUNT(*) FILTER (
+         WHERE cardinality($1::text[]) > 0
+           AND feedback_at >= $2::timestamptz
+           AND dimensions && $1::text[]
+       )::int AS dimension_total,
+       COUNT(*) FILTER (
+         WHERE cardinality($1::text[]) > 0
+           AND feedback_at >= $2::timestamptz
+           AND dimensions && $1::text[]
+           AND state = '已闭环'
+       )::int AS dimension_closed,
+       COUNT(*) FILTER (WHERE $3 <> '' AND btrim(model) = $3)::int AS same_model
+     FROM voc_records`,
+    [dimensions, cutoff, model],
+  )) as Record<string, unknown>[];
+
+  const row = rows[0] ?? {};
+  const count = (value: unknown) => (typeof value === "number" ? value : 0);
+  return {
+    sameDimension: {
+      total: count(row.dimension_total),
+      closed: count(row.dimension_closed),
+    },
+    sameModel: count(row.same_model),
+  };
+}
+
 // How many OTHER records share this one's source case number. Empty case numbers
 // group nothing, matching the reference.
 export async function countRelatedBySource(

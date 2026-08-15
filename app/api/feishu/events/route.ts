@@ -58,11 +58,8 @@ import {
   notify,
 } from "../../../../src/features/notify/deliver";
 import { handOffNotifications } from "../../../../src/features/notify/hand-off";
-import {
-  buildAnswerFacts,
-  computeFactsAggregates,
-  stripMention,
-} from "../../../../src/features/warroom/facts";
+import { buildAnswerFacts, stripMention } from "../../../../src/features/warroom/facts";
+import { readFactsAggregates } from "../../../../src/features/store/workbench-query";
 import {
   createAnswerProvider,
   type AnswerProvider,
@@ -85,7 +82,13 @@ import {
 // `runtime = "nodejs"` was dropped: it is the App Router default anyway, and
 // task 14 enables `cacheComponents` in next.config.ts (for the VOC
 // dashboard's `use cache`), which rejects this route segment config outright.
-export const maxDuration = 10;
+// 10 was the platform default, and it is what killed the war room's answers: the
+// synchronous card callback is answered in milliseconds, but the deferred work an
+// @-mention starts (resolve the ticket, gather the facts, call the aily skill) was being
+// terminated mid-flight — "Task timed out after 10 seconds" — so the group never heard
+// back. The reply path now costs about two seconds; this is headroom for a slow skill,
+// not a budget anything is expected to spend.
+export const maxDuration = 60;
 
 // Exported so createResolveAction's own third parameter (below) can carry the
 // same type as a documented, reusable shape rather than an inline function
@@ -351,6 +354,14 @@ type GroupAnswerBitable = Pick<
 export function createAnswerGroupQuestion(
   bitable: () => GroupAnswerBitable,
   answer: (question: string, facts: string) => Promise<string | null>,
+  aggregatesFor: (
+    ticket: VocRecord,
+  ) => Promise<Awaited<ReturnType<typeof readFactsAggregates>>> = (ticket) =>
+    readFactsAggregates({
+      dimensions: ticket.dimensions,
+      model: ticket.model,
+      now: Date.now(),
+    }),
 ): (
   input: Readonly<{ chatId: string; text: string }>,
 ) => Promise<FeishuOutboundMessage> {
@@ -371,17 +382,17 @@ export function createAnswerGroupQuestion(
       return ticketCardMessage(ticket);
     }
 
-    let records: readonly VocRecord[];
+    // From the mirror, in one query. This used to pull all 3628 records out of the
+    // Bitable to count two things, which took longer than the whole request was allowed
+    // to live.
+    let aggregates: Awaited<ReturnType<typeof readFactsAggregates>>;
     try {
-      records = await bitable().listRecords();
+      aggregates = await aggregatesFor(ticket);
     } catch {
       return createTextMessage(CANNOT_ANSWER_MESSAGE);
     }
 
-    const facts = buildAnswerFacts({
-      ticket,
-      ...computeFactsAggregates(ticket, records),
-    });
+    const facts = buildAnswerFacts({ ticket, ...aggregates });
 
     let prose: string | null;
     try {
