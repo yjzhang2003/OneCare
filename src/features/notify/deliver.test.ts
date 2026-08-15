@@ -17,7 +17,12 @@ const SUBJECT: NotificationSubject = {
 function deps(overrides: Partial<Parameters<typeof notify>[1]> = {}) {
   return {
     insert: vi.fn(async (_input: Parameters<Parameters<typeof notify>[1]["insert"]>[0]) => {}),
-    send: vi.fn(async (_openId: string, _text: string) => {}),
+    send: vi.fn(
+      async (
+        _openId: string,
+        _message: Parameters<Parameters<typeof notify>[1]["send"]>[1],
+      ) => {},
+    ),
     ticketHref: (recordNumber: string) => `https://example.test/workbench/tickets/${recordNumber}`,
     ...overrides,
   };
@@ -25,7 +30,12 @@ function deps(overrides: Partial<Parameters<typeof notify>[1]> = {}) {
 
 describe("notify", () => {
   it("writes the inbox row and sends the same copy to Feishu", async () => {
-    const send = vi.fn(async (_openId: string, _text: string) => {});
+    const send = vi.fn(
+      async (
+        _openId: string,
+        _message: Parameters<Parameters<typeof notify>[1]["send"]>[1],
+      ) => {},
+    );
     const dependencies = deps({ send });
     await notify(
       {
@@ -47,10 +57,13 @@ describe("notify", () => {
         href: "https://example.test/workbench/tickets/VOC-a3cdc5",
       }),
     );
-    const [, text] = send.mock.calls[0]!;
-    expect(text).toContain("工单改派给你");
-    expect(text).toContain("张禹健改派给你");
-    expect(text).toContain("https://example.test/workbench/tickets/VOC-a3cdc5");
+    // A card, not a paragraph with a URL in it: the title, the copy, and the link on a
+    // button the reader can press.
+    const [, message] = send.mock.calls[0]!;
+    expect(message.title).toBe("工单改派给你");
+    expect(message.body).toContain("张禹健改派给你");
+    expect(message.url).toBe("https://example.test/workbench/tickets/VOC-a3cdc5");
+    expect(message.buttonLabel).toBe("打开工单");
   });
 
   // 建单 and 派工 already push a card. A second plain-text copy would give the recipient

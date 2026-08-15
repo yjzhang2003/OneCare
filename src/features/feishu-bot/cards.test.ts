@@ -22,6 +22,9 @@ import {
   createTextMessage,
   createTodayOverviewCard,
   createTodayOverviewMessage,
+  createEngineerTaskCard,
+  createNotificationCard,
+  createProfileInsightCard,
   createVocTicketCard,
   createVocTicketMessage,
   createWarRoomEscalationCard,
@@ -847,5 +850,119 @@ describe("production cards carry no unverified icon token", () => {
     ["closed ticket", () => createVocTicketCard({ ...ticketRecord, state: "已闭环" }, ticketTag)],
   ])("%s card", (_name, build) => {
     expect(JSON.stringify(build())).not.toContain("_colorful");
+  });
+});
+
+// Every card this bot sends carries a door back into the console. A message that says
+// something happened and leaves the reader to go find it is half a notification.
+describe("every card opens the workbench", () => {
+  function buttons(card: unknown): { text: string; url: string }[] {
+    const found: { text: string; url: string }[] = [];
+    const walk = (node: unknown) => {
+      if (Array.isArray(node)) {
+        for (const item of node) walk(item);
+        return;
+      }
+      if (typeof node !== "object" || node === null) return;
+      const record = node as Record<string, unknown>;
+      const behaviors = record.behaviors;
+      if (record.tag === "button" && Array.isArray(behaviors)) {
+        for (const behavior of behaviors) {
+          const value = behavior as { type?: unknown; default_url?: unknown };
+          if (value.type === "open_url" && typeof value.default_url === "string") {
+            const text = record.text as { content?: unknown } | undefined;
+            found.push({
+              text: typeof text?.content === "string" ? text.content : "",
+              url: value.default_url,
+            });
+          }
+        }
+      }
+      for (const value of Object.values(record)) walk(value);
+    };
+    walk(card);
+    return found;
+  }
+
+  const record = {
+    recordId: "rec1",
+    recordNumber: "VOC-a3cdc5",
+    channel: "400 客服",
+    category: "冰箱",
+    content: "报修后等了三天没人上门",
+    feedbackAt: "2026-08-14T04:00:00.000Z",
+    state: "待跟进" as const,
+    severity: "高" as const,
+  };
+  const tag = {
+    summary: "用户反馈上门维修延迟三天",
+    polarity: "差评",
+    dimensions: ["维修时间"],
+    replies: [],
+  };
+
+  it("puts the ticket link on a button, on the ticket card", () => {
+    const links = buttons(createVocTicketCard(record, tag));
+    expect(links).toContainEqual({
+      text: "在工作台打开",
+      url: "https://onecare.ohmyfeishu.top/workbench/tickets/VOC-a3cdc5",
+    });
+  });
+
+  it("puts it on the escalation card too", () => {
+    const links = buttons(createWarRoomEscalationCard(record, tag, ["黄齐"]));
+    expect(links.some((link) => link.url.includes("VOC-a3cdc5"))).toBe(true);
+  });
+
+  it("puts it on the engineer's task card", () => {
+    const links = buttons(
+      createEngineerTaskCard({
+        record,
+        tag,
+        dispatcherName: "张禹健",
+        model: "BCD-525",
+        userRef: "U-1",
+        deviceRef: "D-1",
+        deviceTotal: 7,
+        deviceOpen: 2,
+        recurrence: null,
+      }),
+    );
+    expect(links.some((link) => link.url.includes("VOC-a3cdc5"))).toBe(true);
+  });
+
+  // The identity cards open the identity, not a ticket that does not exist.
+  it("opens the device page from a device alert", () => {
+    const links = buttons(
+      createProfileInsightCard({
+        kind: "device",
+        id: "D-BE66CB3A",
+        level: "高",
+        headline: "7 次报修",
+        labels: [],
+        signals: [],
+        actions: [],
+        producedBy: "规则引擎",
+        openTicketNumbers: [],
+      }),
+    );
+    expect(links).toContainEqual({
+      text: "打开设备页",
+      url: "https://onecare.ohmyfeishu.top/?section=devices&device=D-BE66CB3A&queue=all",
+    });
+  });
+
+  it("puts the link on a button on a notification card", () => {
+    const links = buttons(
+      createNotificationCard({
+        title: "工单改派给你",
+        body: "张禹健改派给你",
+        subject: "VOC-a3cdc5",
+        url: "https://onecare.ohmyfeishu.top/workbench/tickets/VOC-a3cdc5",
+        buttonLabel: "打开工单",
+      }),
+    );
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({ text: "打开工单" });
   });
 });

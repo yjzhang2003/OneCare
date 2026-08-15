@@ -80,6 +80,35 @@ function callbackButton(
   };
 }
 
+// Every card this bot sends can be opened in the console it came from. A message that
+// says something happened and leaves the reader to go find it is half a notification —
+// and a raw URL pasted in text is a link people have to select and paste.
+export const WORKBENCH_ORIGIN = "https://onecare.ohmyfeishu.top";
+
+export function workbenchTicketUrl(recordNumber: string): string {
+  return `${WORKBENCH_ORIGIN}/workbench/tickets/${encodeURIComponent(recordNumber)}`;
+}
+
+export function workbenchIdentityUrl(kind: "user" | "device", id: string): string {
+  const key = kind === "user" ? "user" : "device";
+  return `${WORKBENCH_ORIGIN}/?section=${kind === "user" ? "users" : "devices"}&${key}=${encodeURIComponent(id)}&queue=all`;
+}
+
+function openUrlButton(
+  content: string,
+  url: string,
+  type: "default" | "primary_filled" = "default",
+): CardElement {
+  return {
+    tag: "button",
+    text: { tag: "plain_text", content },
+    type,
+    size: "medium",
+    width: "fill",
+    behaviors: [{ type: "open_url", default_url: url }],
+  };
+}
+
 function websiteButton(): CardElement {
   return {
     tag: "button",
@@ -164,13 +193,19 @@ function cardRoot(input: Readonly<{
       ...(iconToken
         ? { icon: { tag: "standard_icon", token: iconToken } }
         : {}),
-      text_tag_list: [
-        {
-          tag: "text_tag",
-          text: { tag: "plain_text", content: input.status },
-          color: input.completed ? "green" : input.statusColor,
-        },
-      ],
+      // An empty status is a card with nothing to badge (the notification card), and an
+      // empty pill in the header reads as a rendering failure. Omitted rather than drawn.
+      ...(input.status.trim().length === 0
+        ? {}
+        : {
+            text_tag_list: [
+              {
+                tag: "text_tag",
+                text: { tag: "plain_text", content: input.status },
+                color: input.completed ? "green" : input.statusColor,
+              },
+            ],
+          }),
       padding: "12px 12px 12px 12px",
     },
     body: {
@@ -818,6 +853,7 @@ export function createWarRoomEscalationCard(
         vocActionButton("确认拉群协同", "voc_open_war_room", record.recordId),
         vocActionButton("暂不需要", "voc_decline_war_room", record.recordId),
       ),
+      columns(openUrlButton("在工作台打开", workbenchTicketUrl(record.recordNumber))),
     ],
   });
 }
@@ -876,6 +912,7 @@ export function createVocTicketCard(
             ]
           : [columns(vocActionButton(next.label, next.action, record.recordId))]
         : [note("当前状态无需操作。")]),
+      columns(openUrlButton("在工作台打开", workbenchTicketUrl(record.recordNumber))),
     ],
   });
 }
@@ -968,6 +1005,33 @@ export function createEngineerTaskCard(input: EngineerTaskCardInput): FeishuCard
               ),
             ]
           : [note(`工单当前是「${record.state}」，无需现场操作。`)]),
+      columns(openUrlButton("查看完整工单", workbenchTicketUrl(record.recordNumber))),
+    ],
+  });
+}
+
+// 通知卡片: the card a hand-off sends. It used to be a plain text message with the URL
+// pasted on its own line — a link the reader had to select. Same copy, on a card, with
+// the link on a button.
+export function createNotificationCard(
+  input: Readonly<{
+    title: string;
+    body: string;
+    subject: string;
+    url: string;
+    buttonLabel: string;
+  }>,
+): FeishuCard {
+  return cardRoot({
+    title: input.title,
+    subtitle: input.subject,
+    status: "",
+    statusColor: "grey",
+    template: "blue",
+    summary: input.title,
+    elements: [
+      { tag: "div", text: { tag: "lark_md", content: input.body } },
+      columns(openUrlButton(input.buttonLabel, input.url, "primary_filled")),
     ],
   });
 }
@@ -1037,6 +1101,13 @@ export function createProfileInsightCard(
           : "无",
       ),
       note(`由 ${input.producedBy} 生成`),
+      columns(
+        openUrlButton(
+          isUser ? "打开用户画像" : "打开设备页",
+          workbenchIdentityUrl(input.kind, input.id),
+          "primary_filled",
+        ),
+      ),
     ],
   });
 }

@@ -7,11 +7,14 @@
 
 import { insertNotification } from "../store/notifications";
 import { sendFeishuMessage } from "../feishu-bot/client";
-import { createTextMessage } from "../feishu-bot/cards";
+import {
+  createNotificationCard,
+  workbenchIdentityUrl,
+  workbenchTicketUrl,
+} from "../feishu-bot/cards";
 import { readBotEnv } from "../../lib/env";
 import {
   notificationCopy,
-  notificationText,
   type NotificationKind,
   type NotificationSubject,
 } from "./messages";
@@ -39,7 +42,12 @@ export type NotifyDependencies = Readonly<{
     body: string;
     href: string;
   }) => Promise<void>;
-  send: (openId: string, text: string) => Promise<void>;
+  // The card a notification sends. Not a text message: the link belongs on a button,
+  // not pasted into a paragraph for the reader to select.
+  send: (
+    openId: string,
+    message: Readonly<{ title: string; body: string; subject: string; url: string; buttonLabel: string }>,
+  ) => Promise<void>;
   // The console link the notification points at. Injected because the origin differs
   // between local and production and this module has no business reading env.
   ticketHref: (recordNumber: string) => string;
@@ -77,7 +85,13 @@ export async function notify(
       }),
     input.sendFeishuText
       ? dependencies
-          .send(input.openId, notificationText(input.kind, input.subject, href))
+          .send(input.openId, {
+            title: copy.title,
+            body: copy.body,
+            subject: input.subject.recordNumber,
+            url: href,
+            buttonLabel: input.kind === "device_alert" ? "打开设备页" : "打开工单",
+          })
           .catch((error: unknown) => {
             console.error(
               "Notification send failed:",
@@ -94,15 +108,20 @@ export async function notify(
 export function defaultNotifyDependencies(): NotifyDependencies {
   return {
     insert: insertNotification,
-    send: (openId, text) =>
+    send: (openId, message) =>
       sendFeishuMessage({
         env: readBotEnv(),
         openId,
-        message: createTextMessage(text),
+        message: {
+          msgType: "interactive",
+          content: JSON.stringify(createNotificationCard(message)),
+        },
       }),
-    ticketHref: (recordNumber) => {
-      const origin = process.env.NEXT_PUBLIC_APP_ORIGIN ?? "https://onecare.ohmyfeishu.top";
-      return `${origin}/workbench/tickets/${encodeURIComponent(recordNumber)}`;
-    },
+    // 设备预警's "record number" is the device id, so its link is the device page rather
+    // than a ticket that does not exist.
+    ticketHref: (recordNumber) =>
+      recordNumber.startsWith("D-")
+        ? workbenchIdentityUrl("device", recordNumber)
+        : workbenchTicketUrl(recordNumber),
   };
 }
