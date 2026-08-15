@@ -1,7 +1,11 @@
 import { redirect } from "next/navigation";
 
 import { getCurrentSession } from "../../../../src/features/auth/current-session";
-import { listHref, ticketDetailHref } from "../../../../src/features/workbench/href";
+import {
+  decodeRecordNumber,
+  listHref,
+  ticketDetailHref,
+} from "../../../../src/features/workbench/href";
 import { parseWorkbenchQuery } from "../../../../src/features/workbench/query";
 import {
   readProfileCounts,
@@ -36,10 +40,11 @@ export default async function TicketDetailPage({
   const user = await getCurrentSession();
   if (!user) redirect("/enter");
 
-  const [{ recordNumber }, rawQuery] = await Promise.all([
-    params,
-    searchParams,
-  ]);
+  const [rawParams, rawQuery] = await Promise.all([params, searchParams]);
+  // Decoded here, once, and used for the lookup, the links and everything on screen: the
+  // param arrives percent-encoded, and a 记录编号 with a "+" in it is a real value in this
+  // dataset rather than an edge case.
+  const recordNumber = decodeRecordNumber(rawParams.recordNumber);
   const query = parseWorkbenchQuery(rawQuery);
   const now = currentTimestamp();
 

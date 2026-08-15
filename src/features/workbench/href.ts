@@ -90,6 +90,24 @@ export function listHref(query: WorkbenchQuery): string {
   return toHref(baseParams(query));
 }
 
+// The reverse of the encoding below, applied to whatever the router hands the page.
+//
+// 225 of the 3628 records carry a 记录编号 that came out of the enterprise's Excel as a
+// number in scientific notation ("2.0148551742220401E+18"). ticketDetailHref percent-
+// encodes that "+" as %2B, correctly — but the param arrives at the page still encoded,
+// so the lookup searched for the literal text "…E%2B18", found nothing, and every one of
+// those 225 tickets rendered as "工单不存在或已被移除".
+//
+// A malformed sequence decodes to itself rather than throwing: a record number is data,
+// and a URL somebody hand-edited must not take the page down.
+export function decodeRecordNumber(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export function ticketDetailHref(
   query: WorkbenchQuery,
   recordNumber: string,

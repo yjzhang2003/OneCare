@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  decodeRecordNumber,
   filterHref,
   listHref,
   pageHref,
@@ -168,5 +169,31 @@ describe("section navigation", () => {
     expect(onDevices.severity).toBe("高");
     expect(onDevices.queue).toBe("overdue");
     expect(onDevices.search).toBe("制冷");
+  });
+});
+
+// 225 records carry a 记录编号 that Excel turned into scientific notation before it ever
+// reached the Base ("2.0148551742220401E+18"). The "+" is what broke them: the href
+// encodes it, the router hands the page the encoded text, and the lookup then searched
+// for a record number nobody has.
+describe("decodeRecordNumber", () => {
+  test("round-trips what ticketDetailHref encodes", () => {
+    const number = "2.0148551742220401E+18";
+    const href = ticketDetailHref(parseWorkbenchQuery({}), number);
+    const segment = href.split("?")[0]!.split("/").at(-1)!;
+
+    expect(segment).toBe("2.0148551742220401E%2B18");
+    expect(decodeRecordNumber(segment)).toBe(number);
+  });
+
+  test("leaves an ordinary UUID alone", () => {
+    expect(decodeRecordNumber("a37f3ac8-1b46-41c5-a546-e4cf28f08593")).toBe(
+      "a37f3ac8-1b46-41c5-a546-e4cf28f08593",
+    );
+  });
+
+  // A hand-edited URL is not a reason to take the page down.
+  test("returns a malformed sequence unchanged rather than throwing", () => {
+    expect(decodeRecordNumber("%E0%A4%A")).toBe("%E0%A4%A");
   });
 });
