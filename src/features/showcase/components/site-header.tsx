@@ -42,7 +42,7 @@ export function SiteHeader({
         ))}
       </nav>
 
-      <a className="header-cta" href="/login">
+      <a className="header-cta" href="/api/auth/feishu/start">
         飞书登录
       </a>
     </header>

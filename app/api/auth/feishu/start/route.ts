@@ -39,8 +39,11 @@ export function createStartHandler(
       );
       return response;
     } catch {
-      const errorUrl = new URL("/login", request.url);
+      const errorUrl = new URL("/", request.url);
       errorUrl.searchParams.set("auth_error", "configuration_error");
+      // Same marker the callback sets: the front page only auto-attempts authorization
+      // once, and without it a failed start bounces straight back into another attempt.
+      errorUrl.searchParams.set("auth", "tried");
       return NextResponse.redirect(errorUrl, 302);
     }
   };

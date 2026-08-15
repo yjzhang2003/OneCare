@@ -171,7 +171,7 @@ describe("perspective workspaces", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
       "href",
-      "/login?from=agent",
+      "/api/auth/feishu/start",
     );
     expect(screen.getByText("预诊置信度 87%")).toBeInTheDocument();
 
@@ -213,7 +213,7 @@ describe("perspective workspaces", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
       "href",
-      "/login?from=engineer",
+      "/api/auth/feishu/start",
     );
     expect(complete).toBeDisabled();
 
@@ -266,7 +266,7 @@ describe("perspective workspaces", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
       "href",
-      "/login?from=operations",
+      "/api/auth/feishu/start",
     );
 
     // task 14 fix round 1: the top summary row used to mix real numbers with

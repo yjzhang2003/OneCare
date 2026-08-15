@@ -19,13 +19,16 @@ describe("FeishuExperienceBanner", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
       "href",
-      "/login?from=agent",
+      "/api/auth/feishu/start",
     );
     expect(container.textContent).not.toMatch(/[↗→]/);
   });
 
+  // Every role's banner now starts authorization directly. The intermediate page that
+  // used to receive ?from=<role> and tailor a sentence to it is gone: it was a screen
+  // between a visitor and the only button on it.
   it.each(["agent", "engineer", "operations"] as const)(
-    "uses the closed %s source role",
+    "sends every role straight into authorization",
     (role) => {
       render(
         <FeishuExperienceBanner role={role}>角色说明</FeishuExperienceBanner>,
@@ -33,7 +36,7 @@ describe("FeishuExperienceBanner", () => {
 
       expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
         "href",
-        `/login?from=${role}`,
+        "/api/auth/feishu/start",
       );
     },
   );

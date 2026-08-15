@@ -79,7 +79,7 @@ describe("LandingContent", () => {
     );
     expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
       "href",
-      "/login",
+      "/api/auth/feishu/start",
     );
 
     expect(screen.getByRole("link", { name: "四个视角" })).toHaveAttribute(
