@@ -80,6 +80,34 @@ describe("buildAnswerFacts", () => {
     });
   });
 
+  // The skill's prompt lives in the aily console and can only cite fields it knows. A
+  // sentence it can read without being told about a new key is what closes that gap.
+  it("states the same numbers in a sentence, for a prompt that never heard of the keys", () => {
+    const facts = JSON.parse(
+      buildAnswerFacts({
+        ticket,
+        sameDimension: { total: 12, closed: 5 },
+        sameModel: 3,
+        sameDevice: { total: 7, open: 2 },
+      }),
+    ) as { 摘要: string };
+
+    expect(facts.摘要).toContain("累计 7 条反馈");
+    expect(facts.摘要).toContain("未闭环 2 条");
+    expect(facts.摘要).toContain("近 7 天同问题维度共 12 条");
+  });
+
+  it("says there is nothing to count when the record has no 设备标识", () => {
+    const facts = JSON.parse(
+      buildAnswerFacts({
+        ticket: { ...ticket, deviceRef: "" },
+        sameDimension: { total: 0, closed: 0 },
+        sameModel: 0,
+      }),
+    ) as { 摘要: string };
+    expect(facts.摘要).toContain("没有设备标识");
+  });
+
   // "这台机器修过几次" is the first question a war room asks. Before the device counts
   // were in the facts, the honest answer the skill gave was 我不知道.
   it("counts this machine's own history, and zero when there is no 设备标识", () => {

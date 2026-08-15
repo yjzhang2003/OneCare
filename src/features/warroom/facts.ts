@@ -51,7 +51,22 @@ export function buildAnswerFacts(input: BuildAnswerFactsInput): string {
   const { recordId: _recordId, warRoomChatId: _warRoomChatId, ...ticketFacts } =
     input.ticket;
 
+  const device = input.sameDevice ?? { total: 0, open: 0 };
+  // A plain-Chinese line beside the numbers. The skill's prompt lives in the aily
+  // console, outside this repository, and it can only cite fields it was told about —
+  // a new key it has never heard of reads as "no information" and the group gets
+  // 我不知道 about a number sitting right there. A sentence needs no prompt update.
+  const readable = [
+    `工单 ${input.ticket.recordNumber}：${input.ticket.channel} / ${input.ticket.category}，当前状态 ${input.ticket.state}`,
+    input.ticket.deviceRef.trim().length > 0
+      ? `该设备（${input.ticket.deviceRef}）累计 ${device.total} 条反馈，其中未闭环 ${device.open} 条`
+      : "这条记录没有设备标识，无法统计同一台机器的历史",
+    `近 7 天同问题维度共 ${input.sameDimension.total} 条，其中已闭环 ${input.sameDimension.closed} 条`,
+    `同机型（${input.ticket.model || "未填写"}）累计 ${input.sameModel} 条`,
+  ].join("；");
+
   return JSON.stringify({
+    摘要: readable,
     ticket: ticketFacts,
     aggregates: {
       sameDimensionLast7Days: input.sameDimension.total,
