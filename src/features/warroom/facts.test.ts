@@ -60,9 +60,14 @@ describe("stripMention", () => {
 });
 
 describe("buildAnswerFacts", () => {
-  it("carries the ticket and both aggregates as JSON", () => {
+  it("carries the ticket and every aggregate as JSON", () => {
     const facts = JSON.parse(
-      buildAnswerFacts({ ticket, sameDimension: { total: 12, closed: 5 }, sameModel: 3 }),
+      buildAnswerFacts({
+        ticket,
+        sameDimension: { total: 12, closed: 5 },
+        sameModel: 3,
+        sameDevice: { total: 7, open: 2 },
+      }),
     ) as { ticket: Record<string, unknown>; aggregates: Record<string, unknown> };
 
     expect(facts.ticket.recordNumber).toBe(ticket.recordNumber);
@@ -70,7 +75,28 @@ describe("buildAnswerFacts", () => {
       sameDimensionLast7Days: 12,
       sameDimensionClosed: 5,
       sameModelTotal: 3,
+      sameDeviceTotal: 7,
+      sameDeviceOpen: 2,
     });
+  });
+
+  // "这台机器修过几次" is the first question a war room asks. Before the device counts
+  // were in the facts, the honest answer the skill gave was 我不知道.
+  it("counts this machine's own history, and zero when there is no 设备标识", () => {
+    const withDevice = JSON.parse(
+      buildAnswerFacts({
+        ticket,
+        sameDimension: { total: 0, closed: 0 },
+        sameModel: 0,
+        sameDevice: { total: 7, open: 2 },
+      }),
+    ) as { aggregates: Record<string, unknown> };
+    expect(withDevice.aggregates.sameDeviceTotal).toBe(7);
+
+    const without = JSON.parse(
+      buildAnswerFacts({ ticket, sameDimension: { total: 0, closed: 0 }, sameModel: 0 }),
+    ) as { aggregates: Record<string, unknown> };
+    expect(without.aggregates.sameDeviceTotal).toBe(0);
   });
 
   it("omits the record id so the model cannot quote an internal identifier", () => {

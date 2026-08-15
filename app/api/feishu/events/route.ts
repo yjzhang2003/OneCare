@@ -360,6 +360,7 @@ export function createAnswerGroupQuestion(
     readFactsAggregates({
       dimensions: ticket.dimensions,
       model: ticket.model,
+      deviceRef: ticket.deviceRef,
       now: Date.now(),
     }),
 ): (

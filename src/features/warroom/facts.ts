@@ -22,12 +22,17 @@ export function stripMention(text: string): string {
 export type FactsAggregates = Readonly<{
   sameDimension: Readonly<{ total: number; closed: number }>;
   sameModel: number;
+  // 这台机器修过几次 is the first question anyone asks in a war room, and until this
+  // was in the facts the honest answer the skill gave was "我不知道". Zero when the
+  // record carries no 设备标识 — there is no machine to count.
+  sameDevice?: Readonly<{ total: number; open: number }>;
 }>;
 
 export type BuildAnswerFactsInput = Readonly<{
   ticket: VocRecord;
   sameDimension: Readonly<{ total: number; closed: number }>;
   sameModel: number;
+  sameDevice?: Readonly<{ total: number; open: number }>;
 }>;
 
 // The only two things the answering skill is ever shown: the ticket itself
@@ -52,6 +57,10 @@ export function buildAnswerFacts(input: BuildAnswerFactsInput): string {
       sameDimensionLast7Days: input.sameDimension.total,
       sameDimensionClosed: input.sameDimension.closed,
       sameModelTotal: input.sameModel,
+      // Named for what it is: every feedback ever recorded against this same machine,
+      // and how many of those are still open.
+      sameDeviceTotal: input.sameDevice?.total ?? 0,
+      sameDeviceOpen: input.sameDevice?.open ?? 0,
     },
   });
 }

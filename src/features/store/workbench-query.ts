@@ -271,12 +271,20 @@ export async function readFactsAggregates(
   input: Readonly<{
     dimensions: readonly string[];
     model: string;
+    deviceRef: string;
     now: number;
   }>,
-): Promise<Readonly<{ sameDimension: { total: number; closed: number }; sameModel: number }>> {
+): Promise<
+  Readonly<{
+    sameDimension: { total: number; closed: number };
+    sameModel: number;
+    sameDevice: { total: number; open: number };
+  }>
+> {
   const cutoff = new Date(input.now - 7 * 24 * 3_600_000).toISOString();
   const dimensions = [...input.dimensions];
   const model = input.model.trim();
+  const deviceRef = input.deviceRef.trim();
 
   const rows = (await getSql().query(
     `SELECT
@@ -291,9 +299,15 @@ export async function readFactsAggregates(
            AND dimensions && $1::text[]
            AND state = '已闭环'
        )::int AS dimension_closed,
-       COUNT(*) FILTER (WHERE $3 <> '' AND btrim(model) = $3)::int AS same_model
+       COUNT(*) FILTER (WHERE $3 <> '' AND btrim(model) = $3)::int AS same_model,
+       COUNT(*) FILTER (WHERE $4 <> '' AND device_ref = $4)::int AS same_device,
+       COUNT(*) FILTER (
+         WHERE $4 <> '' AND device_ref = $4
+           AND ticket_opened_at IS NOT NULL
+           AND state NOT IN ('已闭环', '无需跟进')
+       )::int AS same_device_open
      FROM voc_records`,
-    [dimensions, cutoff, model],
+    [dimensions, cutoff, model, deviceRef],
   )) as Record<string, unknown>[];
 
   const row = rows[0] ?? {};
@@ -304,6 +318,10 @@ export async function readFactsAggregates(
       closed: count(row.dimension_closed),
     },
     sameModel: count(row.same_model),
+    sameDevice: {
+      total: count(row.same_device),
+      open: count(row.same_device_open),
+    },
   };
 }
 
