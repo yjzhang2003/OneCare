@@ -6,6 +6,7 @@
     "app/api/feishu/events/route.ts": { "regions": ["hkg1"] },
     "app/api/voc/analyze/route.ts": { "regions": ["hkg1"] },
     "app/api/voc/dashboard/route.ts": { "regions": ["hkg1"] },
+    "app/api/voc/tickets/route.ts": { "regions": ["hkg1"] },
     "app/api/voc/tickets/[recordId]/action/route.ts": { "regions": ["hkg1"] },
     "app/api/voc/tickets/[recordId]/analyze/route.ts": { "regions": ["hkg1"] },
     "app/api/voc/tickets/[recordId]/war-room/route.ts": { "regions": ["hkg1"] },

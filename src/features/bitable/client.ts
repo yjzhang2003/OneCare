@@ -102,6 +102,10 @@ export type BitableClient = Readonly<{
   getRecord(recordId: string): Promise<VocRecord | null>;
   listRecords(options?: ListRecordsOptions): Promise<readonly VocRecord[]>;
   updateRecord(recordId: string, fields: BitableFields): Promise<void>;
+  // The one create path into this table, added for 手动新建工单 (see
+  // src/features/voc/new-ticket.ts for why it is defensible and how the rows it makes
+  // stay identifiable). Returns the new record_id.
+  createRecord(fields: BitableFields): Promise<string>;
   // Many records in one request, for the one job that has to touch the whole table:
   // re-seeding the demo dataset's timeline. 3628 sequential updateRecord calls would be
   // roughly 3628 round trips at ~400ms and would sit on the app's write rate limit for
@@ -203,6 +207,24 @@ export function createBitableClient(
       }
 
       return collected;
+    },
+
+    async createRecord(fields) {
+      const payload = await call(`${recordsUrl}?user_id_type=open_id`, {
+        method: "POST",
+        body: JSON.stringify({ fields }),
+      });
+
+      if (payload.code !== 0) {
+        throw new Error(`Bitable create failed (code ${String(payload.code)})`);
+      }
+
+      const data = isRecord(payload.data) ? payload.data : {};
+      const record = isRecord(data.record) ? data.record : {};
+      if (typeof record.record_id !== "string") {
+        throw new Error("Bitable create returned no record_id");
+      }
+      return record.record_id;
     },
 
     async updateRecord(recordId, fields) {

@@ -55,6 +55,7 @@ import type {
   IdentityProfile,
   ProfilePage,
 } from "../src/features/workbench/profiles";
+import { NewTicketButton } from "./workbench-new-ticket";
 import { NotificationBell } from "./workbench-notifications";
 import { OwnersPane } from "./workbench-owners";
 import { ProfileInsightPanel } from "./workbench-profile-insight";
@@ -502,6 +503,16 @@ export function WorkbenchConsole({
                   <Tag color="arcoblue">{devices.matched} 个</Tag>
                 )}
               </Space>
+            }
+            // The one control that adds to the dataset rather than reading it, so it sits
+            // in the header of the list it adds to, and only on the ticket sections.
+            extra={
+              query.section === "tickets" ? (
+                <NewTicketButton
+                  channels={options.channel}
+                  categories={options.category}
+                />
+              ) : null
             }
           >
             <Spin loading={pending} style={{ display: "block", width: "100%" }}>
