@@ -772,6 +772,11 @@ export function createFeishuEventRoute(
 
       if (outcome.kind === "group_question") {
         dependencies.schedule(async () => {
+          // Logged at both ends on purpose. This task is deferred, so nothing about it
+          // reaches the caller: when it stopped producing answers, production told us
+          // only that the request had arrived, and every guess about where it died cost
+          // a deploy. Two lines make the next one a log read.
+          console.log(`[onecare-bot] group_question start chat=${outcome.chatId}`);
           try {
             const message = await dependencies.answerGroupQuestion({
               chatId: outcome.chatId,
@@ -782,7 +787,12 @@ export function createFeishuEventRoute(
               chatId: outcome.chatId,
               message,
             });
-          } catch {
+            console.log(`[onecare-bot] group_question sent chat=${outcome.chatId}`);
+          } catch (error) {
+            console.error(
+              "[onecare-bot] group_question failed:",
+              error instanceof Error ? error.message : String(error),
+            );
             dependencies.reportFailure();
           }
         });
