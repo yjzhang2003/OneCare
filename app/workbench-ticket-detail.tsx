@@ -40,6 +40,7 @@ import {
 } from "../src/features/workbench/query";
 import { availableActions } from "../src/features/workbench/write-actions";
 import { AnalyzeButton } from "./workbench-analyze-button";
+import { NotificationBell } from "./workbench-notifications";
 import { TagEditButton } from "./workbench-tag-edit";
 import { DispatchPanel } from "./workbench-dispatch";
 import { WarRoomButton } from "./workbench-war-room-button";
@@ -94,9 +95,13 @@ function DetailHeader({
   user,
   recordNumber,
   brand,
+  inbox = true,
 }: Readonly<{
   user: AuthUser;
   recordNumber: string | null;
+  // Off in the two error shells: there is no ticket and no navigation there, and an
+  // inbox that polls behind a "记录不存在" card is answering a question nobody asked.
+  inbox?: boolean;
   // The wordmark belongs to the sider, and the ticket page now has one. The two
   // error states below do not — they are a single centred card with no navigation —
   // so they keep it in the header rather than losing it entirely.
@@ -115,6 +120,9 @@ function DetailHeader({
         </Breadcrumb>
       </Space>
       <Space size="small" align="center">
+        {/* The detail page is where an operator spends the wait for a 23-second
+            analysis; the inbox has to be reachable from here too. */}
+        {inbox && <NotificationBell />}
         <span className="oc-console__user">{user.name}</span>
         <UserAvatar user={user} />
       </Space>
@@ -135,7 +143,7 @@ function DetailShell({
 }>) {
   return (
     <Layout className="oc-console oc-ticket-detail">
-      <DetailHeader user={user} recordNumber={recordNumber} brand />
+      <DetailHeader user={user} recordNumber={recordNumber} brand inbox={false} />
       {children}
     </Layout>
   );

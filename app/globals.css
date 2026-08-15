@@ -6117,3 +6117,53 @@ a {
   flex-direction: column;
   line-height: 1.35;
 }
+
+/* 站内消息 dropdown: a list of events, each one a link to the ticket it is about. */
+.oc-console__inbox {
+  width: 340px;
+  max-height: 420px;
+  overflow-y: auto;
+  background: var(--color-bg-popup, #fff);
+  border-radius: 6px;
+  box-shadow: 0 4px 10px rgb(0 0 0 / 10%);
+  padding: 8px 0;
+}
+.oc-console__inbox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px 8px;
+}
+.oc-console__inbox-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.oc-console__inbox-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.oc-console__inbox-item:hover {
+  background: var(--color-fill-1, #f7f8fa);
+}
+.oc-console__inbox-item--unread {
+  border-left-color: rgb(var(--primary-6));
+}
+.oc-console__inbox-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.oc-console__inbox-time {
+  font-weight: 400;
+  color: var(--color-text-3);
+}
+.oc-console__inbox-body {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--color-text-2);
+  white-space: pre-line;
+}

@@ -54,6 +54,11 @@ import {
 } from "../../../../src/features/feishu-bot/today-overview";
 import { resolveWarRoomAction } from "../../../../src/features/feishu-bot/war-room-actions";
 import {
+  defaultNotifyDependencies,
+  notify,
+} from "../../../../src/features/notify/deliver";
+import { handOffNotifications } from "../../../../src/features/notify/hand-off";
+import {
   buildAnswerFacts,
   computeFactsAggregates,
   stripMention,
@@ -510,6 +515,59 @@ function isWarRoomCardAction(
 // boundary. Replacing this function with a stub in tests is what let the
 // missing note reach production: the route's own tests never saw the call it
 // actually makes.
+// The two card actions that hand the ticket to somebody else. Named here rather than
+// imported from card-actions' private table: this file needs the state machine's action,
+// not the card's, and only for the two that produce a notification.
+const CARD_ACTION_TRANSITIONS: Readonly<Record<string, string | undefined>> = {
+  voc_submit_follow_up: "提交跟进结果",
+  voc_confirm_closure: "确认闭环",
+};
+
+// Reads the record back after the write so the notification describes the ticket as it
+// now is, and so nothing has to be threaded through resolveVocCardAction's return value.
+async function notifyHandOff(
+  recordId: string,
+  operatorOpenId: string,
+  action: string,
+): Promise<void> {
+  try {
+    const record = await getBitableClient().getRecord(recordId);
+    if (!record) return;
+    const events = handOffNotifications({
+      action,
+      operatorOpenId,
+      ownerOpenIds: record.ownerOpenIds,
+      engineerOpenIds: record.engineerOpenIds,
+    });
+    for (const event of events) {
+      await notify(
+        {
+          kind: event.kind,
+          openId: event.openId,
+          recordId,
+          sendFeishuText: true,
+          subject: {
+            recordNumber: record.recordNumber,
+            channel: record.channel,
+            category: record.category,
+            summary: record.summary,
+            content: record.content,
+            severity: record.severity,
+            state: record.state,
+            actorName: "",
+          },
+        },
+        defaultNotifyDependencies(),
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Hand-off notification failed:",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
 export function createResolveAction(
   bitable: () => VocActionBitable,
   warRoom: WarRoomActionDependencies = defaultWarRoomDependencies,
@@ -534,7 +592,7 @@ export function createResolveAction(
       return outcome.result;
     }
     if (isVocCardAction(input.action)) {
-      return resolveVocCardAction({
+      const result = await resolveVocCardAction({
         action: input.action,
         recordId: input.recordId,
         operatorOpenId: input.operatorOpenId,
@@ -548,6 +606,18 @@ export function createResolveAction(
         readTranscript: readWarRoomTranscript,
         summarise: summariseClosure,
       });
+
+      // The hand-off this click caused, told to whoever it landed on. Scheduled rather
+      // than awaited: Feishu wants the callback answered in ~3 seconds and this is a
+      // read plus two writes. Skipped when the click was refused — an error toast means
+      // nothing moved.
+      const refused =
+        result.kind === "update" && result.response.toast?.type === "error";
+      const action = CARD_ACTION_TRANSITIONS[input.action];
+      if (!refused && action) {
+        schedule(() => notifyHandOff(input.recordId, input.operatorOpenId, action));
+      }
+      return result;
     }
     return resolveCardAction(input.action);
   };

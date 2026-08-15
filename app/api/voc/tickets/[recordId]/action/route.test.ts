@@ -59,6 +59,7 @@ function route(
   const handler = createTicketActionRoute({
     listMembers,
     listAdmins: async () => [],
+    notify: async () => {},
     session: async () =>
       overrides.user === undefined
         ? { openId: OWNER, name: "张禹健" }
@@ -89,6 +90,7 @@ describe("ticket action route — gating", () => {
     const handler = createTicketActionRoute({
       session: async () => null,
       listAdmins: async () => [],
+    notify: async () => {},
     listMembers: async () => [],
       getRecord,
       updateRecord: async () => undefined,
@@ -266,6 +268,7 @@ describe("ticket action route — outcomes", () => {
     const handler = createTicketActionRoute({
       session: async () => ({ openId: OWNER, name: "张禹健" }),
       listAdmins: async () => [],
+    notify: async () => {},
     listMembers: async () => [],
       getRecord: async () => {
         throw new Error("bitable down");

@@ -15,6 +15,13 @@ import {
   listAssignableMembers,
   type Member,
 } from "../../../../../../src/features/directory/members";
+import {
+  defaultNotifyDependencies,
+  notify,
+  type NotifyInput,
+} from "../../../../../../src/features/notify/deliver";
+import { handOffNotifications } from "../../../../../../src/features/notify/hand-off";
+import type { NotificationSubject } from "../../../../../../src/features/notify/messages";
 import { writeRecord } from "../../../../../../src/features/store/mirror";
 import { listOwnerRuleRecords } from "../../../../../../src/features/voc/owner-directory";
 import { adminOpenIds } from "../../../../../../src/features/voc/owner-rules";
@@ -33,6 +40,21 @@ import {
 // would falsify that argument the moment it shipped, and re-validating the
 // whole cacheComponents cache architecture on a newer Next is not something
 // three days accommodates. A route handler does the same job.
+// The record as a notification describes it. One helper so both branches below say the
+// same thing about the same ticket.
+function subjectOf(record: VocRecord, actorName: string): NotificationSubject {
+  return {
+    recordNumber: record.recordNumber,
+    channel: record.channel,
+    category: record.category,
+    summary: record.summary,
+    content: record.content,
+    severity: record.severity,
+    state: record.state,
+    actorName,
+  };
+}
+
 export type TicketActionDependencies = Readonly<{
   session: () => Promise<AuthUser | null>;
   getRecord: (recordId: string) => Promise<VocRecord | null>;
@@ -50,6 +72,9 @@ export type TicketActionDependencies = Readonly<{
   // contained the same way: a roster that cannot be read means nobody is treated as an
   // admin, which is the safe direction — an owner can still act on their own ticket.
   listAdmins: () => Promise<readonly string[]>;
+  // 站内消息 + 飞书 for the hand-offs this route causes. Injected so a test can assert
+  // exactly who gets told without a database or a bot.
+  notify: (input: NotifyInput) => Promise<void>;
   now: () => number;
 }>;
 
@@ -231,6 +256,40 @@ export function createTicketActionRoute(dependencies: TicketActionDependencies) 
       // cache entry on behalf of a write that then failed.
       dependencies.revalidate();
 
+      // Everything that moved this ticket onto somebody else says so, in both channels.
+      // 改派 is addressed (the assignee was chosen by the person clicking); the two
+      // hand-offs below are not — they go to whoever the ticket just landed back on.
+      const events: NotifyInput[] =
+        resolved.kind === "assign"
+          ? [
+              {
+                kind: "ticket_reassigned",
+                openId: resolved.assigneeOpenId,
+                recordId,
+                sendFeishuText: true,
+                subject: subjectOf(record, user.name),
+              },
+            ]
+          : handOffNotifications({
+              action: resolved.kind === "transition" ? resolved.action : "",
+              operatorOpenId: user.openId,
+              ownerOpenIds: record.ownerOpenIds,
+              engineerOpenIds: record.engineerOpenIds,
+            }).map((handOff) => ({
+              kind: handOff.kind,
+              openId: handOff.openId,
+              recordId,
+              sendFeishuText: true,
+              subject: subjectOf(
+                { ...record, state: outcome.nextState },
+                user.name,
+              ),
+            }));
+
+      for (const event of events) {
+        await dependencies.notify(event);
+      }
+
       return Response.json({
         ok: true,
         message: outcome.message,
@@ -274,6 +333,7 @@ export const POST = createTicketActionRoute({
       },
     }),
   getRecord: (recordId) => getBitableClient().getRecord(recordId),
+  notify: (input) => notify(input, defaultNotifyDependencies()),
   listAdmins: async () =>
     adminOpenIds(
       await listOwnerRuleRecords({

@@ -55,6 +55,7 @@ import type {
   IdentityProfile,
   ProfilePage,
 } from "../src/features/workbench/profiles";
+import { NotificationBell } from "./workbench-notifications";
 import { OwnersPane } from "./workbench-owners";
 import { ProfileInsightPanel } from "./workbench-profile-insight";
 import { ConsoleSider } from "./workbench-sider";
@@ -457,6 +458,7 @@ export function WorkbenchConsole({
             </Breadcrumb>
           </Space>
           <Space size="small" align="center">
+            <NotificationBell />
             <span className="oc-console__user">{user.name}</span>
             {/* avatarUrl is optional on AuthUser — Feishu does not always return
                 one — so the fallback is the name's first character rather than a

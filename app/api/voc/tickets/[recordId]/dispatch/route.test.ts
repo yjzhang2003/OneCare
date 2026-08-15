@@ -86,6 +86,7 @@ function deps(overrides: Partial<DispatchDependencies> = {}): DispatchDependenci
       },
     }),
     sendCard: async () => {},
+    notify: async () => {},
     revalidate: () => {},
     now: () => NOW,
     ...overrides,

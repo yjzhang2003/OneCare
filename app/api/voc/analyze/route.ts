@@ -46,6 +46,7 @@ import {
   resolveOwner,
   type OwnerRule,
 } from "../../../../src/features/voc/assignment";
+import { defaultNotifyDependencies, notify } from "../../../../src/features/notify/deliver";
 import { OWNER_FIELDS } from "../../../../src/features/voc/owner-directory";
 import { toOwnerRole } from "../../../../src/features/voc/owner-rules";
 import {
@@ -584,6 +585,29 @@ async function runShard(
       notifyErrors += 1;
     }
 
+    // The console's own copy of the same event. The card above is the message; this is
+    // the row that makes it findable in 消息 an hour later, and it never sends a second
+    // Feishu message for a card that just went out.
+    await notify(
+      {
+        kind: "ticket_assigned",
+        openId: delivery.openId,
+        recordId: record.recordId,
+        sendFeishuText: false,
+        subject: {
+          recordNumber: record.recordNumber,
+          channel: record.channel,
+          category: record.category,
+          summary: freshTagging?.tag.summary ?? "",
+          content: record.content,
+          severity: freshTagging?.severity ?? null,
+          state: "待跟进",
+          actorName: "",
+        },
+      },
+      defaultNotifyDependencies(),
+    );
+
     // Escalation is an enhancement on top of the closed loop above, never a
     // condition of it: the ticket already reached 待跟进 and its owner was
     // already (attempted to be) notified by this point, regardless of
@@ -1023,6 +1047,27 @@ export async function escalateToWarRoom(input: EscalateInput): Promise<void> {
   const env = readBotEnv();
   for (const openId of input.fallbackOpenIds) {
     await sendFeishuMessage({ env, openId, message });
+    // The escalation card is the message; this is its copy in 消息, so an approver who
+    // was away from Feishu still finds the decision waiting for them in the console.
+    await notify(
+      {
+        kind: "escalation_requested",
+        openId,
+        recordId: input.record.recordId,
+        sendFeishuText: false,
+        subject: {
+          recordNumber: input.record.recordNumber,
+          channel: input.record.channel,
+          category: input.record.category,
+          summary: input.tag.summary,
+          content: input.record.content,
+          severity: input.severity,
+          state: input.record.state,
+          actorName: "",
+        },
+      },
+      defaultNotifyDependencies(),
+    );
   }
 }
 

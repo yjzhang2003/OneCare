@@ -26,6 +26,11 @@ import {
   engineerRules,
   type OwnerRuleRecord,
 } from "../../../../../../src/features/voc/owner-rules";
+import {
+  defaultNotifyDependencies,
+  notify,
+  type NotifyInput,
+} from "../../../../../../src/features/notify/deliver";
 import { readBitableEnv, readBotEnv } from "../../../../../../src/lib/env";
 
 // 派工: hand a ticket to the engineer who will go on site.
@@ -63,6 +68,9 @@ export type DispatchDependencies = Readonly<{
     }>
   >;
   sendCard: (openId: string, card: FeishuCard) => Promise<void>;
+  // The console's copy of this event. Separate from sendCard because the card is the
+  // message and this is the row that makes it findable afterwards.
+  notify: (input: NotifyInput) => Promise<void>;
   revalidate: () => void;
   now: () => number;
 }>;
@@ -209,6 +217,23 @@ export function createDispatchRoute(dependencies: DispatchDependencies) {
         });
       }
 
+      await dependencies.notify({
+        kind: "engineer_dispatched",
+        openId: engineerOpenId,
+        recordId,
+        sendFeishuText: false,
+        subject: {
+          recordNumber: record.recordNumber,
+          channel: record.channel,
+          category: record.category,
+          summary: record.summary,
+          content: record.content,
+          severity: record.severity,
+          state: record.state,
+          actorName: user.name,
+        },
+      });
+
       return Response.json({
         ok: true,
         dispatched: true,
@@ -286,6 +311,7 @@ export const POST = createDispatchRoute({
       },
     };
   },
+  notify: (input) => notify(input, defaultNotifyDependencies()),
   sendCard: (openId, card) =>
     sendFeishuMessage({
       env: readBotEnv(),
