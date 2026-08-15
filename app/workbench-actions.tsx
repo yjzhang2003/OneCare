@@ -177,7 +177,7 @@ export function WorkbenchActions({
       </Space>
 
       <Modal
-        title="改派负责人"
+        title="改派客服负责人"
         visible={assigning}
         unmountOnExit
         confirmLoading={busy}
@@ -207,8 +207,8 @@ export function WorkbenchActions({
           showSearch
           placeholder={
             ownerNames.length > 0
-              ? `当前负责人：${ownerNames.join("、")}`
-              : "选择负责人"
+              ? `当前客服负责人：${ownerNames.join("、")}`
+              : "选择客服负责人"
           }
           value={assignee}
           style={{ width: "100%" }}

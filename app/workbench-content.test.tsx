@@ -193,6 +193,17 @@ describe("WorkbenchConsole", () => {
     expect(within(nav).getByText("全部")).toBeInTheDocument();
   });
 
+  // The list answers "who has this" for both roles, so a dispatched ticket does not
+  // look identical to one nobody has been sent to.
+  it("names the 客服 owner and the engineer in the same column", () => {
+    renderWorkbench({
+      tickets: [ticket({ ownerNames: ["黄齐"], engineerNames: ["张睿哲"] })],
+      searchParams: { queue: "all" },
+    });
+    expect(screen.getByText("客服 黄齐")).toBeInTheDocument();
+    expect(screen.getByText("工程师 张睿哲")).toBeInTheDocument();
+  });
+
   it("renders the real feedback text, unredacted, because the page is gated", () => {
     renderWorkbench({ searchParams: { queue: "all" } });
     expect(screen.getByText("报修后等了三天没人上门")).toBeInTheDocument();

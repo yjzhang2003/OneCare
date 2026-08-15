@@ -87,7 +87,7 @@ export function DispatchPanel({
     <Space direction="vertical" size="small" style={{ width: "100%" }}>
       {assigned ? (
         <Space size="small" wrap>
-          <Tag color="green">上门工程师 {engineerNames.join("、")}</Tag>
+          <Tag color="green">工程师负责人 {engineerNames.join("、")}</Tag>
           <Typography.Text type="secondary">
             派工于 {formatShanghaiTime(dispatchedAt) ?? "—"}
           </Typography.Text>
@@ -105,7 +105,7 @@ export function DispatchPanel({
       ) : (
         <Space size="small">
           <Select
-            placeholder={assigned ? "改派给别的工程师" : "选择上门工程师"}
+            placeholder={assigned ? "改派给别的工程师" : "选择工程师负责人"}
             style={{ width: 180 }}
             size="small"
             value={choice || undefined}

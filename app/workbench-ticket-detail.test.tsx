@@ -311,6 +311,21 @@ describe("TicketDetailPageView", () => {
     },
   );
 
+  // A ticket now has two owners, and each answers a different question: who closes it,
+  // and who goes. One unqualified 负责人 could not say which was meant.
+  it("names both owners, and says 未派工 rather than leaving a gap", () => {
+    renderDetail({ ownerNames: ["黄齐"], engineerNames: [] });
+    expect(screen.getByText("客服负责人")).toBeInTheDocument();
+    expect(screen.getByText("工程师负责人")).toBeInTheDocument();
+    expect(screen.getByText("未派工")).toBeInTheDocument();
+  });
+
+  it("shows the dispatched engineer beside the 客服 owner", () => {
+    renderDetail({ ownerNames: ["黄齐"], engineerNames: ["张睿哲"] });
+    expect(screen.getByText("黄齐")).toBeInTheDocument();
+    expect(screen.getAllByText("张睿哲").length).toBeGreaterThan(0);
+  });
+
   // Both controls are always there, in every state: a conclusion can be re-run, and it
   // can be corrected by hand. 已经打过标 changes the label and adds a confirmation, it
   // does not take the control away.

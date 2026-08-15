@@ -323,15 +323,26 @@ export function WorkbenchConsole({
       ),
     },
     {
+      // 客服 and 工程师 in one column rather than two: they answer the same question
+      // ("who has this"), and a ticket only ever has an engineer once someone put one
+      // on it, so the second line is absent far more often than it is present.
       title: "负责人",
       dataIndex: "ownerNames",
-      width: 110,
-      render: (_: unknown, row: WorkbenchTicket) =>
-        row.ownerNames.length === 0 ? (
-          <span style={{ color: "var(--color-text-3)" }}>未分配</span>
-        ) : (
-          row.ownerNames.join("、")
-        ),
+      width: 132,
+      render: (_: unknown, row: WorkbenchTicket) => (
+        <div className="oc-console__owners">
+          {row.ownerNames.length === 0 ? (
+            <span style={{ color: "var(--color-text-3)" }}>未分配</span>
+          ) : (
+            <span>客服 {row.ownerNames.join("、")}</span>
+          )}
+          {row.engineerNames.length > 0 && (
+            <span style={{ color: "var(--color-text-3)" }}>
+              工程师 {row.engineerNames.join("、")}
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       title: (
@@ -391,7 +402,7 @@ export function WorkbenchConsole({
         {filterSelect("category", "品类")}
         {filterSelect("polarity", "情绪极性")}
         {filterSelect("dimension", "问题维度")}
-        {filterSelect("owner", "负责人")}
+        {filterSelect("owner", "客服负责人")}
         {filterSelect("unit", "事业部")}
         {filterSelect("level1", "问题分类")}
         <Input.Search

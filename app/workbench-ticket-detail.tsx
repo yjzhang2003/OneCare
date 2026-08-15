@@ -414,8 +414,18 @@ export function TicketDetailPageView({
                 <div className="oc-ticket-detail__status-grid">
                   <span>流程状态</span>
                   <Tag color={STATE_COLOR[ticket.state]}>{ticket.state}</Tag>
-                  <span>负责人</span>
+                  {/* Two owners, named as such. A ticket has a 客服 who answers for
+                      closing it and — once dispatched — an engineer who answers for what
+                      happens at the customer's home; a single unqualified 负责人 made the
+                      page ambiguous the moment the second one existed. */}
+                  <span>客服负责人</span>
                   <strong>{owner}</strong>
+                  <span>工程师负责人</span>
+                  <strong>
+                    {ticket.engineerNames.length === 0
+                      ? "未派工"
+                      : ticket.engineerNames.join("、")}
+                  </strong>
                   <span>严重度</span>
                   <Tag color={ticket.severity ? SEVERITY_COLOR[ticket.severity] : "gray"}>
                     {ticket.severity ?? ABSENT}

@@ -22,7 +22,7 @@ export const QUEUES = [
   {
     key: "unassigned",
     label: "未分配",
-    hint: "已建单但没有负责人，谁都不会去看",
+    hint: "已建单但没有客服负责人，谁都不会去看",
   },
   {
     key: "failed",

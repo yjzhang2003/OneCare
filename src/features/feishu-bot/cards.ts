@@ -808,8 +808,8 @@ export function createWarRoomEscalationCard(
       ),
       field("AI 摘要", tag.summary || "—"),
       field(
-        "负责人",
-        ownerNames.length > 0 ? ownerNames.join("、") : "未解析到负责人",
+        "客服负责人",
+        ownerNames.length > 0 ? ownerNames.join("、") : "未解析到客服负责人",
       ),
       // Same value shape as the existing four VOC actions (action + record_id)
       // so the callback path (event-handler.ts's isVocCardAction branch) reads

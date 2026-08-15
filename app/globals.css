@@ -6109,3 +6109,11 @@ a {
 .oc-profile-insight__by {
   font-size: 12px;
 }
+
+/* 客服 and 工程师 stacked in one column: two lines when a ticket has been dispatched,
+   one when it has not. */
+.oc-console__owners {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
