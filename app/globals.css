@@ -6197,3 +6197,28 @@ a {
 .oc-console__sider-readonly {
   color: var(--color-text-3, #86909c);
 }
+
+/* 引导: a ring around the element being explained, and a card next to it. The dim is the
+   ring's own outer shadow, so there is no separate backdrop to keep in sync. */
+.oc-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  pointer-events: none;
+}
+.oc-tour__spot {
+  position: fixed;
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 2px rgb(var(--primary-6)),
+    0 0 0 9999px rgb(0 0 0 / 45%);
+  transition: all 160ms ease;
+}
+.oc-tour__card {
+  position: fixed;
+  pointer-events: auto;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--color-bg-popup, #fff);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 20%);
+}

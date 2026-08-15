@@ -11,6 +11,7 @@ import {
   IconApps,
   IconBug,
   IconClockCircle,
+  IconCompass,
   IconDashboard,
   IconDesktop,
   IconFile,
@@ -60,6 +61,8 @@ export type ConsoleSiderProps = Readonly<{
   navigate: (href: string) => void;
   // 评委通道: the developer options inside 设置 generate tickets and push cards.
   readOnly?: boolean;
+  // Replays the five-stop tour. Only ever passed on the read-only door.
+  onReplayTour?: () => void;
 }>;
 
 // The console's left column, shared by the list view and the ticket detail page.
@@ -73,6 +76,7 @@ export function ConsoleSider({
   selectedKey,
   navigate,
   readOnly = false,
+  onReplayTour,
 }: ConsoleSiderProps) {
   const count = (value: number | null) =>
     value === null ? null : <Tag size="small">{value}</Tag>;
@@ -114,6 +118,7 @@ export function ConsoleSider({
         </Menu.Item>
 
         <Menu.SubMenu
+          data-tour="queues"
           key="tickets"
           title={
             <>
@@ -137,6 +142,7 @@ export function ConsoleSider({
         </Menu.SubMenu>
 
         <Menu.Item
+          data-tour="profiles"
           key="users"
           onClick={() => navigate(destination({ section: "users" }))}
         >
@@ -157,6 +163,7 @@ export function ConsoleSider({
         {/* 人员管理: the routing table the pipeline reads. No count tag — a number here
             would compete with the four above it for a value nobody triages by. */}
         <Menu.Item
+          data-tour="owners"
           key="owners"
           onClick={() => navigate(destination({ section: "owners" }))}
         >
@@ -169,7 +176,14 @@ export function ConsoleSider({
           .arco-layout-sider-children. */}
       <div className="oc-console__sider-footer">
         {readOnly ? (
-          <span className="oc-console__sider-readonly">评委通道 · 只读</span>
+          <button
+            type="button"
+            className="oc-console__sider-settings"
+            onClick={onReplayTour}
+          >
+            <IconCompass />
+            <span>使用引导</span>
+          </button>
         ) : (
           <SettingsButton />
         )}

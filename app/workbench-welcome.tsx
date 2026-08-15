@@ -12,20 +12,26 @@ import { useState } from "react";
 // first is asking to be read as something it is not: the records are a real enterprise's
 // desensitised export, parts of the dataset were reprocessed to make a demo possible,
 // and this door is read-only.
-export function WelcomeDialog({ open }: Readonly<{ open: boolean }>) {
+export function WelcomeDialog({
+  open,
+  onDismiss,
+}: Readonly<{ open: boolean; onDismiss?: () => void }>) {
   // Seeded from the prop rather than set in an effect: the flag arrives with the page
   // (the 评委通道 link puts it in the URL), so there is nothing to wait for and nothing
   // for a first render to miss. Dismissing it is the only state change there is.
   const [dismissed, setDismissed] = useState(false);
   const visible = open && !dismissed;
-  const setVisible = (next: boolean) => setDismissed(!next);
+  const setVisible = (next: boolean) => {
+    setDismissed(!next);
+    if (!next) onDismiss?.();
+  };
 
   return (
     <Modal
       title="关于这份演示数据"
       visible={visible}
       unmountOnExit
-      okText="我知道了"
+      okText="我知道了，带我看看"
       onOk={() => setVisible(false)}
       onCancel={() => setVisible(false)}
       cancelButtonProps={{ style: { display: "none" } }}

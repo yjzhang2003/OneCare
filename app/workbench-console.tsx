@@ -57,6 +57,7 @@ import type {
 } from "../src/features/workbench/profiles";
 import { NewTicketButton } from "./workbench-new-ticket";
 import { NotificationBell } from "./workbench-notifications";
+import { WorkbenchTour } from "./workbench-tour";
 import { WelcomeDialog } from "./workbench-welcome";
 import { OwnersPane } from "./workbench-owners";
 import { ProfileInsightPanel } from "./workbench-profile-insight";
@@ -192,6 +193,9 @@ export function WorkbenchConsole({
   // 评委通道 sessions carry guest: true. Every control that writes is hidden for them —
   // and refused by the route as well, because a hidden button is not a permission.
   const readOnly = user.guest === true;
+  // The tour follows the data notice: a judge reads what the data is, then gets shown
+  // around. Replayable from the sider, because the first pass is usually a skim.
+  const [tourOpen, setTourOpen] = useState(false);
   const [search, setSearch] = useState(query.search);
   // Every navigation here is a server round trip: filtering and paging 3628
   // records stays on the server so only 50 rows cross the wire. That is the right
@@ -406,7 +410,7 @@ export function WorkbenchConsole({
     );
 
     return (
-      <Space wrap style={{ marginBottom: 12 }}>
+      <Space wrap style={{ marginBottom: 12 }} data-tour="filters">
         {filterSelect("state", "流程状态")}
         {filterSelect("severity", "严重度")}
         {filterSelect("channel", "渠道")}
@@ -436,7 +440,8 @@ export function WorkbenchConsole({
     // never applied, so the sider stacks on top of a zero-height main column — which
     // is exactly what happened the moment the sider moved into its own component.
     <>
-      <WelcomeDialog open={welcome} />
+      <WelcomeDialog open={welcome} onDismiss={() => setTourOpen(readOnly)} />
+      <WorkbenchTour open={tourOpen} onClose={() => setTourOpen(false)} />
       <Layout className="oc-console" hasSider>
       <ConsoleSider
         query={query}
@@ -446,6 +451,7 @@ export function WorkbenchConsole({
         selectedKey={query.section === "tickets" ? query.queue : query.section}
         navigate={go}
         readOnly={readOnly}
+        onReplayTour={() => setTourOpen(true)}
       />
 
       <Layout className="oc-console__main">
@@ -558,7 +564,7 @@ export function WorkbenchConsole({
                     />,
                   )}
 
-                  <div ref={tableWrapRef}>
+                  <div ref={tableWrapRef} data-tour="table">
                     <Table
                       rowKey="recordNumber"
                       columns={columns}
