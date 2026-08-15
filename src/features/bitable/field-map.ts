@@ -130,8 +130,26 @@ export type VocRecord = Readonly<{
 // Card rendering (createVocTicketCard) and any other consumer that needs a
 // plain string out of a Bitable field reach for this rather than re-deriving
 // their own typeof check.
+// Two shapes, one field. `GET /records` returns a text field as a plain string, while
+// `POST /records/search` returns the same field as rich-text runs — [{ text, type }] —
+// and a decoder that only accepted the first read every text column of a search result
+// as empty. That is not cosmetic: findByWarRoomChatId is a search, so the war room's
+// answering skill was being handed a ticket with no 记录编号, no 机型, no 设备标识, no
+// 原始内容 and no 摘要, and could only ever answer 我不知道.
 export function text(value: unknown): string {
-  return typeof value === "string" ? value : "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    return value
+      .map((run) =>
+        typeof run === "object" &&
+        run !== null &&
+        typeof (run as { text?: unknown }).text === "string"
+          ? (run as { text: string }).text
+          : "",
+      )
+      .join("");
+  }
+  return "";
 }
 
 // The Bitable client can hand back a missing/malformed payload (a deleted

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   VOC_FIELD_NAMES,
   parseReplyText,
+  text,
   toTagFieldUpdate,
   toVocRecord,
 } from "./field-map";
@@ -402,5 +403,50 @@ describe("parseReplyText", () => {
 
   it("tolerates an empty tone label rather than dropping the reply", () => {
     expect(parseReplyText("【】抱歉")).toEqual([{ tone: "", text: "抱歉" }]);
+  });
+});
+
+// The two shapes a Bitable text field arrives in. `GET /records` sends a plain string;
+// `POST /records/search` — which findByWarRoomChatId uses — sends rich-text runs. A
+// decoder that knew only the first read every text column of a search result as empty,
+// which is how the war room's bot ended up answering questions about a ticket with no
+// 记录编号, no 机型 and no 原始内容.
+describe("text across both Bitable read APIs", () => {
+  it("reads a plain string", () => {
+    expect(text("VOC-a3cdc5")).toBe("VOC-a3cdc5");
+  });
+
+  it("reads rich-text runs, joining them in order", () => {
+    expect(
+      text([
+        { text: "报修后等了三天", type: "text" },
+        { text: "没人上门", type: "text" },
+      ]),
+    ).toBe("报修后等了三天没人上门");
+  });
+
+  it("still answers empty for anything that is not text", () => {
+    expect(text(undefined)).toBe("");
+    expect(text(42)).toBe("");
+    expect(text([{ notText: 1 }])).toBe("");
+  });
+
+  it("decodes a whole search-shaped record", () => {
+    const record = toVocRecord(
+      {
+        记录编号: [{ text: "01ed9ccd", type: "text" }],
+        机型: [{ text: "容声 BCD-526WD1MPA", type: "text" }],
+        设备标识: [{ text: "D-85367338", type: "text" }],
+        原始内容: [{ text: "冰箱刚买几天就降价", type: "text" }],
+        流程状态: "已闭环",
+      },
+      "recSearch",
+    );
+
+    expect(record.recordNumber).toBe("01ed9ccd");
+    expect(record.model).toBe("容声 BCD-526WD1MPA");
+    expect(record.deviceRef).toBe("D-85367338");
+    expect(record.content).toBe("冰箱刚买几天就降价");
+    expect(record.state).toBe("已闭环");
   });
 });
