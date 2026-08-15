@@ -29,7 +29,7 @@ const errorMessages: Record<string, string> = {
   // reports a prior attempt that did not produce a session, with no more
   // specific auth_error code attached. Deliberately generic — this must never
   // surface the underlying reason to the client.
-  tried: "工作台授权未成功，你可以点击下方「进入工作台」重新尝试，或继续浏览方案展示厅。",
+  tried: "登录未完成，可以再试一次。",
 };
 
 type LandingContentProps = {
@@ -75,23 +75,23 @@ export function LandingContent({ user, authError, metrics }: LandingContentProps
               串成一条有感知、有判断、有行动、会学习的服务闭环。
             </p>
 
+            {/* This is the product's front page, so the first action is the one a
+                visitor came to take: sign in. A tenant member who opened a shared link
+                rather than the Feishu app icon lands here too, and 进入工作台 is one
+                click for them. */}
             <div className="hero-actions">
-              <a className="primary-action" href="#perspectives">
-                查看四个视角
-              </a>
-              <a className="secondary-action" href="/login">
-                使用飞书体验
-              </a>
-              {user ? null : (
-                // Anonymous visitors (including a tenant member who opened
-                // this page from a shared link rather than the Feishu app
-                // icon) need a manual way to reach the workbench: opening the
-                // app icon lands on /enter without this link, but a shared
-                // /-link degrades to one click here instead.
-                <a className="secondary-action" href="/enter">
+              {user ? (
+                <a className="primary-action" href="/enter">
                   进入工作台
                 </a>
+              ) : (
+                <a className="primary-action" href="/api/auth/feishu/start">
+                  用飞书登录
+                </a>
               )}
+              <a className="secondary-action" href="#perspectives">
+                查看四个视角
+              </a>
             </div>
           </div>
             </section>

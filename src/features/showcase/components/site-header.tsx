@@ -42,11 +42,8 @@ export function SiteHeader({
         ))}
       </nav>
 
-      <a
-        className="header-cta"
-        href="/login"
-      >
-        飞书体验
+      <a className="header-cta" href="/login">
+        飞书登录
       </a>
     </header>
   );

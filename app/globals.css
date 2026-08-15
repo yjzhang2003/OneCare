@@ -5649,11 +5649,36 @@ a {
 .oc-console__brand {
   /* 20px, not 16: the icons start at 20 because of Arco's own item padding, and
      the wordmark has to share that line, not the item's outer edge. */
+  display: block;
   padding: 18px 16px 12px 20px;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--color-text-1, #1d2129);
+  text-decoration: none;
+}
+
+.oc-console__brand:hover {
+  color: rgb(var(--primary-6));
+}
+
+/* 设置 sits where the showcase link used to: same row, same weight, but it opens the
+   dialog rather than leaving the console. */
+.oc-console__sider-settings {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--color-text-2, #4e5969);
+  cursor: pointer;
+}
+
+.oc-console__sider-settings:hover {
+  color: rgb(var(--primary-6));
 }
 
 .oc-console__header {

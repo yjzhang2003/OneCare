@@ -12,16 +12,16 @@ export function FeishuExperienceBanner({
   children,
 }: FeishuExperienceBannerProps) {
   return (
-    <aside className="feishu-experience-banner" aria-label="飞书体验计划">
+    <aside className="feishu-experience-banner" aria-label="飞书登录">
       <div>
-        <span>计划接入飞书</span>
+        <span>飞书</span>
         <strong>{children}</strong>
       </div>
       <a
         className="feishu-experience-banner__action"
         href={`/login?from=${role}`}
       >
-        登录体验
+        飞书登录
       </a>
     </aside>
   );

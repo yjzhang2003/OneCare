@@ -22,6 +22,7 @@ import {
 import Link from "next/link";
 
 import { filterHref, type QueryPatch } from "../src/features/workbench/href";
+import { SettingsButton } from "./workbench-settings";
 import {
   QUEUES,
   type QueueKey,
@@ -86,7 +87,11 @@ export function ConsoleSider({
 
   return (
     <Layout.Sider width={200} className="oc-console__sider">
-      <div className="oc-console__brand">万护 OneCare</div>
+      {/* The wordmark is the way home: the public site is the product's front page, and
+          this is the one place every console screen already shows. */}
+      <Link className="oc-console__brand" href="/">
+        万护 OneCare
+      </Link>
       {/* Three top-level destinations, with the queues nested one level under 工单.
           An earlier version had no group heading at all, on the reasoning that a
           second group would never exist — which lasted exactly until these two
@@ -158,11 +163,9 @@ export function ConsoleSider({
       </Menu>
 
       {/* Pinned to the bottom of the sider by the flex rule on
-          .arco-layout-sider-children: it is navigation, so it belongs in the
-          navigation column, and it is the one destination that leaves the
-          workbench, so it belongs at the far end of it. */}
+          .arco-layout-sider-children. */}
       <div className="oc-console__sider-footer">
-        <Link href="/?view=showcase">方案展示厅 →</Link>
+        <SettingsButton />
       </div>
     </Layout.Sider>
   );

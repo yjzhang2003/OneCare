@@ -169,7 +169,7 @@ describe("perspective workspaces", () => {
     expect(
       screen.getByText("在飞书接收转人工会话与 AI 预诊摘要"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "登录体验" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
       "href",
       "/login?from=agent",
     );
@@ -211,7 +211,7 @@ describe("perspective workspaces", () => {
     expect(
       screen.getByText("在飞书接收工单、配件与上门提醒"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "登录体验" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
       "href",
       "/login?from=engineer",
     );
@@ -264,7 +264,7 @@ describe("perspective workspaces", () => {
     expect(
       screen.getByText("在飞书接收 VOC 异常与闭环任务"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "登录体验" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
       "href",
       "/login?from=operations",
     );

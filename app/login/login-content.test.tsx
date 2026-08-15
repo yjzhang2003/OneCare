@@ -4,21 +4,23 @@ import { describe, expect, it } from "vitest";
 import { LoginContent } from "./login-content";
 
 describe("LoginContent", () => {
-  it("guides a visitor through joining, verifying and opening Feishu", () => {
+  it("is a login page: join the org, sign in, land in the workbench", () => {
     render(<LoginContent user={null} />);
 
     expect(
-      screen.getByRole("heading", { name: "在飞书里体验万护" }),
+      screen.getByRole("heading", { name: "用飞书登录万护 OneCare" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("加入体验组织")).toBeInTheDocument();
-    expect(screen.getByText("验证飞书身份")).toBeInTheDocument();
-    expect(screen.getByText("在飞书开始体验")).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "使用飞书验证身份" }),
-    ).toHaveAttribute("href", "/api/auth/feishu/start");
+    expect(screen.getByText("加入 OneCare 组织")).toBeInTheDocument();
+    // Twice on purpose: step 02 names it, and the button does it.
+    expect(screen.getAllByText("用飞书登录")).toHaveLength(2);
+    expect(screen.getByText("进入工作台")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "用飞书登录" })).toHaveAttribute(
+      "href",
+      "/api/auth/feishu/start",
+    );
     expect(
       screen.getByRole("img", {
-        name: "加入 OneCare 体验组织的飞书二维码",
+        name: "加入 OneCare 组织的飞书二维码",
       }),
     ).toHaveAttribute(
       "src",
@@ -30,7 +32,8 @@ describe("LoginContent", () => {
     expect(screen.getByText("仅支持 +86 手机号")).toBeInTheDocument();
   });
 
-  it("shows the verified identity without rendering a second dashboard", () => {
+  // Signed in, this page has exactly one thing left to offer: the way into the console.
+  it("shows who is signed in and the way into the workbench", () => {
     render(
       <LoginContent
         user={{ openId: "ou_test", name: "服务体验员" }}
@@ -38,11 +41,11 @@ describe("LoginContent", () => {
     );
 
     expect(screen.getByText("服务体验员")).toBeInTheDocument();
-    expect(screen.getByText("飞书身份已验证")).toBeInTheDocument();
-    expect(
-      screen.getByText("打开飞书，在顶部搜索「OneCare」开始体验"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("机器人配置中")).toBeInTheDocument();
+    expect(screen.getByText("已登录")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "进入工作台" })).toHaveAttribute(
+      "href",
+      "/enter",
+    );
     expect(screen.queryByText("服务闭环指挥台")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "退出登录" })).toHaveAttribute(
       "type",

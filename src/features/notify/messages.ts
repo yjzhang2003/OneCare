@@ -23,6 +23,8 @@ export const NOTIFICATION_KINDS = [
   "ticket_closed",
   // 升级提请：高严重度，等你决定要不要拉群。
   "escalation_requested",
+  // 设备预警：同一台机器反复回来，系统先说一声。
+  "device_alert",
 ] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
@@ -54,6 +56,7 @@ const TITLES: Readonly<Record<NotificationKind, string>> = {
   engineer_reported: "工程师已回填，等你确认闭环",
   ticket_closed: "你上门的工单已闭环",
   escalation_requested: "高严重度工单，等你决定是否拉群",
+  device_alert: "设备异常预警",
 };
 
 // One line of context, then the subject. Deliberately short: this is a notification, and
@@ -74,6 +77,7 @@ export function notificationCopy(
     engineer_reported: who.length > 0 ? `${who}已回填现场结果` : "工程师已回填现场结果",
     ticket_closed: who.length > 0 ? `${who}已确认闭环` : "已确认闭环",
     escalation_requested: "打标判定为高严重度",
+    device_alert: "同一台设备反复报修",
   };
 
   const head = [lead[kind], ...scope, severity].filter(Boolean).join(" · ");

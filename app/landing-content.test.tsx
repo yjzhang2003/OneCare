@@ -73,9 +73,11 @@ describe("LandingContent", () => {
       "href",
       "#home",
     );
-    const login = screen.getByRole("link", { name: "使用飞书体验" });
-    expect(login).toHaveAttribute("href", "/login");
-    expect(screen.getByRole("link", { name: "飞书体验" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "用飞书登录" })).toHaveAttribute(
+      "href",
+      "/api/auth/feishu/start",
+    );
+    expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
       "href",
       "/login",
     );
@@ -259,7 +261,8 @@ describe("LandingContent", () => {
     );
   });
 
-  it("returns signed-in visitors to the Feishu experience gateway", () => {
+  // Signed in, the first action is the workbench rather than a second login.
+  it("sends a signed-in visitor to the workbench", () => {
     render(
       <LandingContent
         metrics={metrics}
@@ -267,15 +270,13 @@ describe("LandingContent", () => {
       />,
     );
 
-    expect(screen.queryByText("服务运营员，欢迎回来")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "使用飞书体验" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "进入工作台" })).toHaveAttribute(
       "href",
-      "/login",
+      "/enter",
     );
-    expect(screen.getByRole("link", { name: "飞书体验" })).toHaveAttribute(
-      "href",
-      "/login",
-    );
+    expect(
+      screen.queryByRole("link", { name: "用飞书登录" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders only safe copy for a known authentication error", () => {
@@ -288,16 +289,20 @@ describe("LandingContent", () => {
     );
   });
 
-  it("offers a manual entry into the workbench for a session-less visitor", () => {
+  // Anonymous, the first action is the one a visitor came to take. This is the product's
+  // front page, not a brochure with a login hidden in the corner.
+  it("leads a session-less visitor with the login", () => {
     render(<LandingContent metrics={metrics} user={null} />);
 
-    expect(screen.getByRole("link", { name: "进入工作台" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "用飞书登录" })).toHaveAttribute(
       "href",
-      "/enter",
+      "/api/auth/feishu/start",
     );
   });
 
-  it("does not offer the workbench entry link to an already signed-in visitor", () => {
+  // One primary action, never two: a visitor is either signed in or not, and the hero
+  // shows exactly the move that is theirs to make.
+  it("never offers both actions at once", () => {
     render(
       <LandingContent
         metrics={metrics}
@@ -305,8 +310,9 @@ describe("LandingContent", () => {
       />,
     );
 
+    expect(screen.getAllByRole("link", { name: "进入工作台" })).toHaveLength(1);
     expect(
-      screen.queryByRole("link", { name: "进入工作台" }),
+      screen.queryByRole("link", { name: "用飞书登录" }),
     ).not.toBeInTheDocument();
   });
 
@@ -314,7 +320,7 @@ describe("LandingContent", () => {
     render(<LandingContent authError="tried" metrics={metrics} user={null} />);
 
     const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent("工作台授权未成功");
+    expect(alert).toHaveTextContent("登录未完成");
     expect(alert.textContent).not.toMatch(/error|exception|stack|token/i);
   });
 });

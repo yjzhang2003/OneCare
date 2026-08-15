@@ -13,11 +13,11 @@ describe("FeishuExperienceBanner", () => {
       </FeishuExperienceBanner>,
     );
 
-    expect(screen.getByText("计划接入飞书")).toBeInTheDocument();
+    expect(screen.getByText("飞书")).toBeInTheDocument();
     expect(
       screen.getByText("在飞书接收转人工会话与 AI 预诊摘要"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "登录体验" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
       "href",
       "/login?from=agent",
     );
@@ -31,7 +31,7 @@ describe("FeishuExperienceBanner", () => {
         <FeishuExperienceBanner role={role}>角色说明</FeishuExperienceBanner>,
       );
 
-      expect(screen.getByRole("link", { name: "登录体验" })).toHaveAttribute(
+      expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
         "href",
         `/login?from=${role}`,
       );

@@ -21,18 +21,18 @@ type LoginContentProps = Readonly<{
 const steps = [
   {
     index: "01",
-    title: "加入体验组织",
-    description: "尚未加入 OneCare 时，先扫描右侧二维码完成加入。",
+    title: "加入 OneCare 组织",
+    description: "尚未加入时，先扫描右侧二维码。",
   },
   {
     index: "02",
-    title: "验证飞书身份",
-    description: "使用组织内的飞书账号完成身份验证。",
+    title: "用飞书登录",
+    description: "用组织内的飞书账号完成登录。",
   },
   {
     index: "03",
-    title: "在飞书开始体验",
-    description: "打开飞书，在顶部搜索 OneCare 与服务助手对话。",
+    title: "进入工作台",
+    description: "登录后直接进入运营工作台。",
   },
 ] as const;
 
@@ -50,7 +50,7 @@ export function LoginContent({
           <OneCareLogo decorative size={34} tone="light" />
           <span>
             万护 ONECARE
-            <small>飞书体验入口</small>
+            <small>登录</small>
           </span>
         </Link>
         <Link className="feishu-login-header__back" href="/">
@@ -60,12 +60,8 @@ export function LoginContent({
 
       <main className="feishu-login-main">
         <section className="feishu-login-guide" aria-labelledby="login-title">
-          <p className="feishu-login-kicker">FEISHU EXPERIENCE</p>
-          <h1 id="login-title">在飞书里体验万护</h1>
-          <p className="feishu-login-intro">
-            网站负责说明方案，飞书承接真实体验。加入 OneCare 组织、验证身份，
-            然后在熟悉的协作入口里开始服务对话。
-          </p>
+          <p className="feishu-login-kicker">FEISHU LOGIN</p>
+          <h1 id="login-title">用飞书登录万护 OneCare</h1>
 
           {sourceRole ? (
             <p className="feishu-source-note">{sourceMessages[sourceRole]}</p>
@@ -104,14 +100,12 @@ export function LoginContent({
                 </div>
                 <div>
                   <strong>{user.name}</strong>
-                  <span>飞书身份已验证</span>
+                  <span>已登录</span>
                 </div>
               </div>
-              <div className="feishu-bot-status">
-                <span>机器人配置中</span>
-                <strong>打开飞书，在顶部搜索「OneCare」开始体验</strong>
-                <p>机器人完成发布后即可在组织内搜索；当前页面不会进入另一套网站后台。</p>
-              </div>
+              <a className="feishu-auth-action" href="/enter">
+                进入工作台
+              </a>
               <form action="/api/auth/logout" method="post">
                 <button className="feishu-auth-secondary" type="submit">
                   退出登录
@@ -120,21 +114,21 @@ export function LoginContent({
             </div>
           ) : (
             <a className="feishu-auth-action" href="/api/auth/feishu/start">
-              使用飞书验证身份
+              用飞书登录
             </a>
           )}
         </section>
 
-        <aside className="feishu-invite-card" aria-label="OneCare 体验组织邀请">
+        <aside className="feishu-invite-card" aria-label="OneCare 组织邀请">
           <div className="feishu-invite-card__heading">
             <div>
-              <span>比赛体验组织</span>
+              <span>飞书组织</span>
               <h2>扫码加入 OneCare</h2>
             </div>
             <span className="feishu-invite-card__limit">仅支持 +86 手机号</span>
           </div>
           <Image
-            alt="加入 OneCare 体验组织的飞书二维码"
+            alt="加入 OneCare 组织的飞书二维码"
             className="feishu-invite-image"
             height={1334}
             priority

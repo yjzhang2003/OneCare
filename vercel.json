@@ -15,6 +15,7 @@
     "app/api/voc/profiles/[kind]/[id]/analyze/route.ts": { "regions": ["hkg1"] },
     "app/api/voc/profiles/[kind]/[id]/war-room/route.ts": { "regions": ["hkg1"] },
     "app/api/voc/demo/rehearsal/route.ts": { "regions": ["hkg1"] },
+    "app/api/voc/demo/device-alert/route.ts": { "regions": ["hkg1"] },
     "app/api/voc/notifications/route.ts": { "regions": ["hkg1"] },
     "app/api/voc/owners/route.ts": { "regions": ["hkg1"] },
     "app/api/voc/owners/[recordId]/route.ts": { "regions": ["hkg1"] }
