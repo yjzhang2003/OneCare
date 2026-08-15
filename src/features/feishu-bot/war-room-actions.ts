@@ -168,11 +168,14 @@ export async function resolveWarRoomAction(
   }
 
   const fallbackIds = await input.fallbackOpenIds();
+  // The 上门任务卡 carries this button too: the engineer on site is often the first
+  // person to know a group is needed, and they are already on the ticket.
   const isAuthorized =
     record.ownerOpenIds.includes(input.operatorOpenId) ||
+    record.engineerOpenIds.includes(input.operatorOpenId) ||
     fallbackIds.includes(input.operatorOpenId);
   if (!isAuthorized) {
-    return settled(toast("error", "你不是该工单的负责人或兜底人"));
+    return settled(toast("error", "你不是该工单的负责人、上门工程师或兜底人"));
   }
 
   if (input.action === "voc_decline_war_room") {

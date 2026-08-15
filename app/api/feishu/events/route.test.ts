@@ -104,6 +104,11 @@ function dependencies(outcome: FeishuEventOutcome) {
       ),
       schedule: vi.fn((task: () => Promise<void>) => scheduled.push(task)),
       reportFailure: vi.fn(),
+    openIdentityWarRoom: vi.fn(async () => ({
+      kind: "created" as const,
+      chatId: "oc_identity",
+      message: "协同群已创建，已拉入 2 人",
+    })),
     },
   };
 }
@@ -768,6 +773,11 @@ function liveDependencies(
       ),
       schedule,
       reportFailure: vi.fn(),
+    openIdentityWarRoom: vi.fn(async () => ({
+      kind: "created" as const,
+      chatId: "oc_identity",
+      message: "协同群已创建，已拉入 2 人",
+    })),
     },
   };
 }
@@ -1567,6 +1577,11 @@ function liveGroupDependencies(
         scheduled.push(task);
       },
       reportFailure: vi.fn(),
+    openIdentityWarRoom: vi.fn(async () => ({
+      kind: "created" as const,
+      chatId: "oc_identity",
+      message: "协同群已创建，已拉入 2 人",
+    })),
     },
   };
 }
@@ -2118,6 +2133,11 @@ function liveMenuDependencies(
         scheduled.push(task);
       },
       reportFailure: vi.fn(),
+    openIdentityWarRoom: vi.fn(async () => ({
+      kind: "created" as const,
+      chatId: "oc_identity",
+      message: "协同群已创建，已拉入 2 人",
+    })),
     },
   };
 }

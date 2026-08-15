@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { RULE_ENGINE_LABEL } from "../../../../../../../src/features/profiles/insight";
 import type { WorkbenchTicket } from "../../../../../../../src/features/workbench/data";
 import type { IdentityProfile } from "../../../../../../../src/features/workbench/profiles";
-import { createProfileWarRoomRoute, identityWarRoomName } from "./route";
+import { createProfileInsightCard } from "../../../../../../../src/features/feishu-bot/cards";
+import { createProfileWarRoomRoute } from "./route";
+import { identityWarRoomName } from "../../../../../../../src/features/warroom/identity";
 
 function profile(): IdentityProfile {
   return {
@@ -70,7 +72,7 @@ function route(
     session: async () => ({ openId: "ou_operator", name: "运营" }),
     getProfile: async () => profile(),
     getRecords: async () => [record(), record({ recordNumber: "R-2" })],
-    getOwnerOpenIds: async () => ["ou_owner"],
+    getResponderOpenIds: async () => ["ou_owner"],
     provider: {
       name: RULE_ENGINE_LABEL,
       analyze: async () => ({
@@ -87,6 +89,21 @@ function route(
     existingChat,
     createChat,
     claimChat,
+    // The card is assembled by the caller now, so the shared war-room function can be
+    // driven by a Feishu card action too. Here it stands in for the real one; what these
+    // tests are about is who gets pulled in and what happens on a second click.
+    buildCard: ({ kind, id, insight, openTicketNumbers }) =>
+      createProfileInsightCard({
+        kind,
+        id,
+        level: insight.level,
+        headline: insight.headline,
+        labels: insight.labels,
+        signals: insight.signals,
+        actions: insight.actions,
+        producedBy: insight.producedBy,
+        openTicketNumbers,
+      }),
     sendCard,
     now: () => Date.parse("2026-08-15T12:00:00+08:00"),
     ...overrides,

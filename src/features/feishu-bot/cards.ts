@@ -655,6 +655,32 @@ function vocActionButton(
   };
 }
 
+// Addresses an identity rather than a record: the callback carries the kind and the id,
+// which is what event-handler.ts's identity branch reads back.
+function identityActionButton(
+  text: string,
+  kind: "user" | "device",
+  id: string,
+): CardElement {
+  return {
+    tag: "button",
+    text: { tag: "plain_text", content: text },
+    type: "primary_filled",
+    size: "medium",
+    width: "fill",
+    behaviors: [
+      {
+        type: "callback",
+        value: {
+          action: "voc_open_identity_war_room",
+          identity_kind: kind,
+          identity_id: id,
+        },
+      },
+    ],
+  };
+}
+
 // A Card 2.0 form container: the only way an owner's typed text reaches this
 // server. Feishu is explicit that "要结合使用输入框组件与按钮组件，你需将输入框
 // 组件与按钮组件内嵌于表单容器中" — a standalone input only submits via the
@@ -912,7 +938,16 @@ export function createVocTicketCard(
             ]
           : [columns(vocActionButton(next.label, next.action, record.recordId))]
         : [note("当前状态无需操作。")]),
-      columns(openUrlButton("在工作台打开", workbenchTicketUrl(record.recordNumber))),
+      // 拉群 is not a state transition, so it does not follow NEXT_VOC_ACTION — but a
+      // finished ticket keeps the rule this card has always had: nothing left to click.
+      // A card in a chat outlives the work it describes, and a button on a week-old
+      // closed ticket is one somebody clicks by accident.
+      completed || record.state === "无需跟进"
+        ? columns(openUrlButton("在工作台打开", workbenchTicketUrl(record.recordNumber)))
+        : columns(
+            vocActionButton("拉群处理", "voc_open_war_room", record.recordId),
+            openUrlButton("在工作台打开", workbenchTicketUrl(record.recordNumber)),
+          ),
     ],
   });
 }
@@ -1005,7 +1040,15 @@ export function createEngineerTaskCard(input: EngineerTaskCardInput): FeishuCard
               ),
             ]
           : [note(`工单当前是「${record.state}」，无需现场操作。`)]),
-      columns(openUrlButton("查看完整工单", workbenchTicketUrl(record.recordNumber))),
+      // The engineer standing in the customer's home is often the person who knows a
+      // group is needed, and resolveWarRoomAction authorises them for it — while the
+      // ticket is still live, on the same rule as the ticket card above.
+      record.state === "已闭环" || record.state === "无需跟进"
+        ? columns(openUrlButton("查看完整工单", workbenchTicketUrl(record.recordNumber)))
+        : columns(
+            vocActionButton("拉群处理", "voc_open_war_room", record.recordId),
+            openUrlButton("查看完整工单", workbenchTicketUrl(record.recordNumber)),
+          ),
     ],
   });
 }
@@ -1101,11 +1144,15 @@ export function createProfileInsightCard(
           : "无",
       ),
       note(`由 ${input.producedBy} 生成`),
+      // The move this verdict calls for, on the card that carries it. Everything the
+      // console's own 拉群处理 does — same members, same idempotence, same first message —
+      // runs from here too, so nobody has to leave the card to convene the group it is
+      // telling them to convene.
       columns(
+        identityActionButton("拉群处理", input.kind, input.id),
         openUrlButton(
           isUser ? "打开用户画像" : "打开设备页",
           workbenchIdentityUrl(input.kind, input.id),
-          "primary_filled",
         ),
       ),
     ],

@@ -952,6 +952,51 @@ describe("every card opens the workbench", () => {
     });
   });
 
+  // Everything a card can do, it offers. 拉群 is the one action that is not a state
+  // transition, so it appears on every live ticket regardless of where it is in the flow.
+  it("offers 拉群处理 on a live ticket card and on the engineer's task card", () => {
+    const live = JSON.stringify(createVocTicketCard(record, tag));
+    expect(live).toContain("拉群处理");
+    expect(live).toContain("voc_open_war_room");
+
+    const task = JSON.stringify(
+      createEngineerTaskCard({
+        record,
+        tag,
+        dispatcherName: "张禹健",
+        model: "BCD-525",
+        userRef: "U-1",
+        deviceRef: "D-1",
+        deviceTotal: 7,
+        deviceOpen: 2,
+        recurrence: null,
+      }),
+    );
+    expect(task).toContain("拉群处理");
+  });
+
+  // 设备预警 lands in a chat with a verdict on it; the move that verdict calls for is a
+  // group, and it should not require leaving the card to find the button.
+  it("offers 拉群处理 on the identity card, addressed by kind and id", () => {
+    const card = JSON.stringify(
+      createProfileInsightCard({
+        kind: "device",
+        id: "D-BE66CB3A",
+        level: "高",
+        headline: "7 次报修",
+        labels: [],
+        signals: [],
+        actions: [],
+        producedBy: "规则引擎",
+        openTicketNumbers: [],
+      }),
+    );
+
+    expect(card).toContain("voc_open_identity_war_room");
+    expect(card).toContain("D-BE66CB3A");
+    expect(card).toContain("identity_kind");
+  });
+
   it("puts the link on a button on a notification card", () => {
     const links = buttons(
       createNotificationCard({

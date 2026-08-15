@@ -28,6 +28,7 @@ import {
   createOperatorSummaryMessage,
   createTextMessage,
   createTodayOverviewMessage,
+  createProfileInsightCard,
   createVocTicketCard,
   createWelcomeMessage,
 } from "../../../../src/features/feishu-bot/cards";
@@ -58,6 +59,20 @@ import {
   notify,
 } from "../../../../src/features/notify/deliver";
 import { handOffNotifications } from "../../../../src/features/notify/hand-off";
+import { ruleBasedProvider } from "../../../../src/features/profiles/insight";
+import {
+  claimIdentityWarRoom,
+  readIdentityWarRoom,
+} from "../../../../src/features/store/identity-war-rooms";
+import {
+  readIdentityRecords,
+  readIdentityResponderOpenIds,
+  readProfile,
+} from "../../../../src/features/store/workbench-query";
+import {
+  openIdentityWarRoom,
+  type IdentityWarRoomOutcome,
+} from "../../../../src/features/warroom/identity";
 import { buildAnswerFacts, stripMention } from "../../../../src/features/warroom/facts";
 import { readFactsAggregates } from "../../../../src/features/store/workbench-query";
 import {
@@ -142,6 +157,15 @@ type FeishuEventRouteDependencies = {
   ) => Promise<FeishuOutboundMessage>;
   schedule: Scheduler;
   reportFailure: () => void;
+  // 标识拉群, shared with the console's own route so the two cannot disagree about who is
+  // in the group or what a second click does.
+  openIdentityWarRoom: (
+    input: Readonly<{
+      kind: "user" | "device";
+      id: string;
+      operatorOpenId: string;
+    }>,
+  ) => Promise<IdentityWarRoomOutcome>;
 };
 
 // Every field the dispatcher needs, all required. `note` is not optional here
@@ -689,6 +713,37 @@ const defaultDependencies: FeishuEventRouteDependencies = {
   }),
   schedule: (task) => after(task),
   reportFailure: () => console.error("[onecare-bot] reply_failed"),
+  openIdentityWarRoom: (input) =>
+    openIdentityWarRoom(input, {
+      getProfile: readProfile,
+      getRecords: readIdentityRecords,
+      getResponderOpenIds: readIdentityResponderOpenIds,
+      provider: ruleBasedProvider,
+      existingChat: async (kind, id) =>
+        (await readIdentityWarRoom(kind, id))?.chatId ?? null,
+      createChat: (name, memberOpenIds) =>
+        createWarRoomChat({ env: readBotEnv(), name, memberOpenIds }),
+      claimChat: claimIdentityWarRoom,
+      buildCard: ({ kind, id, insight, openTicketNumbers }) =>
+        createProfileInsightCard({
+          kind,
+          id,
+          level: insight.level,
+          headline: insight.headline,
+          labels: insight.labels,
+          signals: insight.signals,
+          actions: insight.actions,
+          producedBy: insight.producedBy,
+          openTicketNumbers,
+        }),
+      sendCard: (chatId, card) =>
+        sendFeishuMessage({
+          env: readBotEnv(),
+          chatId,
+          message: { msgType: "interactive", content: JSON.stringify(card) },
+        }),
+      now: () => Date.now(),
+    }),
 };
 
 function json(data: object, status = 200): Response {
@@ -768,6 +823,40 @@ export function createFeishuEventRoute(
           }
         });
         return json({ toast: { type: "info", content: result.toast } });
+      }
+
+      // 设备预警卡 / 用户画像卡 的「拉群处理」。The synchronous half answers the click
+      // immediately — Feishu kills a callback at ~3s and creating a group takes longer
+      // than that — and the group itself is built in the deferred half, exactly like the
+      // ticket war room's own button.
+      if (outcome.kind === "identity_card_action") {
+        dependencies.schedule(async () => {
+          console.log(
+            `[onecare-bot] identity_war_room start ${outcome.identityKind}=${outcome.identityId}`,
+          );
+          try {
+            const result = await dependencies.openIdentityWarRoom({
+              kind: outcome.identityKind,
+              id: outcome.identityId,
+              operatorOpenId: outcome.operatorOpenId,
+            });
+            await dependencies.sendDirectMessage({
+              env,
+              openId: outcome.operatorOpenId,
+              message: createTextMessage(result.message),
+            });
+            console.log(`[onecare-bot] identity_war_room ${result.kind}`);
+          } catch (error) {
+            console.error(
+              "[onecare-bot] identity_war_room failed:",
+              error instanceof Error ? error.message : String(error),
+            );
+            dependencies.reportFailure();
+          }
+        });
+        return json({
+          toast: { type: "info", content: "正在创建协同群，稍后会在群里看到分析卡" },
+        });
       }
 
       if (outcome.kind === "group_question") {

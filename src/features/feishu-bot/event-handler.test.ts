@@ -203,6 +203,8 @@ function cardActionBody(overrides?: {
   messageId?: string;
   operatorId?: string;
   formValue?: Record<string, unknown>;
+  identityKind?: string;
+  identityId?: string;
 }) {
   return {
     schema: "2.0",
@@ -226,6 +228,13 @@ function cardActionBody(overrides?: {
           // so this key is only added when a test explicitly asks for one.
           ...(overrides?.recordId !== undefined
             ? { record_id: overrides.recordId }
+            : {}),
+          // 标识卡片 carries these two instead of a record id.
+          ...(overrides?.identityKind !== undefined
+            ? { identity_kind: overrides.identityKind }
+            : {}),
+          ...(overrides?.identityId !== undefined
+            ? { identity_id: overrides.identityId }
             : {}),
         },
         // Card 2.0 returns form-container values here, keyed by each
@@ -863,5 +872,56 @@ describe("parseFeishuEvent menu clicks", () => {
     await expect(
       parse({ rawBody, headers: signedHeaders(rawBody), env }),
     ).resolves.toEqual({ kind: "unauthorized" });
+  });
+});
+
+// 设备预警卡 / 用户画像卡 address an identity, not a Bitable row: the callback carries
+// kind and id, and the record-id validation the VOC actions run would reject it.
+describe("identity card actions", () => {
+  function identityOutcome(overrides: {
+    identityKind?: string;
+    identityId?: string;
+    operatorId?: string;
+  }) {
+    const rawBody = JSON.stringify(
+      cardActionBody({
+        action: "voc_open_identity_war_room",
+        identityKind: "device",
+        identityId: "D-BE66CB3A",
+        operatorId: "ou_owner",
+        ...overrides,
+      }),
+    );
+    return parse({ rawBody, headers: signedHeaders(rawBody), env });
+  }
+
+  it("reads the identity and the operator off a signed click", async () => {
+    await expect(identityOutcome({})).resolves.toMatchObject({
+      kind: "identity_card_action",
+      action: "voc_open_identity_war_room",
+      identityKind: "device",
+      identityId: "D-BE66CB3A",
+      operatorOpenId: "ou_owner",
+    });
+  });
+
+  it("refuses a kind it does not know, rather than guessing one", async () => {
+    await expect(identityOutcome({ identityKind: "spaceship" })).resolves.toEqual({
+      kind: "invalid_card_action",
+    });
+  });
+
+  it("refuses a click with no identity at all", async () => {
+    await expect(identityOutcome({ identityId: "   " })).resolves.toEqual({
+      kind: "invalid_card_action",
+    });
+  });
+
+  // The operator is read from the signed payload, never from the card's own value —
+  // the same rule every other action here follows.
+  it("refuses a click with no operator", async () => {
+    await expect(identityOutcome({ operatorId: "" })).resolves.toEqual({
+      kind: "invalid_card_action",
+    });
   });
 });

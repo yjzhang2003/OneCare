@@ -25,6 +25,13 @@ export const VOC_CARD_ACTIONS = [
 
 export type VocCardAction = (typeof VOC_CARD_ACTIONS)[number];
 
+// 标识卡片上的动作。Its own list because it addresses a user or a device rather than a
+// Bitable row: a 设备预警卡 has no record_id to carry, and the VOC actions all require
+// one.
+export const IDENTITY_CARD_ACTIONS = ["voc_open_identity_war_room"] as const;
+
+export type IdentityCardAction = (typeof IDENTITY_CARD_ACTIONS)[number];
+
 // The three Card 2.0 form identifiers that carry an owner's typed note back to
 // this server. They live here, shared by the card builder that writes them and
 // the event parser that reads them, because the round trip only works if both

@@ -11,9 +11,11 @@ import type { BotEnv } from "../../lib/env";
 import {
   ONECARE_CARD_ACTIONS,
   ONECARE_CASE_ID,
+  IDENTITY_CARD_ACTIONS,
   VOC_CARD_ACTIONS,
   VOC_NOTE_FIELD_NAME,
   type OneCareCardAction,
+  type IdentityCardAction,
   type VocCardAction,
 } from "./card-types";
 
@@ -43,6 +45,18 @@ export type FeishuEventOutcome =
   // exactly the kind of same-name-two-meanings mixup that has bitten this
   // codebase before.
   | Readonly<{ kind: "group_question"; chatId: string; text: string }>
+  // A click on a 设备预警 / 用户画像 card. Its own outcome rather than a flag on
+  // card_action: those address a Bitable row and validate a record_id, and an identity
+  // has neither.
+  | Readonly<{
+      kind: "identity_card_action";
+      action: IdentityCardAction;
+      identityKind: "user" | "device";
+      identityId: string;
+      operatorOpenId: string;
+      chatId: string;
+      messageId: string;
+    }>
   | Readonly<{ kind: "entered"; chatId: string }>
   | Readonly<{
       kind: "card_action";
@@ -187,6 +201,13 @@ function isOneCareCardAction(value: unknown): value is OneCareCardAction {
   return (
     typeof value === "string" &&
     (ONECARE_CARD_ACTIONS as readonly string[]).includes(value)
+  );
+}
+
+function isIdentityCardAction(value: unknown): value is IdentityCardAction {
+  return (
+    typeof value === "string" &&
+    (IDENTITY_CARD_ACTIONS as readonly string[]).includes(value)
   );
 }
 
@@ -347,6 +368,32 @@ function parseCardAction(payload: JsonObject): FeishuEventOutcome {
       chatId: normalized.chatId,
       messageId: normalized.messageId,
     };
+  }
+
+  if (isIdentityCardAction(action)) {
+    const identityKind = normalized.action.value.identity_kind;
+    const identityId = normalized.action.value.identity_id;
+    const openId = readOperatorOpenId(payload);
+
+    if (identityKind !== "user" && identityKind !== "device") {
+      return { kind: "invalid_card_action" };
+    }
+    if (typeof identityId !== "string" || identityId.trim().length === 0) {
+      return { kind: "invalid_card_action" };
+    }
+    if (openId.length === 0) {
+      return { kind: "invalid_card_action" };
+    }
+
+    return {
+      kind: "identity_card_action",
+      action,
+      identityKind,
+      identityId: identityId.trim(),
+      operatorOpenId: openId,
+      chatId: normalized.chatId,
+      messageId: normalized.messageId,
+    } as const;
   }
 
   // The four real VOC actions address an actual Bitable row instead of the
