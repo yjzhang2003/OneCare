@@ -99,11 +99,15 @@ export async function listChatMessages(
     const token = createTenantTokenProvider(input.env.appId, input.env.appSecret);
     const pageSize = input.limit ?? DEFAULT_MESSAGE_PAGE_SIZE;
 
+    // Newest first, then reversed below. Ascending returns the *oldest* page, so a war
+    // room with more messages than one page produced a closing summary of how the
+    // conversation began — missing the part where it was resolved, which is the only
+    // part a closing summary is for.
     const params = new URLSearchParams({
       container_id_type: "chat",
       container_id: input.chatId,
       page_size: String(pageSize),
-      sort_type: "ByCreateTimeAsc",
+      sort_type: "ByCreateTimeDesc",
     });
 
     const response = await fetcher(`${BASE_URL}/im/v1/messages?${params.toString()}`, {
@@ -119,10 +123,14 @@ export async function listChatMessages(
     const data = isRecord(payload.data) ? payload.data : {};
     if (!Array.isArray(data.items)) return [];
 
-    return data.items.flatMap((item) => {
-      const text = extractText(item);
-      return text === null ? [] : [text];
-    });
+    // Back into reading order: the model is being handed a conversation, and a
+    // conversation read backwards is a different conversation.
+    return data.items
+      .flatMap((item) => {
+        const text = extractText(item);
+        return text === null ? [] : [text];
+      })
+      .reverse();
   } catch {
     return [];
   }

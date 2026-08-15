@@ -84,17 +84,21 @@ describe("createWarRoomChat", () => {
 });
 
 describe("listChatMessages", () => {
-  it("reads group messages oldest first and keeps only text", async () => {
+  // Asks Feishu for the newest page and hands it back in reading order. Ascending
+  // returns the oldest page, so a long war room was summarised from how it began
+  // rather than from how it ended.
+  it("reads the most recent group messages, in chronological order, text only", async () => {
     const fetcher = vi.fn(async (url: string) => {
       expect(url).toContain("container_id_type=chat");
       expect(url).toContain("container_id=oc_1");
+      expect(url).toContain("sort_type=ByCreateTimeDesc");
       return jsonResponse({
         code: 0,
         data: {
           items: [
-            { msg_type: "text", body: { content: JSON.stringify({ text: "第一条" }) } },
+            { msg_type: "text", body: { content: JSON.stringify({ text: "最后一条" }) } },
             { msg_type: "interactive", body: { content: "{}" } },
-            { msg_type: "text", body: { content: JSON.stringify({ text: "第二条" }) } },
+            { msg_type: "text", body: { content: JSON.stringify({ text: "早一点的" }) } },
           ],
         },
       });
@@ -102,7 +106,7 @@ describe("listChatMessages", () => {
 
     expect(
       await listChatMessages({ env, chatId: "oc_1" }, fetcher as unknown as typeof fetch),
-    ).toEqual(["第一条", "第二条"]);
+    ).toEqual(["早一点的", "最后一条"]);
   });
 
   it("returns an empty list when the group has no readable text", async () => {
