@@ -36,7 +36,8 @@ function isAuthUser(value: unknown): value is AuthUser {
     typeof candidate.name === "string" &&
     candidate.name.length > 0 &&
     (candidate.avatarUrl === undefined ||
-      typeof candidate.avatarUrl === "string")
+      typeof candidate.avatarUrl === "string") &&
+    (candidate.guest === undefined || typeof candidate.guest === "boolean")
   );
 }
 

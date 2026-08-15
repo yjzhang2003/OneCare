@@ -1,4 +1,5 @@
 import { getCurrentSession } from "../../../../../src/features/auth/current-session";
+import { isGuest, refuseGuestWrite } from "../../../../../src/features/auth/guest";
 import type { AuthUser } from "../../../../../src/features/auth/types";
 import { createProfileInsightCard } from "../../../../../src/features/feishu-bot/cards";
 import type { FeishuCard } from "../../../../../src/features/feishu-bot/card-types";
@@ -63,6 +64,7 @@ export function createDeviceAlertRoute(dependencies: DeviceAlertDependencies) {
           { status: 401 },
         );
       }
+      if (isGuest(user)) return refuseGuestWrite();
 
       const asked = new URL(request.url).searchParams.get("device")?.trim() ?? "";
       const deviceRef =

@@ -104,6 +104,12 @@ export async function WorkbenchContent({
   searchParams,
 }: WorkbenchContentProps) {
   const query = parseWorkbenchQuery(searchParams);
+  // Only the 评委通道 link sets this, and only once: it is not part of WorkbenchQuery
+  // because it describes an arrival, not a view.
+  const welcome =
+    (Array.isArray(searchParams.welcome)
+      ? searchParams.welcome[0]
+      : searchParams.welcome) === "1";
 
   // One Promise.all, not a chain of awaits. Every read below is an independent HTTP
   // round trip to Neon, so awaiting them in sequence adds their latencies together:
@@ -182,6 +188,7 @@ export async function WorkbenchContent({
       userCount={profileCounts.users}
       deviceCount={profileCounts.devices}
       owners={owners}
+      welcome={welcome}
       selectedProfile={selectedProfile}
     />
   );

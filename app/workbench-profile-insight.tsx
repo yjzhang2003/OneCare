@@ -21,6 +21,8 @@ import type { ProfileInsight } from "../src/features/profiles/insight";
 export type ProfileInsightPanelProps = Readonly<{
   kind: "user" | "device";
   id: string;
+  // 评委通道: analysing is a read and stays; 拉群 creates a real Feishu group and does not.
+  readOnly?: boolean;
   // How many of this identity's records are still open, which is what makes 拉群 worth
   // offering before any analysis has been run.
   open: number;
@@ -32,7 +34,12 @@ const LEVEL_COLOR: Readonly<Record<string, string>> = {
   低: "gray",
 };
 
-export function ProfileInsightPanel({ kind, id, open }: ProfileInsightPanelProps) {
+export function ProfileInsightPanel({
+  kind,
+  id,
+  open,
+  readOnly = false,
+}: ProfileInsightPanelProps) {
   const router = useRouter();
   const [insight, setInsight] = useState<ProfileInsight | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -121,14 +128,16 @@ export function ProfileInsightPanel({ kind, id, open }: ProfileInsightPanelProps
           >
             {insight ? "重新分析" : "立即分析"}
           </Button>
-          <Button
-            size="small"
-            icon={<IconUserGroup />}
-            loading={pulling}
-            onClick={() => void pullGroup()}
-          >
-            拉群处理
-          </Button>
+          {!readOnly && (
+            <Button
+              size="small"
+              icon={<IconUserGroup />}
+              loading={pulling}
+              onClick={() => void pullGroup()}
+            >
+              拉群处理
+            </Button>
+          )}
         </Space>
       }
     >

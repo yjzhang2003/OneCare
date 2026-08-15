@@ -1,3 +1,4 @@
+import { isGuest, refuseGuestWrite } from "../../../../../src/features/auth/guest";
 import { createTenantTokenProvider } from "../../../../../src/features/bitable/client";
 import {
   deleteOwnerRule,
@@ -43,6 +44,7 @@ export function createOwnerUpdateRoute(dependencies: OwnerMutationDependencies) 
           { status: 401 },
         );
       }
+      if (isGuest(user)) return refuseGuestWrite();
 
       const { recordId } = await context.params;
       const draft = parseDraft(await request.json().catch(() => null));
@@ -116,6 +118,7 @@ export function createOwnerDeleteRoute(dependencies: OwnerMutationDependencies) 
           { status: 401 },
         );
       }
+      if (isGuest(user)) return refuseGuestWrite();
 
       const { recordId } = await context.params;
       if (!recordId) {

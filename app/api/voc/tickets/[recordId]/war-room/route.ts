@@ -1,6 +1,7 @@
 import { revalidateTag } from "next/cache";
 
 import { getCurrentSession } from "../../../../../../src/features/auth/current-session";
+import { isGuest, refuseGuestWrite } from "../../../../../../src/features/auth/guest";
 import type { AuthUser } from "../../../../../../src/features/auth/types";
 import {
   createBitableClient,
@@ -75,6 +76,7 @@ export function createTicketWarRoomRoute(dependencies: TicketWarRoomDependencies
           { status: 401 },
         );
       }
+      if (isGuest(user)) return refuseGuestWrite();
 
       const { recordId } = await context.params;
       if (!recordId) {

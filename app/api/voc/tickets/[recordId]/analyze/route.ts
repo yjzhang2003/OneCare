@@ -1,6 +1,7 @@
 import { revalidateTag } from "next/cache";
 
 import { getCurrentSession } from "../../../../../../src/features/auth/current-session";
+import { isGuest, refuseGuestWrite } from "../../../../../../src/features/auth/guest";
 import type { AuthUser } from "../../../../../../src/features/auth/types";
 import type { VocRecord } from "../../../../../../src/features/bitable/field-map";
 import { readRecordById } from "../../../../../../src/features/store/records";
@@ -64,6 +65,7 @@ export function createTicketAnalyzeRoute(
           { status: 401 },
         );
       }
+      if (isGuest(user)) return refuseGuestWrite();
 
       const { recordId } = await context.params;
       if (!recordId) {

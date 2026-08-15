@@ -6192,3 +6192,8 @@ a {
   color: var(--color-text-2);
   white-space: pre-line;
 }
+
+/* 评委通道 replaces 设置 in the sider footer: same slot, nothing to click. */
+.oc-console__sider-readonly {
+  color: var(--color-text-3, #86909c);
+}

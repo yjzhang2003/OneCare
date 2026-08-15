@@ -89,6 +89,14 @@ export function LandingContent({ user, authError, metrics }: LandingContentProps
                   用飞书登录
                 </a>
               )}
+              {/* Judges are not members of this tenant, so OAuth is not a door they can
+                  walk through — and a demo nobody can open is not a demo. Read-only,
+                  which the workbench says on arrival and enforces at every write. */}
+              {user ? null : (
+                <a className="secondary-action" href="/judge">
+                  评委通道（免登录）
+                </a>
+              )}
               <a className="secondary-action" href="#perspectives">
                 查看四个视角
               </a>

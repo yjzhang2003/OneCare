@@ -75,6 +75,23 @@ describe("POST /api/voc/tickets", () => {
     expect(response.status).toBe(422);
   });
 
+  // 评委通道 is read-only, and the check lives in the route because the console's hidden
+  // button is not a permission — the session is handed out by a link on a public page.
+  it("refuses a guest session, before writing anything", async () => {
+    const create = vi.fn(async () => "recNew");
+    const response = await createNewTicketRoute(
+      deps({
+        session: async () => ({ openId: "guest", name: "评委", guest: true }),
+        create,
+      }),
+    )(post(DRAFT));
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { message: string };
+    expect(body.message).toContain("只读");
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("refuses without a session", async () => {
     const create = vi.fn(async () => "recNew");
     const response = await createNewTicketRoute(

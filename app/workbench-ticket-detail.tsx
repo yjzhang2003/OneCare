@@ -122,7 +122,7 @@ function DetailHeader({
       <Space size="small" align="center">
         {/* The detail page is where an operator spends the wait for a 23-second
             analysis; the inbox has to be reachable from here too. */}
-        {inbox && <NotificationBell />}
+        {inbox && !user.guest && <NotificationBell />}
         <span className="oc-console__user">{user.name}</span>
         <UserAvatar user={user} />
       </Space>
@@ -215,6 +215,9 @@ export function TicketDetailPageView({
   deviceCount,
 }: TicketDetailPageViewProps) {
   const router = useRouter();
+  // 评委通道: read the ticket, change nothing. Every control below that writes is hidden,
+  // and every route behind them refuses a guest session anyway.
+  const readOnly = user.guest === true;
   // Leaving this page is a server round trip like every other navigation in the
   // console, so it gets the same treatment: the wait is shown over the content the
   // operator is leaving, rather than nothing happening for a second.
@@ -331,20 +334,22 @@ export function TicketDetailPageView({
                   // the state transitions in 可执行操作: neither moves the ticket
                   // through the service flow.
                   extra={
-                    <Space size="small">
-                      <TagEditButton
-                        recordId={ticket.recordId}
-                        polarity={ticket.polarity}
-                        dimensions={ticket.dimensions}
-                        severity={ticket.severity}
-                        summary={ticket.summary}
-                      />
-                      <AnalyzeButton
-                        recordId={ticket.recordId}
-                        state={ticket.state}
-                        retryCount={ticket.retryCount}
-                      />
-                    </Space>
+                    readOnly ? null : (
+                      <Space size="small">
+                        <TagEditButton
+                          recordId={ticket.recordId}
+                          polarity={ticket.polarity}
+                          dimensions={ticket.dimensions}
+                          severity={ticket.severity}
+                          summary={ticket.summary}
+                        />
+                        <AnalyzeButton
+                          recordId={ticket.recordId}
+                          state={ticket.state}
+                          retryCount={ticket.retryCount}
+                        />
+                      </Space>
+                    )
                   }
                 >
                   <Typography.Text type="secondary">摘要</Typography.Text>
@@ -451,19 +456,27 @@ export function TicketDetailPageView({
                 </div>
               </Card>
 
-              <ActionPanel ticket={ticket} members={members} />
+              {!readOnly && <ActionPanel ticket={ticket} members={members} />}
 
               {/* 上门: its own card rather than a row in 可执行操作, because it is not a
                   state transition — it is handing the ticket to a second person who
                   works it from Feishu and never opens this console. */}
               <Card size="small" title="上门">
-                <DispatchPanel
-                  recordId={ticket.recordId}
-                  engineers={engineers}
-                  engineerNames={ticket.engineerNames}
-                  dispatchedAt={ticket.dispatchedAt}
-                  state={ticket.state}
-                />
+                {readOnly ? (
+                  <Typography.Text type="secondary">
+                    {ticket.engineerNames.length === 0
+                      ? "未派工"
+                      : `工程师负责人 ${ticket.engineerNames.join("、")}`}
+                  </Typography.Text>
+                ) : (
+                  <DispatchPanel
+                    recordId={ticket.recordId}
+                    engineers={engineers}
+                    engineerNames={ticket.engineerNames}
+                    dispatchedAt={ticket.dispatchedAt}
+                    state={ticket.state}
+                  />
+                )}
               </Card>
             </div>
 

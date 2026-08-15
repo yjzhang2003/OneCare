@@ -8,6 +8,7 @@ import {
 } from "../../../../../../src/features/bitable/client";
 import type { VocRecord } from "../../../../../../src/features/bitable/field-map";
 import { getCurrentSession } from "../../../../../../src/features/auth/current-session";
+import { isGuest, refuseGuestWrite } from "../../../../../../src/features/auth/guest";
 import type { AuthUser } from "../../../../../../src/features/auth/types";
 import { readBitableEnv, readBotEnv } from "../../../../../../src/lib/env";
 import { VOC_RECORDS_CACHE_TAG } from "../../../../../../src/features/voc/cache-tags";
@@ -161,6 +162,7 @@ export function createTicketActionRoute(dependencies: TicketActionDependencies) 
           { status: 401 },
         );
       }
+      if (isGuest(user)) return refuseGuestWrite();
 
       const { recordId } = await context.params;
       if (!recordId) {

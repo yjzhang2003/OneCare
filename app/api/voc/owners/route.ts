@@ -1,4 +1,5 @@
 import { getCurrentSession } from "../../../../src/features/auth/current-session";
+import { isGuest, refuseGuestWrite } from "../../../../src/features/auth/guest";
 import type { AuthUser } from "../../../../src/features/auth/types";
 import { createTenantTokenProvider } from "../../../../src/features/bitable/client";
 import { listAssignableMembers } from "../../../../src/features/directory/members";
@@ -112,6 +113,7 @@ export function createOwnerCreateRoute(dependencies: OwnerRoutesDependencies) {
           { status: 401 },
         );
       }
+      if (isGuest(user)) return refuseGuestWrite();
 
       const draft = parseDraft(await request.json().catch(() => null));
       if (!draft) {

@@ -57,6 +57,7 @@ import type {
 } from "../src/features/workbench/profiles";
 import { NewTicketButton } from "./workbench-new-ticket";
 import { NotificationBell } from "./workbench-notifications";
+import { WelcomeDialog } from "./workbench-welcome";
 import { OwnersPane } from "./workbench-owners";
 import { ProfileInsightPanel } from "./workbench-profile-insight";
 import { ConsoleSider } from "./workbench-sider";
@@ -158,6 +159,10 @@ export type WorkbenchConsoleProps = Readonly<{
   userCount: number;
   deviceCount: number;
   selectedProfile: IdentityProfile | null;
+  // Set once, by the 评委通道 link. Shown as a dialog rather than a banner because what
+  // it says — this data is desensitised and reprocessed — has to be read before the
+  // numbers on screen are, not alongside them.
+  welcome?: boolean;
   // 人员管理's data. Read only on its own section; `unavailable` distinguishes "the
   // routing table could not be read" from "there are no rules", which are very
   // different things to show an operator.
@@ -181,8 +186,12 @@ export function WorkbenchConsole({
   deviceCount,
   selectedProfile,
   owners,
+  welcome = false,
 }: WorkbenchConsoleProps) {
   const router = useRouter();
+  // 评委通道 sessions carry guest: true. Every control that writes is hidden for them —
+  // and refused by the route as well, because a hidden button is not a permission.
+  const readOnly = user.guest === true;
   const [search, setSearch] = useState(query.search);
   // Every navigation here is a server round trip: filtering and paging 3628
   // records stays on the server so only 50 rows cross the wire. That is the right
@@ -426,7 +435,9 @@ export function WorkbenchConsole({
     // ours arrives inside ConsoleSider. Without it the class that makes this a row is
     // never applied, so the sider stacks on top of a zero-height main column — which
     // is exactly what happened the moment the sider moved into its own component.
-    <Layout className="oc-console" hasSider>
+    <>
+      <WelcomeDialog open={welcome} />
+      <Layout className="oc-console" hasSider>
       <ConsoleSider
         query={query}
         queueCounts={view.queueCounts}
@@ -434,6 +445,7 @@ export function WorkbenchConsole({
         deviceCount={deviceCount}
         selectedKey={query.section === "tickets" ? query.queue : query.section}
         navigate={go}
+        readOnly={readOnly}
       />
 
       <Layout className="oc-console__main">
@@ -459,7 +471,7 @@ export function WorkbenchConsole({
             </Breadcrumb>
           </Space>
           <Space size="small" align="center">
-            <NotificationBell />
+            {!readOnly && <NotificationBell />}
             <span className="oc-console__user">{user.name}</span>
             {/* avatarUrl is optional on AuthUser — Feishu does not always return
                 one — so the fallback is the name's first character rather than a
@@ -507,7 +519,7 @@ export function WorkbenchConsole({
             // The one control that adds to the dataset rather than reading it, so it sits
             // in the header of the list it adds to, and only on the ticket sections.
             extra={
-              query.section === "tickets" ? (
+              query.section === "tickets" && !readOnly ? (
                 <NewTicketButton
                   channels={options.channel}
                   categories={options.category}
@@ -599,6 +611,7 @@ export function WorkbenchConsole({
                     query={query}
                     now={now}
                     go={go}
+                    readOnly={readOnly}
                   />
                 ))}
 
@@ -622,11 +635,13 @@ export function WorkbenchConsole({
                     query={query}
                     now={now}
                     go={go}
+                    readOnly={readOnly}
                   />
                 ))}
 
               {query.section === "owners" && (
                 <OwnersPane
+                  readOnly={readOnly}
                   rules={owners.rules}
                   members={owners.members}
                   channels={options.channel}
@@ -646,7 +661,8 @@ export function WorkbenchConsole({
         </Layout.Content>
       </Layout>
 
-    </Layout>
+      </Layout>
+    </>
   );
 }
 
@@ -817,6 +833,7 @@ function ProfileDetail({
   query,
   now,
   go,
+  readOnly,
 }: Readonly<{
   kind: "user" | "device";
   id: string;
@@ -825,6 +842,7 @@ function ProfileDetail({
   query: WorkbenchQuery;
   now: number;
   go: (href: string) => void;
+  readOnly: boolean;
 }>) {
   const isUser = kind === "user";
   const back = filterHref(query, { user: null, device: null });
@@ -879,7 +897,7 @@ function ProfileDetail({
       {/* The analysis and the 拉群 it leads to. Its own client component because both
           buttons are actions with in-flight state, and this pane is otherwise a
           read-only rendering of what the server already resolved. */}
-      <ProfileInsightPanel kind={kind} id={id} open={profile.open} />
+      <ProfileInsightPanel kind={kind} id={id} open={profile.open} readOnly={readOnly} />
 
       <Table
         rowKey="recordNumber"

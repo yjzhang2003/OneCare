@@ -48,6 +48,8 @@ export type OwnersPaneProps = Readonly<{
   // Null when the routing table could not be read at all, which is different from it
   // being empty and is shown as such.
   unavailable: boolean;
+  // 评委通道 sees the roster and the routing health, and changes neither.
+  readOnly?: boolean;
 }>;
 
 type Draft = Readonly<{
@@ -86,6 +88,7 @@ export function OwnersPane({
   channels,
   categories,
   unavailable,
+  readOnly = false,
 }: OwnersPaneProps) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -216,6 +219,7 @@ export function OwnersPane({
       title: "操作",
       dataIndex: "recordId",
       width: 150,
+      hidden: readOnly,
       render: (_: unknown, row: OwnerRuleRecord) => (
         <Space size="mini">
           <Button
@@ -284,9 +288,11 @@ export function OwnersPane({
       )}
 
       <Space>
-        <Button type="primary" icon={<IconPlus />} onClick={() => setDraft(EMPTY)}>
-          新增人员
-        </Button>
+        {!readOnly && (
+          <Button type="primary" icon={<IconPlus />} onClick={() => setDraft(EMPTY)}>
+            新增人员
+          </Button>
+        )}
         <Typography.Text type="secondary">
           客服路由 {health.total} 条 · 工程师 {health.engineers} 人 · 管理员 {health.admins} 人
         </Typography.Text>

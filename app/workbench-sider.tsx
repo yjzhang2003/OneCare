@@ -58,6 +58,8 @@ export type ConsoleSiderProps = Readonly<{
   // How the host page navigates. The console wraps this in a transition so its own
   // Spin can cover the wait; the detail page pushes and lets the route change.
   navigate: (href: string) => void;
+  // 评委通道: the developer options inside 设置 generate tickets and push cards.
+  readOnly?: boolean;
 }>;
 
 // The console's left column, shared by the list view and the ticket detail page.
@@ -70,6 +72,7 @@ export function ConsoleSider({
   deviceCount,
   selectedKey,
   navigate,
+  readOnly = false,
 }: ConsoleSiderProps) {
   const count = (value: number | null) =>
     value === null ? null : <Tag size="small">{value}</Tag>;
@@ -165,7 +168,11 @@ export function ConsoleSider({
       {/* Pinned to the bottom of the sider by the flex rule on
           .arco-layout-sider-children. */}
       <div className="oc-console__sider-footer">
-        <SettingsButton />
+        {readOnly ? (
+          <span className="oc-console__sider-readonly">评委通道 · 只读</span>
+        ) : (
+          <SettingsButton />
+        )}
       </div>
     </Layout.Sider>
   );
