@@ -70,6 +70,8 @@ export function toMirrorRecord(
     engineerOpenIds: [],
     engineerNames: [],
     dispatchedAt: null,
+    followUpNote: "",
+    closingNote: "",
     userRef: draft.userRef,
     deviceRef: draft.deviceRef,
     sourceTicketNo: "",

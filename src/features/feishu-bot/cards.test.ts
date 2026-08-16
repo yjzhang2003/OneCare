@@ -201,6 +201,8 @@ function vocRecord(overrides: Partial<VocRecord> = {}): VocRecord {
     engineerOpenIds: [],
     engineerNames: [],
     dispatchedAt: null,
+    followUpNote: "",
+    closingNote: "",
     sourceTicketNo: "CAS-42567239-Q7Q8Q",
     userRef: "U-3878645B",
     deviceRef: "D-91C2A70E",

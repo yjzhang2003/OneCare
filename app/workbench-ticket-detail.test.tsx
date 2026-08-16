@@ -52,6 +52,8 @@ function ticket(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
     hasWarRoom: false,
     engineerNames: [],
     dispatchedAt: null,
+    followUpNote: "",
+    closingNote: "",
     sourceTicketNo: "CAS-1",
     userRef: "U-A",
     deviceRef: "D-A",
@@ -202,6 +204,8 @@ describe("TicketDetailPageView", () => {
       hasWarRoom: true,
       engineerNames: [],
       dispatchedAt: null,
+      followUpNote: "",
+      closingNote: "",
     });
     expect(screen.getByText("冷藏室温度持续偏高")).toBeInTheDocument();
     // Twice on purpose: the subject line at the top is the summary, in full, and
@@ -381,3 +385,28 @@ describe("TicketDetailState", () => {
     );
   });
 });
+
+// 处理过程: both notes were written to the Base and read by nobody — a handover that
+// only exists in a chat window. The page is where they become part of the ticket.
+describe("处理过程", () => {
+  it("shows the follow-up result and the closing conclusion", () => {
+    renderDetail({
+      state: "已闭环",
+      followUpNote: "已上门查看，确认非人为损坏，已更换屏幕总成",
+      closingNote: "已为用户免费更换并致歉，用户表示满意",
+    });
+
+    expect(screen.getByText("处理过程")).toBeTruthy();
+    expect(screen.getByText(/已更换屏幕总成/)).toBeTruthy();
+    expect(screen.getByText(/用户表示满意/)).toBeTruthy();
+  });
+
+  // An empty section is worse than no section: it reads as a rendering failure on
+  // every ticket that has not been worked yet.
+  it("stays out of the way while the ticket has neither", () => {
+    renderDetail();
+
+    expect(screen.queryByText("处理过程")).toBeNull();
+  });
+});
+

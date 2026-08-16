@@ -56,6 +56,10 @@ export type WorkbenchTicket = Readonly<{
   // same reason ownerNames is — this row comes from a cache every viewer shares.
   engineerNames: readonly string[];
   dispatchedAt: string | null;
+  // 处理过程：客服或工程师提交的跟进结果，以及闭环时写下的结论（有协同群的工单，
+  // 这一段可能是 aily 闭环纪要）。详情页读它们，列表不读。
+  followUpNote: string;
+  closingNote: string;
   // Recovered from the source export. sourceTicketNo is the one that adds a
   // capability rather than a column: ~856 of the 3628 rows share a source case
   // number with another row, so "the other records from this same 400 case" is a
@@ -110,6 +114,8 @@ export function toWorkbenchTicket(record: VocRecord): WorkbenchTicket {
     hasWarRoom: warRoomDecision(record.warRoomChatId) === "exists",
     engineerNames: record.engineerNames,
     dispatchedAt: record.dispatchedAt,
+    followUpNote: record.followUpNote,
+    closingNote: record.closingNote,
     userRef: record.userRef,
     deviceRef: record.deviceRef,
     sourceTicketNo: record.sourceTicketNo,

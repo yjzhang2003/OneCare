@@ -112,6 +112,13 @@ export type VocRecord = Readonly<{
   engineerOpenIds: readonly string[];
   engineerNames: readonly string[];
   dispatchedAt: string | null;
+  // 处理过程的两段文字。Written by 提交跟进结果 and 确认闭环 — from the console, from
+  // a 客服's ticket card, or from an engineer's 回填 — and, on a ticket with a war
+  // room, the closing one may be the aily 闭环纪要. They were write-only until the
+  // ticket page grew somewhere to show them: a handover nobody can read afterwards
+  // is a handover that happened in a chat window and stayed there.
+  followUpNote: string;
+  closingNote: string;
   // The source system's own case or review number (a 400 工单号 like
   // CAS-42567239-Q7Q8Q, or an e-commerce review id). Not a user and not a device:
   // the export contains no user identity of any kind, so this is the only
@@ -303,6 +310,8 @@ export function toVocRecord(
     engineerOpenIds: openIds(safeFields[VOC_FIELD_NAMES.engineer]),
     engineerNames: personNames(safeFields[VOC_FIELD_NAMES.engineer]),
     dispatchedAt: isoDate(safeFields[VOC_FIELD_NAMES.dispatchedAt]),
+    followUpNote: text(safeFields[VOC_FIELD_NAMES.followUpNote]),
+    closingNote: text(safeFields[VOC_FIELD_NAMES.closingNote]),
     userRef: text(safeFields[VOC_FIELD_NAMES.userRef]),
     deviceRef: text(safeFields[VOC_FIELD_NAMES.deviceRef]),
     sourceTicketNo: text(safeFields[VOC_FIELD_NAMES.sourceTicketNo]),

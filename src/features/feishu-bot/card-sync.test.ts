@@ -29,6 +29,8 @@ function record(overrides: Partial<VocRecord> = {}): VocRecord {
     engineerOpenIds: ["ou_engineer"],
     engineerNames: ["张睿哲"],
     dispatchedAt: "2026-08-16T06:00:00.000Z",
+    followUpNote: "",
+    closingNote: "",
     userRef: "U-1",
     deviceRef: "D-1",
     sourceTicketNo: "CAS-1",
@@ -63,7 +65,7 @@ describe("syncTicketCards", () => {
   // The whole point: one click, and every other surface holding this ticket is
   // redrawn at the state the click produced.
   it("redraws every registered card for the ticket", async () => {
-    const patch = vi.fn(async () => {});
+    const patch = vi.fn(async (_messageId: string, _card: unknown) => {});
     const result = await syncTicketCards("rec1", {
       ...deps(),
       listCards: async () => [

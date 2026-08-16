@@ -93,6 +93,8 @@ const record: VocRecord = {
   engineerOpenIds: [],
   engineerNames: [],
   dispatchedAt: null,
+  followUpNote: "",
+  closingNote: "",
   sourceTicketNo: "CAS-42567239-Q7Q8Q",
   userRef: "U-3878645B",
   deviceRef: "D-91C2A70E",
@@ -512,8 +514,13 @@ describe("resolveVocCardAction closure archival", () => {
     });
 
     expect(writes[0]?.[VOC_FIELD_NAMES.state]).toBe("已闭环");
-    expect(writes[1]?.[VOC_FIELD_NAMES.closingNote]).toBe("已上门更换配件，用户确认解决。");
+    // The operator's own words survive the archival: the summary is appended to
+    // what they typed, not written over it.
+    expect(writes[1]?.[VOC_FIELD_NAMES.closingNote]).toBe(
+      "已处理\n\nAI 闭环纪要：已上门更换配件，用户确认解决。",
+    );
   });
+
 
   it("keeps the closure when the summary fails", async () => {
     // This is the load-bearing rule of the whole design. Closure is a fact that

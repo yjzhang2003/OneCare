@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS voc_records (
   engineer_open_ids TEXT[] NOT NULL DEFAULT '{}',
   engineer_names    TEXT[] NOT NULL DEFAULT '{}',
   dispatched_at     TIMESTAMPTZ,
+  follow_up_note    TEXT NOT NULL DEFAULT '',
+  closing_note      TEXT NOT NULL DEFAULT '',
   user_ref          TEXT NOT NULL DEFAULT '',
   device_ref        TEXT NOT NULL DEFAULT '',
   source_ticket_no  TEXT NOT NULL DEFAULT '',
@@ -67,6 +69,10 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE voc_records ADD COLUMN IF NOT EXISTS engineer_open_ids TEXT[] NOT NULL DEFAULT '{}';`,
   `ALTER TABLE voc_records ADD COLUMN IF NOT EXISTS engineer_names TEXT[] NOT NULL DEFAULT '{}';`,
   `ALTER TABLE voc_records ADD COLUMN IF NOT EXISTS dispatched_at TIMESTAMPTZ;`,
+  // 跟进记录 / 闭环结论 were unmirrored while nothing read them back; the ticket page
+  // reads them now.
+  `ALTER TABLE voc_records ADD COLUMN IF NOT EXISTS follow_up_note TEXT NOT NULL DEFAULT '';`,
+  `ALTER TABLE voc_records ADD COLUMN IF NOT EXISTS closing_note TEXT NOT NULL DEFAULT '';`,
 ];
 
 // Indexes for what the console actually filters and groups by. Created separately

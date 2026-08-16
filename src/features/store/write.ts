@@ -83,6 +83,11 @@ const COLUMNS: Readonly<Record<string, Column>> = {
     column: "dispatched_at",
     convert: asTimestamp,
   },
+  [VOC_FIELD_NAMES.followUpNote]: {
+    column: "follow_up_note",
+    convert: asText,
+  },
+  [VOC_FIELD_NAMES.closingNote]: { column: "closing_note", convert: asText },
   [VOC_FIELD_NAMES.polarity]: { column: "polarity", convert: asText },
   [VOC_FIELD_NAMES.dimensions]: { column: "dimensions", convert: asStringArray },
   [VOC_FIELD_NAMES.summary]: { column: "summary", convert: asText },
@@ -127,10 +132,6 @@ export const UNMIRRORED_FIELDS: readonly string[] = [
   VOC_FIELD_NAMES.failureReason,
   VOC_FIELD_NAMES.rawOutput,
   VOC_FIELD_NAMES.sentiment,
-  // 跟进记录 and 闭环结论 are written on closure and never read back by this app —
-  // they are not on VocRecord and have no column here.
-  VOC_FIELD_NAMES.followUpNote,
-  VOC_FIELD_NAMES.closingNote,
 ];
 
 // A people write carries ids, not names, so applying it locally leaves owner_names

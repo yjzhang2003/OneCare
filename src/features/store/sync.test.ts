@@ -35,6 +35,8 @@ function record(recordId: string): VocRecord {
     engineerOpenIds: [],
     engineerNames: [],
     dispatchedAt: null,
+    followUpNote: "",
+    closingNote: "",
     userRef: "",
     deviceRef: "",
     sourceTicketNo: "",

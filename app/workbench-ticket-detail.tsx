@@ -377,6 +377,46 @@ export function TicketDetailPageView({
               </section>
 
               <section className="oc-ticket-detail__section">
+                {/* 处理过程: the two pieces of prose a ticket accumulates while it is
+                    worked — the result whoever handled it submitted, and the conclusion
+                    written at closure. Both were write-only until now: they landed in
+                    the Base from a card click or a console action and had nowhere to be
+                    read afterwards, which is exactly where a handover goes to die. On a
+                    ticket with a war room the closing one may be the aily 闭环纪要, so
+                    the label says where it came from rather than asserting a person
+                    wrote it. */}
+                {(ticket.followUpNote.trim().length > 0 ||
+                  ticket.closingNote.trim().length > 0) && (
+                  <Card title="处理过程" style={{ marginBottom: 16 }}>
+                    <Space direction="vertical" size="medium" style={{ width: "100%" }}>
+                      {ticket.followUpNote.trim().length > 0 && (
+                        <div>
+                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                            跟进结果
+                            {ticket.engineerNames.length > 0
+                              ? `（客服 ${owner} / 上门工程师 ${ticket.engineerNames.join("、")}）`
+                              : `（客服 ${owner}）`}
+                          </Typography.Text>
+                          <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
+                            {ticket.followUpNote}
+                          </Typography.Paragraph>
+                        </div>
+                      )}
+                      {ticket.closingNote.trim().length > 0 && (
+                        <div>
+                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                            闭环结论
+                            {ticket.hasWarRoom ? "（协同群闭环时由 aily 生成纪要）" : ""}
+                          </Typography.Text>
+                          <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
+                            {ticket.closingNote}
+                          </Typography.Paragraph>
+                        </div>
+                      )}
+                    </Space>
+                  </Card>
+                )}
+
                 <Card title="处理信息">
                   <Descriptions
                     column={2}

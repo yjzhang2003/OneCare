@@ -27,6 +27,8 @@ function record(overrides: Partial<VocRecord> = {}): VocRecord {
     engineerOpenIds: [],
     engineerNames: [],
     dispatchedAt: null,
+    followUpNote: "",
+    closingNote: "",
     sourceTicketNo: "CAS-1",
     userRef: "U-A",
     deviceRef: "D-A",

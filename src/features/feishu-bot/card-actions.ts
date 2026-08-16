@@ -316,12 +316,19 @@ export async function resolveVocCardAction(
       });
       const closingSummary = await summarise(facts, transcript);
       if (closingSummary) {
-        // Its own updateRecord, deliberately not merged into the write
-        // above: that write already landed and is not being revisited here,
-        // only appended to. Writes only 闭环结论 — the state and closedAt
-        // set moments ago are not this call's concern.
+        // Appended, never substituted. The operator typed their own 闭环结论 into
+        // the card's form seconds ago and it has already been written; replacing
+        // it with the model's version would delete a person's words in favour of
+        // a summary of them — and the ticket page shows this column, so what is
+        // lost here is lost visibly.
+        // Guaranteed non-empty on this path — 确认闭环's own guard rejects an empty
+        // 闭环结论 before any of this runs — but read defensively so a future caller
+        // that skips the state machine cannot produce a note reading "AI 闭环纪要：".
+        const typed = (input.note ?? "").trim();
         await input.bitable.updateRecord(input.recordId, {
-          [VOC_FIELD_NAMES.closingNote]: closingSummary,
+          [VOC_FIELD_NAMES.closingNote]: typed
+            ? `${typed}\n\nAI 闭环纪要：${closingSummary}`
+            : closingSummary,
         });
       } else {
         closureSuffix = "（结论生成失败）";

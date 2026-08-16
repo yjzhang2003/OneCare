@@ -44,6 +44,8 @@ function record(overrides: Partial<WorkbenchTicket> = {}): WorkbenchTicket {
     hasWarRoom: false,
     engineerNames: [],
     dispatchedAt: null,
+    followUpNote: "",
+    closingNote: "",
     sourceTicketNo: "CAS-1",
     userRef: "U-1",
     deviceRef: "D-1",
