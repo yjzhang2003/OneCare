@@ -174,6 +174,10 @@ export type ResolveVocCardActionInput = Readonly<{
     facts: string,
     transcript: readonly string[],
   ) => Promise<string | null>;
+  // 人员管理's 工程师 rows, fetched only when the state this click produces could
+  // carry 派单 buttons — a card callback has ~3 seconds and a roster read is a real
+  // round trip, so it is not spent on transitions that would not use it.
+  listEngineers?: () => Promise<readonly Readonly<{ openId: string; name: string }>[]>;
 }>;
 
 function errorToast(content: string): CardActionResult {
@@ -341,6 +345,13 @@ export async function resolveVocCardAction(
     }
   }
 
+  // 跟进中 is where 派单 belongs on the 客服's card, so the roster is read only when
+  // the click lands there — never on a closure, never on a rejection.
+  const engineers =
+    outcome.next === "待跟进" || outcome.next === "跟进中"
+      ? await (input.listEngineers?.().catch(() => []) ?? [])
+      : [];
+
   // One card, in this one synchronous response. Without it the owner got a
   // green toast on a card still showing the old status tag and the button they
   // just used — in an unedited screen recording the card looks frozen while
@@ -365,6 +376,7 @@ export async function resolveVocCardAction(
             dimensions: record.dimensions,
             replies: record.replies,
           },
+          { engineers },
         ),
       },
     },

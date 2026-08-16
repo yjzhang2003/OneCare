@@ -69,6 +69,10 @@ export type FeishuEventOutcome =
       // state machine as `undefined` from a route that compiled cleanly and
       // rejected every real click.
       note: string;
+      // 派单 carries who it dispatches to in the button's own callback value — the
+      // roster is on the card, so nothing has to be typed. Empty for every other
+      // action, which is what the dispatch handler checks before doing anything.
+      engineerOpenId: string;
       chatId: string;
       messageId: string;
     }>
@@ -365,6 +369,7 @@ function parseCardAction(payload: JsonObject): FeishuEventOutcome {
       operatorOpenId: "",
       // No demo card carries a form; a note would have nowhere to be written.
       note: "",
+      engineerOpenId: "",
       chatId: normalized.chatId,
       messageId: normalized.messageId,
     };
@@ -416,6 +421,10 @@ function parseCardAction(payload: JsonObject): FeishuEventOutcome {
       recordId,
       operatorOpenId: openId,
       note: readFormNote(payload),
+      engineerOpenId:
+        typeof normalized.action.value.engineer_open_id === "string"
+          ? normalized.action.value.engineer_open_id.trim()
+          : "",
       chatId: normalized.chatId,
       messageId: normalized.messageId,
     };

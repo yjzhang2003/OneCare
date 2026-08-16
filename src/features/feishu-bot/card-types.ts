@@ -19,6 +19,10 @@ export const VOC_CARD_ACTIONS = [
   "voc_submit_follow_up",
   "voc_confirm_closure",
   "voc_mark_no_action",
+  // 派单: carried on the 客服's own ticket card so the owner's sequence — 跟进 →
+  // 派单 →（等上门）→ 确认闭环 — happens entirely in Feishu. The engineer's open
+  // id rides in the callback value beside record_id, so no form is involved.
+  "voc_dispatch",
   "voc_open_war_room",
   "voc_decline_war_room",
 ] as const;

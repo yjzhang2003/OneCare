@@ -10,8 +10,22 @@
 import { patchFeishuCard } from "./client";
 import { syncTicketCards, type CardSyncDependencies, type CardSyncResult } from "./card-sync";
 import { readRecordById } from "../store/records";
+import { listOwnerRuleRecords } from "../voc/owner-directory";
+import { engineerRules } from "../voc/owner-rules";
+import { createTenantTokenProvider, type TenantTokenProvider } from "../bitable/client";
 import { listTicketCards } from "../store/ticket-cards";
-import { readBotEnv } from "../../lib/env";
+import { readBitableEnv, readBotEnv } from "../../lib/env";
+
+// Module-scoped like every other token holder in this app: an exchange per card
+// redraw would be a round trip nobody asked for.
+let tokenProvider: TenantTokenProvider | null = null;
+function getTokenProvider(): TenantTokenProvider {
+  if (!tokenProvider) {
+    const bot = readBotEnv();
+    tokenProvider = createTenantTokenProvider(bot.appId, bot.appSecret);
+  }
+  return tokenProvider;
+}
 
 export function defaultCardSyncDependencies(): CardSyncDependencies {
   return {
@@ -22,6 +36,16 @@ export function defaultCardSyncDependencies(): CardSyncDependencies {
     getRecord: readRecordById,
     patch: (messageId, card) =>
       patchFeishuCard({ env: readBotEnv(), messageId, card }),
+    listEngineers: async () => {
+      const roster = await listOwnerRuleRecords({
+        bitable: readBitableEnv(),
+        token: getTokenProvider(),
+      });
+      return engineerRules(roster).map((rule) => ({
+        openId: rule.openId,
+        name: rule.ownerName || "工程师",
+      }));
+    },
   };
 }
 

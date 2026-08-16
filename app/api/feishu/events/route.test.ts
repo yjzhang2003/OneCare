@@ -273,6 +273,7 @@ describe("POST /api/feishu/events", () => {
       recordId: "",
       operatorOpenId: "",
       note: "",
+      engineerOpenId: "",
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });
@@ -293,6 +294,7 @@ describe("POST /api/feishu/events", () => {
       recordId: "",
       operatorOpenId: "",
       note: "",
+      engineerOpenId: "",
     });
     expect(setup.dependencies.sendMessage).toHaveBeenCalledWith({
       env,
@@ -311,6 +313,7 @@ describe("POST /api/feishu/events", () => {
       recordId: "",
       operatorOpenId: "",
       note: "",
+      engineerOpenId: "",
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });
@@ -359,6 +362,7 @@ describe("POST /api/feishu/events", () => {
       recordId: "rec12345",
       operatorOpenId: "ou_owner",
       note: "",
+      engineerOpenId: "",
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });
@@ -378,6 +382,7 @@ describe("POST /api/feishu/events", () => {
       recordId: "rec12345",
       operatorOpenId: "ou_owner",
       note: "",
+      engineerOpenId: "",
     });
     expect(setup.dependencies.schedule).not.toHaveBeenCalled();
     expect(setup.dependencies.sendMessage).not.toHaveBeenCalled();
@@ -390,6 +395,7 @@ describe("POST /api/feishu/events", () => {
       recordId: "rec12345",
       operatorOpenId: "ou_owner",
       note: "",
+      engineerOpenId: "",
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });
@@ -414,6 +420,7 @@ describe("POST /api/feishu/events", () => {
       recordId: "",
       operatorOpenId: "",
       note: "",
+      engineerOpenId: "",
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });

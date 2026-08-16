@@ -369,6 +369,7 @@ describe("parseFeishuEvent", () => {
       operatorOpenId: "",
       // No demo card carries a form, so there is never a note to read.
       note: "",
+      engineerOpenId: "",
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });
@@ -589,6 +590,7 @@ describe("parseFeishuEvent VOC card actions", () => {
       recordId: "rec12345",
       operatorOpenId: "ou_owner",
       note: "",
+      engineerOpenId: "",
       chatId: "oc_onecare_chat",
       messageId: "om_onecare_card",
     });

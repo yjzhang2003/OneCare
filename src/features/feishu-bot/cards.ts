@@ -736,6 +736,39 @@ function noteForm(
   };
 }
 
+// 派单按钮：one per engineer on the roster, each carrying that engineer's open id in
+// its own callback value. A select inside a form would be the other shape, but the
+// roster is a handful of people and a button that says who it dispatches to needs no
+// second tap to confirm what was picked.
+const DISPATCHABLE_STATES: ReadonlySet<VocState> = new Set<VocState>([
+  "待跟进",
+  "跟进中",
+]);
+const MAX_DISPATCH_BUTTONS = 3;
+
+function dispatchButton(
+  engineer: Readonly<{ openId: string; name: string }>,
+  recordId: string,
+): CardElement {
+  return {
+    tag: "button",
+    text: { tag: "plain_text", content: `派单给 ${engineer.name}` },
+    type: "default",
+    size: "medium",
+    width: "fill",
+    behaviors: [
+      {
+        type: "callback",
+        value: {
+          action: "voc_dispatch",
+          record_id: recordId,
+          engineer_open_id: engineer.openId,
+        },
+      },
+    ],
+  };
+}
+
 // Only the action that is actually legal from the record's current state is
 // offered — the state machine (Task 2) is the single source of truth for
 // what happens next, so the card must not invite a click that resolveVocCardAction
@@ -893,9 +926,18 @@ export function createWarRoomEscalationCard(
 export function createVocTicketCard(
   record: VocTicketCardRecord,
   tag: VocTicketCardTag,
-  options: Readonly<{ fullContent?: boolean }> = {},
+  options: Readonly<{
+    fullContent?: boolean;
+    // 人员管理's 工程师 rows. Absent (or empty) simply means no 派单 button — every
+    // caller that cannot cheaply read the roster keeps the card it always had.
+    engineers?: readonly Readonly<{ openId: string; name: string }>[];
+  }> = {},
 ): FeishuCard {
   const completed = record.state === "已闭环";
+  const dispatchable =
+    DISPATCHABLE_STATES.has(record.state) && (options.engineers?.length ?? 0) > 0
+      ? (options.engineers ?? []).slice(0, MAX_DISPATCH_BUTTONS)
+      : [];
   const next = NEXT_VOC_ACTION[record.state];
   // Default (and every existing call site) keeps truncating: the single-chat
   // card this function has always produced must stay byte-for-byte unchanged.
@@ -944,6 +986,11 @@ export function createVocTicketCard(
             ]
           : [columns(vocActionButton(next.label, next.action, record.recordId))]
         : [note("当前状态无需操作。")]),
+      // 派单 sits beside the state transition rather than replacing it: 跟进中 can go
+      // either way — the 客服 handles it themselves, or sends someone on site.
+      ...(dispatchable.length > 0
+        ? [columns(...dispatchable.map((engineer) => dispatchButton(engineer, record.recordId)))]
+        : []),
       // 拉群 is not a state transition, so it does not follow NEXT_VOC_ACTION — but a
       // finished ticket keeps the rule this card has always had: nothing left to click.
       // A card in a chat outlives the work it describes, and a button on a week-old

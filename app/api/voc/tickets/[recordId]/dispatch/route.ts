@@ -9,7 +9,7 @@ import {
   type BitableClient,
   type TenantTokenProvider,
 } from "../../../../../../src/features/bitable/client";
-import { VOC_FIELD_NAMES, type VocRecord } from "../../../../../../src/features/bitable/field-map";
+import type { VocRecord } from "../../../../../../src/features/bitable/field-map";
 import { syncTicketCardsInBackground } from "../../../../../../src/features/feishu-bot/card-sync-wiring";
 import { createEngineerTaskCard } from "../../../../../../src/features/feishu-bot/cards";
 import type { FeishuCard } from "../../../../../../src/features/feishu-bot/card-types";
@@ -23,14 +23,9 @@ import {
 } from "../../../../../../src/features/store/workbench-query";
 import { VOC_RECORDS_CACHE_TAG } from "../../../../../../src/features/voc/cache-tags";
 import { rememberTicketCard } from "../../../../../../src/features/store/ticket-cards";
-import { transition } from "../../../../../../src/features/voc/service-event";
-import { transitionFields } from "../../../../../../src/features/voc/transition-fields";
+import { dispatchTicket } from "../../../../../../src/features/voc/dispatch";
 import { listOwnerRuleRecords } from "../../../../../../src/features/voc/owner-directory";
-import {
-  adminOpenIds,
-  engineerRules,
-  type OwnerRuleRecord,
-} from "../../../../../../src/features/voc/owner-rules";
+import type { OwnerRuleRecord } from "../../../../../../src/features/voc/owner-rules";
 import {
   defaultNotifyDependencies,
   notify,
@@ -116,155 +111,92 @@ export function createDispatchRoute(dependencies: DispatchDependencies) {
         );
       }
 
-      const [record, roster] = await Promise.all([
-        dependencies.getRecord(recordId),
-        dependencies.listRoster(),
-      ]);
-      if (!record) {
+      const result = await dispatchTicket(
+        {
+          recordId,
+          engineerOpenId,
+          operatorOpenId: user.openId,
+          operatorName: user.name,
+        },
+        {
+          getRecord: dependencies.getRecord,
+          listRoster: dependencies.listRoster,
+          updateRecord: dependencies.updateRecord,
+          now: dependencies.now,
+          sendTaskCard: async (dispatched, openId) => {
+            const context_ = await dependencies
+              .deviceContext(dispatched.deviceRef)
+              .catch(() => ({ total: 0, open: 0, recurrence: null }));
+            const payload = {
+              dispatcherName: user.name,
+              model: dispatched.model,
+              userRef: dispatched.userRef,
+              deviceRef: dispatched.deviceRef,
+              deviceTotal: context_.total,
+              deviceOpen: context_.open,
+              recurrence: context_.recurrence,
+            };
+            try {
+              const messageId = await dependencies.sendCard(
+                openId,
+                createEngineerTaskCard({
+                  record: dispatched,
+                  tag: {
+                    summary: dispatched.summary,
+                    polarity: dispatched.polarity ?? "—",
+                    dimensions: dispatched.dimensions,
+                    replies: dispatched.replies,
+                  },
+                  ...payload,
+                }),
+              );
+              await dependencies.rememberCard({
+                messageId,
+                recordId,
+                audience: "engineer",
+                payload,
+              });
+              return true;
+            } catch {
+              return false;
+            }
+          },
+        },
+      );
+
+      if (result.kind === "not_found") {
         return Response.json(
           { error: "not_found", message: "记录不存在或已被删除" },
           { status: 404 },
         );
       }
-
-      // Dispatching someone else's ticket is a 管理员's privilege; otherwise it is the
-      // owner's own call. An unowned ticket is nobody's to hand out — claim it first,
-      // which is the same door 改派 makes people go through.
-      const admins = adminOpenIds(roster);
-      const authorised =
-        record.ownerOpenIds.includes(user.openId) || admins.includes(user.openId);
-      if (!authorised) {
+      if (result.kind === "forbidden") {
         return Response.json(
-          {
-            error: "forbidden",
-            message: "只有该工单的负责人或管理员可以派工",
-          },
+          { error: "forbidden", message: result.message },
           { status: 403 },
         );
       }
-
-      if (TERMINAL.has(record.state)) {
+      if (result.kind === "rejected") {
         return Response.json(
-          {
-            error: "rejected",
-            message: `工单已经是「${record.state}」，不需要再派工`,
-          },
+          { error: "rejected", message: result.message },
           { status: 422 },
         );
       }
-
-      // Only the people 人员管理 lists as 工程师. A free-text open_id here would put a
-      // colleague on a rota nobody added them to, and the card would arrive without
-      // warning.
-      const engineer = engineerRules(roster).find(
-        (rule) => rule.openId === engineerOpenId,
-      );
-      if (!engineer) {
-        return Response.json(
-          {
-            error: "rejected",
-            message: "这个人不是工程师——请先在人员管理里把他加成工程师",
-          },
-          { status: 422 },
-        );
-      }
-
-      if (record.engineerOpenIds.includes(engineerOpenId)) {
-        return Response.json({
-          ok: true,
-          dispatched: false,
-          message: `${engineer.ownerName || "该工程师"}已经在这条工单上了`,
-        });
-      }
-
-      // 派工 is a state transition now, not just two columns: a ticket with an engineer
-      // on the way sits in 上门中, so the queue, the cards and the console all say who
-      // holds it. The machine answers whether that move is legal from here; a second
-      // dispatch to another engineer replays into a noop and only rewrites the columns.
-      const outcome = transition(record.state, "派工", {
-        retryCount: record.retryCount,
-        hasOwner: record.ownerOpenIds.length > 0,
-      });
-      if (outcome.kind === "rejected") {
-        return Response.json(
-          { error: "rejected", message: outcome.reason },
-          { status: 422 },
-        );
-      }
-
-      const dispatchedAt = dependencies.now();
-      try {
-        await dependencies.updateRecord(recordId, {
-          ...(outcome.kind === "ok"
-            ? transitionFields(outcome.next, undefined, dispatchedAt)
-            : {}),
-          [VOC_FIELD_NAMES.engineer]: [{ id: engineerOpenId }],
-          [VOC_FIELD_NAMES.dispatchedAt]: dispatchedAt,
-        });
-      } catch {
+      if (result.kind === "write_failed") {
         return Response.json(
           { error: "write_failed", message: "派工写入失败，请稍后重试" },
           { status: 502 },
         );
       }
-
-      dependencies.revalidate();
-
-      // The record already says who is going, so a card that fails to send is a
-      // notification problem, not a dispatch that did not happen. Said plainly rather
-      // than reported as a failure that would invite a second click.
-      const dispatched: VocRecord =
-        outcome.kind === "ok" ? { ...record, state: outcome.next } : record;
-
-      const context_ = await dependencies
-        .deviceContext(record.deviceRef)
-        .catch(() => ({ total: 0, open: 0, recurrence: null }));
-
-      const engineerCardPayload = {
-        dispatcherName: user.name,
-        model: record.model,
-        userRef: record.userRef,
-        deviceRef: record.deviceRef,
-        deviceTotal: context_.total,
-        deviceOpen: context_.open,
-        recurrence: context_.recurrence,
-      };
-
-      try {
-        const messageId = await dependencies.sendCard(
-          engineerOpenId,
-          createEngineerTaskCard({
-            record: dispatched,
-            tag: {
-              summary: record.summary,
-              polarity: record.polarity ?? "—",
-              dimensions: record.dimensions,
-              replies: record.replies,
-            },
-            dispatcherName: user.name,
-            model: record.model,
-            userRef: record.userRef,
-            deviceRef: record.deviceRef,
-            deviceTotal: context_.total,
-            deviceOpen: context_.open,
-            recurrence: context_.recurrence,
-          }),
-        );
-        // Registered only after a successful send: an id we never got is an id
-        // nothing can redraw, and a row without one would be retried forever.
-        await dependencies.rememberCard({
-          messageId,
-          recordId,
-          audience: "engineer",
-          payload: engineerCardPayload,
-        });
-      } catch {
+      if (result.kind === "already") {
         return Response.json({
           ok: true,
-          dispatched: true,
-          message: `已派工给${engineer.ownerName || "工程师"}，但上门任务卡发送失败，请在飞书里手动通知`,
+          dispatched: false,
+          message: `${result.engineerName}已经在这条工单上了`,
         });
       }
+
+      dependencies.revalidate();
 
       await dependencies.notify({
         kind: "engineer_dispatched",
@@ -272,16 +204,24 @@ export function createDispatchRoute(dependencies: DispatchDependencies) {
         recordId,
         sendFeishuText: false,
         subject: {
-          recordNumber: record.recordNumber,
-          channel: record.channel,
-          category: record.category,
-          summary: record.summary,
-          content: record.content,
-          severity: record.severity,
-          state: dispatched.state,
+          recordNumber: result.record.recordNumber,
+          channel: result.record.channel,
+          category: result.record.category,
+          summary: result.record.summary,
+          content: result.record.content,
+          severity: result.record.severity,
+          state: result.record.state,
           actorName: user.name,
         },
       });
+
+      if (!result.cardSent) {
+        return Response.json({
+          ok: true,
+          dispatched: true,
+          message: `已派工给${result.engineerName}，但上门任务卡发送失败，请在飞书里手动通知`,
+        });
+      }
 
       // The owner's card and the war room's copy both still say 跟进中; the
       // ticket is 上门中 now, and whoever is looking at either surface should see
@@ -291,7 +231,7 @@ export function createDispatchRoute(dependencies: DispatchDependencies) {
       return Response.json({
         ok: true,
         dispatched: true,
-        message: `已派工给${engineer.ownerName || "工程师"}，上门任务卡已发到他的飞书`,
+        message: `已派工给${result.engineerName}，上门任务卡已发到他的飞书`,
       });
     } catch {
       return Response.json(

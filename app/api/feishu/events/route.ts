@@ -31,6 +31,7 @@ import {
   createTextMessage,
   createTodayOverviewMessage,
   createProfileInsightCard,
+  createEngineerTaskCard,
   createVocTicketCard,
   createWelcomeMessage,
 } from "../../../../src/features/feishu-bot/cards";
@@ -62,6 +63,9 @@ import {
 } from "../../../../src/features/notify/deliver";
 import { handOffNotifications } from "../../../../src/features/notify/hand-off";
 import { ruleBasedProvider } from "../../../../src/features/profiles/insight";
+import { dispatchTicket } from "../../../../src/features/voc/dispatch";
+import { listOwnerRuleRecords } from "../../../../src/features/voc/owner-directory";
+import { engineerRules } from "../../../../src/features/voc/owner-rules";
 import {
   claimIdentityWarRoom,
   readIdentityWarRoom,
@@ -180,6 +184,8 @@ type CardActionRequest = Readonly<{
   recordId: string;
   operatorOpenId: string;
   note: string;
+  // Only 派单 carries one; "" everywhere else.
+  engineerOpenId: string;
 }>;
 
 function isVocCardAction(
@@ -618,6 +624,126 @@ async function notifyHandOff(
   }
 }
 
+
+// 派单 from the 客服's own ticket card. Everything the HTTP route does around
+// dispatchTicket — authorisation, the roster, the state transition, the engineer's
+// card — is the same function; what differs is only how the answer is shaped, and a
+// card callback answers with a toast.
+async function listDispatchableEngineers(): Promise<
+  readonly Readonly<{ openId: string; name: string }>[]
+> {
+  const roster = await listOwnerRuleRecords({
+    bitable: readBitableEnv(),
+    token: getTokenProvider(),
+  });
+  return engineerRules(roster).map((rule) => ({
+    openId: rule.openId,
+    name: rule.ownerName || "工程师",
+  }));
+}
+
+async function resolveDispatchFromCard(
+  input: Readonly<{
+    recordId: string;
+    engineerOpenId: string;
+    operatorOpenId: string;
+  }>,
+): Promise<CardActionResult> {
+  if (input.engineerOpenId.length === 0) {
+    return {
+      kind: "update",
+      response: { toast: { type: "error", content: "没有指定工程师" } },
+    };
+  }
+
+  const outcome = await dispatchTicket(
+    { ...input, operatorName: "" },
+    {
+      getRecord: (recordId) => storeBackedBitable().getRecord(recordId),
+      listRoster: () =>
+        listOwnerRuleRecords({ bitable: readBitableEnv(), token: getTokenProvider() }),
+      updateRecord: (recordId, fields) =>
+        storeBackedBitable().updateRecord(recordId, fields),
+      now: () => Date.now(),
+      sendTaskCard: async (dispatched, openId) => {
+        const records = dispatched.deviceRef.trim()
+          ? await readIdentityRecords("device", dispatched.deviceRef)
+          : [];
+        const open = records.filter(
+          (record) =>
+            record.ticketOpenedAt !== null &&
+            record.state !== "已闭环" &&
+            record.state !== "无需跟进",
+        ).length;
+        const payload = {
+          dispatcherName: "客服",
+          model: dispatched.model,
+          userRef: dispatched.userRef,
+          deviceRef: dispatched.deviceRef,
+          deviceTotal: records.length,
+          deviceOpen: open,
+          recurrence: null,
+        };
+        try {
+          const messageId = await sendFeishuMessage({
+            env: readBotEnv(),
+            openId,
+            message: {
+              msgType: "interactive",
+              content: JSON.stringify(
+                createEngineerTaskCard({
+                  record: dispatched,
+                  tag: {
+                    summary: dispatched.summary,
+                    polarity: dispatched.polarity ?? "—",
+                    dimensions: dispatched.dimensions,
+                    replies: dispatched.replies,
+                  },
+                  ...payload,
+                }),
+              ),
+            },
+          });
+          await rememberTicketCard({
+            messageId,
+            recordId: input.recordId,
+            audience: "engineer",
+            payload,
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    },
+  );
+
+  const toast = (type: "success" | "error" | "info", content: string): CardActionResult => ({
+    kind: "update",
+    response: { toast: { type, content } },
+  });
+
+  switch (outcome.kind) {
+    case "not_found":
+      return toast("error", "记录不存在或已被删除");
+    case "forbidden":
+      return toast("error", outcome.message);
+    case "rejected":
+      return toast("error", outcome.message);
+    case "write_failed":
+      return toast("error", "派工写入失败，请稍后重试");
+    case "already":
+      return toast("info", `${outcome.engineerName}已经在这条工单上了`);
+    case "dispatched":
+      return toast(
+        "success",
+        outcome.cardSent
+          ? `已派单给${outcome.engineerName}`
+          : `已派单给${outcome.engineerName}，但上门任务卡发送失败`,
+      );
+  }
+}
+
 export function createResolveAction(
   bitable: () => VocActionBitable,
   warRoom: WarRoomActionDependencies = defaultWarRoomDependencies,
@@ -647,6 +773,23 @@ export function createResolveAction(
       }
       return outcome.result;
     }
+    if (input.action === "voc_dispatch") {
+      const result = await resolveDispatchFromCard({
+        recordId: input.recordId,
+        engineerOpenId: input.engineerOpenId,
+        operatorOpenId: input.operatorOpenId,
+      });
+      const failed =
+        result.kind === "update" && result.response.toast?.type === "error";
+      if (!failed) {
+        // The owner's own card still offers 派单, the engineer has just been given
+        // one, and the war room shows 跟进中 — all three are one transition behind.
+        schedule(async () => {
+          await syncCardsForRecord(input.recordId);
+        });
+      }
+      return result;
+    }
     if (isVocCardAction(input.action)) {
       const result = await resolveVocCardAction({
         action: input.action,
@@ -661,6 +804,7 @@ export function createResolveAction(
         // them untouched.
         readTranscript: readWarRoomTranscript,
         summarise: summariseClosure,
+        listEngineers: listDispatchableEngineers,
       });
 
       // The hand-off this click caused, told to whoever it landed on. Scheduled rather
@@ -834,6 +978,7 @@ export function createFeishuEventRoute(
             recordId: outcome.recordId,
             operatorOpenId: outcome.operatorOpenId,
             note: outcome.note,
+            engineerOpenId: outcome.engineerOpenId,
           });
         } catch {
           return json({

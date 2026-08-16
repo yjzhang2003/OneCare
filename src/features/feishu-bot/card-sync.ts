@@ -26,6 +26,9 @@ export type CardSyncDependencies = Readonly<{
   listCards: (recordId: string) => Promise<readonly TicketCard[]>;
   getRecord: (recordId: string) => Promise<VocRecord | null>;
   patch: (messageId: string, card: FeishuCard) => Promise<void>;
+  // 人员管理's 工程师 rows, so a redrawn 客服 card keeps its 派单 buttons. Optional:
+  // without it the card is still correct, just missing the shortcut.
+  listEngineers?: () => Promise<readonly Readonly<{ openId: string; name: string }>[]>;
 }>;
 
 export type CardSyncResult = Readonly<{
@@ -88,6 +91,7 @@ export function renderForAudience(
   audience: CardAudience,
   record: VocRecord,
   payload: Readonly<Record<string, unknown>>,
+  engineers: readonly Readonly<{ openId: string; name: string }>[] = [],
 ): FeishuCard {
   if (audience === "engineer") {
     return createEngineerTaskCard({
@@ -107,6 +111,7 @@ export function renderForAudience(
   // group was added to work this one ticket — so its redraw keeps that.
   return createVocTicketCard(cardRecord(record), tagOf(record), {
     fullContent: audience === "war_room",
+    engineers,
   });
 }
 
@@ -130,6 +135,10 @@ export async function syncTicketCards(
     const record = await dependencies.getRecord(recordId);
     if (!record) return { patched, failed };
 
+    // One roster read for the whole sync, and only when a card on this ticket could
+    // carry 派单 buttons at all.
+    const engineers = await (dependencies.listEngineers?.().catch(() => []) ?? []);
+
     for (const card of cards) {
       if (card.messageId.length === 0 || card.messageId === skipMessageId) {
         continue;
@@ -137,7 +146,7 @@ export async function syncTicketCards(
       try {
         await dependencies.patch(
           card.messageId,
-          renderForAudience(card.audience, record, card.payload),
+          renderForAudience(card.audience, record, card.payload, engineers),
         );
         patched += 1;
       } catch {

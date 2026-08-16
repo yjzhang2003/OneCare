@@ -1013,3 +1013,43 @@ describe("every card opens the workbench", () => {
     expect(links[0]).toMatchObject({ text: "打开工单" });
   });
 });
+
+describe("createVocTicketCard — 派单", () => {
+  // The 客服's own sequence is 跟进 → 派单 →（等上门）→ 确认闭环; the middle step used
+  // to be the only one that required leaving Feishu for a browser.
+  it("offers one button per engineer while the ticket can still be dispatched", () => {
+    const card = JSON.stringify(
+      createVocTicketCard(vocRecord({ state: "跟进中" }), tagResult(), {
+        engineers: [
+          { openId: "ou_a", name: "张睿哲" },
+          { openId: "ou_b", name: "李工" },
+        ],
+      }),
+    );
+
+    expect(card).toContain("派单给 张睿哲");
+    expect(card).toContain("派单给 李工");
+    expect(card).toContain("voc_dispatch");
+    expect(card).toContain("ou_a");
+  });
+
+  // A closed ticket keeps the rule this card has always had: nothing left to click.
+  it("drops the buttons once the ticket is finished", () => {
+    const card = JSON.stringify(
+      createVocTicketCard(vocRecord({ state: "已闭环" }), tagResult(), {
+        engineers: [{ openId: "ou_a", name: "张睿哲" }],
+      }),
+    );
+
+    expect(card).not.toContain("voc_dispatch");
+  });
+
+  // Every caller that cannot cheaply read 人员管理 keeps exactly the card it had.
+  it("renders unchanged when no roster is supplied", () => {
+    const card = JSON.stringify(
+      createVocTicketCard(vocRecord({ state: "跟进中" }), tagResult()),
+    );
+
+    expect(card).not.toContain("voc_dispatch");
+  });
+});
