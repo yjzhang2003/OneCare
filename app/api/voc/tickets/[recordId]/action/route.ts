@@ -1,6 +1,9 @@
 import { revalidateTag } from "next/cache";
 
 import { syncTicketCardsInBackground } from "../../../../../../src/features/feishu-bot/card-sync-wiring";
+import { createVocTicketCard } from "../../../../../../src/features/feishu-bot/cards";
+import { sendFeishuMessage } from "../../../../../../src/features/feishu-bot/client";
+import { rememberTicketCard } from "../../../../../../src/features/store/ticket-cards";
 
 import {
   createBitableClient,
@@ -27,7 +30,7 @@ import { handOffNotifications } from "../../../../../../src/features/notify/hand
 import type { NotificationSubject } from "../../../../../../src/features/notify/messages";
 import { writeRecord } from "../../../../../../src/features/store/mirror";
 import { listOwnerRuleRecords } from "../../../../../../src/features/voc/owner-directory";
-import { adminOpenIds } from "../../../../../../src/features/voc/owner-rules";
+import { adminOpenIds, engineerRules } from "../../../../../../src/features/voc/owner-rules";
 import { VOC_STATES, type VocState } from "../../../../../../src/features/voc/service-event";
 import {
   resolveWorkbenchWrite,
@@ -68,6 +71,9 @@ export type TicketActionDependencies = Readonly<{
   // the hardest kind of bug to notice from the outside.
   // Catches the ticket's other Feishu cards up with the state just written.
   syncCards: (recordId: string) => Promise<unknown>;
+  // 改派: hands the new owner their own copy of the ticket card, and registers it so
+  // it stays in step with the others.
+  sendTicketCard: (openId: string, record: VocRecord) => Promise<unknown>;
   revalidate: () => void;
   // Who may be named as an owner. Injected like every other boundary here, and read
   // per request rather than cached: a colleague added to the app's scope should be
@@ -148,6 +154,19 @@ const STATUS: Readonly<Record<string, number>> = {
   forbidden: 403,
   rejected: 422,
 };
+
+async function listDispatchableEngineers(): Promise<
+  readonly Readonly<{ openId: string; name: string }>[]
+> {
+  const roster = await listOwnerRuleRecords({
+    bitable: readBitableEnv(),
+    token: getTokenProvider(),
+  });
+  return engineerRules(roster).map((rule) => ({
+    openId: rule.openId,
+    name: rule.ownerName || "工程师",
+  }));
+}
 
 export function createTicketActionRoute(dependencies: TicketActionDependencies) {
   return async function POST(
@@ -296,6 +315,17 @@ export function createTicketActionRoute(dependencies: TicketActionDependencies) 
         await dependencies.notify(event);
       }
 
+      // 改派要重新发卡。The notification tells the new owner the ticket is theirs;
+      // the ticket card is what lets them do anything about it without opening a
+      // browser. The previous owner's card is not recalled — it cannot be — but the
+      // sync below redraws it, and every button on it is re-authorised server-side.
+      if (resolved.kind === "assign") {
+        await dependencies.sendTicketCard(
+          resolved.assigneeOpenId,
+          { ...record, state: outcome.nextState },
+        );
+      }
+
       // 三边同步：this ticket's cards are sitting in the owner's chat, the
       // engineer's chat and the war room, each still drawn at the state it had
       // when it was sent. Redrawn here rather than notified about, because a
@@ -348,6 +378,38 @@ export const POST = createTicketActionRoute({
   getRecord: (recordId) => getBitableClient().getRecord(recordId),
   notify: (input) => notify(input, defaultNotifyDependencies()),
   syncCards: (recordId) => syncTicketCardsInBackground(recordId),
+  sendTicketCard: async (openId, record) => {
+    try {
+      const engineers = await listDispatchableEngineers().catch(() => []);
+      const messageId = await sendFeishuMessage({
+        env: readBotEnv(),
+        openId,
+        message: {
+          msgType: "interactive",
+          content: JSON.stringify(
+            createVocTicketCard(
+              record,
+              {
+                summary: record.summary,
+                polarity: record.polarity ?? "—",
+                dimensions: record.dimensions,
+                replies: record.replies,
+              },
+              { engineers },
+            ),
+          ),
+        },
+      });
+      await rememberTicketCard({
+        messageId,
+        recordId: record.recordId,
+        audience: "owner",
+      });
+    } catch {
+      // The reassignment itself already landed and was already answered; a card
+      // that fails to send is one notification short, not a failed handover.
+    }
+  },
   listAdmins: async () =>
     adminOpenIds(
       await listOwnerRuleRecords({

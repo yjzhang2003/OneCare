@@ -47,6 +47,7 @@ function deps(overrides: Partial<TagEditDependencies> = {}): TagEditDependencies
     getRecord: async () => record(),
     updateRecord: async () => {},
     listAdmins: async () => ["ou_admin"],
+    syncCards: async () => ({ patched: 0, failed: 0 }),
     revalidate: () => {},
     ...overrides,
   };

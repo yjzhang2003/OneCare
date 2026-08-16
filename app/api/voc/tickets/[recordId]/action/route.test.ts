@@ -63,6 +63,7 @@ function route(
     listAdmins: async () => [],
     notify: async () => {},
     syncCards: async () => ({ patched: 0, failed: 0 }),
+    sendTicketCard: async () => {},
     session: async () =>
       overrides.user === undefined
         ? { openId: OWNER, name: "张禹健" }
@@ -85,6 +86,43 @@ function post(body: unknown): Request {
 
 const params = { params: Promise.resolve({ recordId: "rec1" }) };
 
+describe("改派", () => {
+  // 通知说「这条工单归你了」，卡片才是让新负责人不打开浏览器也能动手的东西。
+  test("sends the new owner their own ticket card", async () => {
+    const sendTicketCard = vi.fn(async () => {});
+    const handler = createTicketActionRoute({
+      session: async () => ({ openId: OWNER, name: "黄齐" }),
+      listAdmins: async () => [],
+    notify: async () => {},
+    syncCards: async () => ({ patched: 0, failed: 0 }),
+    sendTicketCard,
+    listMembers: async () => [{ openId: "ou_new", name: "李客服" }],
+      getRecord: async () => record(),
+      updateRecord: async () => {},
+      revalidate: () => {},
+      now: () => NOW,
+    });
+
+    const response = await handler(
+      new Request("https://example.com", {
+        method: "POST",
+        body: JSON.stringify({
+          kind: "assign",
+          assigneeOpenId: "ou_new",
+          assigneeName: "李客服",
+          seenState: "待跟进",
+        }),
+      }),
+      params,
+    );
+
+    expect(response.status).toBe(200);
+    expect(sendTicketCard).toHaveBeenCalledWith("ou_new", expect.objectContaining({
+      recordId: "rec1",
+    }));
+  });
+});
+
 describe("ticket action route — gating", () => {
   // The Base read must not happen for an anonymous caller: this endpoint writes,
   // and an unauthenticated request should cost nothing and reveal nothing.
@@ -95,6 +133,7 @@ describe("ticket action route — gating", () => {
       listAdmins: async () => [],
     notify: async () => {},
     syncCards: async () => ({ patched: 0, failed: 0 }),
+    sendTicketCard: async () => {},
     listMembers: async () => [],
       getRecord,
       updateRecord: async () => undefined,
@@ -274,6 +313,7 @@ describe("ticket action route — outcomes", () => {
       listAdmins: async () => [],
     notify: async () => {},
     syncCards: async () => ({ patched: 0, failed: 0 }),
+    sendTicketCard: async () => {},
     listMembers: async () => [],
       getRecord: async () => {
         throw new Error("bitable down");

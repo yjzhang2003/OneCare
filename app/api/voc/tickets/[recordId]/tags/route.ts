@@ -1,5 +1,7 @@
 import { revalidateTag } from "next/cache";
 
+import { syncTicketCardsInBackground } from "../../../../../../src/features/feishu-bot/card-sync-wiring";
+
 import { getCurrentSession } from "../../../../../../src/features/auth/current-session";
 import { isGuest, refuseGuestWrite } from "../../../../../../src/features/auth/guest";
 import type { AuthUser } from "../../../../../../src/features/auth/types";
@@ -24,6 +26,7 @@ export type TagEditDependencies = Readonly<{
   getRecord: (recordId: string) => Promise<VocRecord | null>;
   updateRecord: (recordId: string, fields: Record<string, unknown>) => Promise<void>;
   listAdmins: () => Promise<readonly string[]>;
+  syncCards: (recordId: string) => Promise<unknown>;
   revalidate: () => void;
 }>;
 
@@ -86,6 +89,11 @@ export function createTagEditRoute(dependencies: TagEditDependencies) {
       }
 
       dependencies.revalidate();
+
+      // 情绪极性、问题维度、严重度、AI 摘要 都印在卡片上。改了结论却不重画，
+      // 三张卡就会继续显示被推翻的那一版。
+      await dependencies.syncCards(recordId);
+
       return Response.json({ ok: true, message: "已保存，来源标记为人工修正" });
     } catch {
       return Response.json(
@@ -134,5 +142,6 @@ export const PATCH = createTagEditRoute({
         token: getTokenProvider(),
       }),
     ),
+  syncCards: (recordId) => syncTicketCardsInBackground(recordId),
   revalidate: () => revalidateTag(VOC_RECORDS_CACHE_TAG, { expire: 0 }),
 });
