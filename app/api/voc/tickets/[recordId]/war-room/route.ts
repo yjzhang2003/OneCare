@@ -16,6 +16,7 @@ import { sendFeishuMessage } from "../../../../../../src/features/feishu-bot/cli
 import { resolveWarRoomAction } from "../../../../../../src/features/feishu-bot/war-room-actions";
 import { writeRecord } from "../../../../../../src/features/store/mirror";
 import { readRecordById } from "../../../../../../src/features/store/records";
+import { rememberTicketCard } from "../../../../../../src/features/store/ticket-cards";
 import { VOC_RECORDS_CACHE_TAG } from "../../../../../../src/features/voc/cache-tags";
 import { warRoomDecision } from "../../../../../../src/features/warroom/naming";
 import { readBitableEnv, readBotEnv } from "../../../../../../src/lib/env";
@@ -48,7 +49,11 @@ export type TicketWarRoomDependencies = Readonly<{
   updateRecord: (recordId: string, fields: Record<string, unknown>) => Promise<void>;
   fallbackOpenIds: () => Promise<readonly string[]>;
   createChat: (name: string, memberOpenIds: readonly string[]) => Promise<string>;
-  sendToChat: (chatId: string, card: FeishuCard) => Promise<void>;
+  sendToChat: (
+    chatId: string,
+    card: FeishuCard,
+    recordId: string,
+  ) => Promise<void>;
   revalidate: () => void;
 }>;
 
@@ -212,11 +217,13 @@ export const POST = createTicketWarRoomRoute({
   },
   createChat: (name, memberOpenIds) =>
     createWarRoomChat({ env: readBotEnv(), name, memberOpenIds }),
-  sendToChat: (chatId, card) =>
-    sendFeishuMessage({
+  sendToChat: async (chatId, card, recordId) => {
+    const messageId = await sendFeishuMessage({
       env: readBotEnv(),
       chatId,
       message: { msgType: "interactive", content: JSON.stringify(card) },
-    }),
+    });
+    await rememberTicketCard({ messageId, recordId, audience: "war_room" });
+  },
   revalidate: () => revalidateTag(VOC_RECORDS_CACHE_TAG, { expire: 0 }),
 });

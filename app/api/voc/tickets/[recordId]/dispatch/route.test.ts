@@ -85,8 +85,10 @@ function deps(overrides: Partial<DispatchDependencies> = {}): DispatchDependenci
         producedBy: "规则引擎",
       },
     }),
-    sendCard: async () => {},
+    sendCard: async () => "om_test",
     notify: async () => {},
+    syncCards: async () => ({ patched: 0, failed: 0 }),
+    rememberCard: async () => {},
     revalidate: () => {},
     now: () => NOW,
     ...overrides,
@@ -117,7 +119,7 @@ describe("parseDispatch", () => {
 describe("POST /api/voc/tickets/[recordId]/dispatch", () => {
   it("writes both columns and sends the engineer their task card", async () => {
     const updateRecord = vi.fn(async () => {});
-    const sendCard = vi.fn(async () => {});
+    const sendCard = vi.fn(async () => "om_test");
     const revalidate = vi.fn();
 
     const response = await createDispatchRoute(
@@ -127,6 +129,8 @@ describe("POST /api/voc/tickets/[recordId]/dispatch", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ dispatched: true });
     expect(updateRecord).toHaveBeenCalledWith("rec-1", {
+      // 派工 moves the ticket into 上门中 — the whole point of the state existing.
+      流程状态: "上门中",
       上门工程师: [{ id: "ou_engineer" }],
       派工时间: NOW,
     });
@@ -139,7 +143,10 @@ describe("POST /api/voc/tickets/[recordId]/dispatch", () => {
   it("puts the device's history and the recurrence verdict on the card", async () => {
     let card: unknown = null;
     await createDispatchRoute(
-      deps({ sendCard: async (_openId, sent) => void (card = sent) }),
+      deps({ sendCard: async (_openId, sent) => {
+          card = sent;
+          return "om_test";
+        } }),
     )(post({ engineerOpenId: "ou_engineer" }), params());
 
     const json = JSON.stringify(card);
@@ -196,7 +203,7 @@ describe("POST /api/voc/tickets/[recordId]/dispatch", () => {
   // A second click on the same engineer is not a second job — and must not be a second
   // card either.
   it("does nothing when the same engineer is already on the ticket", async () => {
-    const sendCard = vi.fn(async () => {});
+    const sendCard = vi.fn(async () => "om_test");
     const response = await createDispatchRoute(
       deps({
         getRecord: async () =>
@@ -227,7 +234,7 @@ describe("POST /api/voc/tickets/[recordId]/dispatch", () => {
   });
 
   it("reports a failed write rather than claiming the engineer was sent", async () => {
-    const sendCard = vi.fn(async () => {});
+    const sendCard = vi.fn(async () => "om_test");
     const response = await createDispatchRoute(
       deps({
         updateRecord: async () => {
@@ -259,7 +266,7 @@ describe("POST /api/voc/tickets/[recordId]/dispatch", () => {
 
   // A device with no history read still gets dispatched; the card just loses a block.
   it("dispatches even when the device context cannot be read", async () => {
-    const sendCard = vi.fn(async () => {});
+    const sendCard = vi.fn(async () => "om_test");
     const response = await createDispatchRoute(
       deps({
         deviceContext: async () => {

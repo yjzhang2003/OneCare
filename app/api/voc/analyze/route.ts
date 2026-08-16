@@ -6,6 +6,7 @@ import {
   type TenantTokenProvider,
 } from "../../../../src/features/bitable/client";
 import { pushPending, writeRecord } from "../../../../src/features/store/mirror";
+import { rememberTicketCard } from "../../../../src/features/store/ticket-cards";
 import {
   migrate,
   readPendingPushIds,
@@ -125,6 +126,11 @@ type PendingRecord = Pick<
 type TicketDelivery = Readonly<{
   openId: string;
   message: FeishuOutboundMessage;
+  // Which ticket this card is about. Carried so the delivery can be written into
+  // the card registry (store/ticket-cards.ts) and caught up later: once the
+  // engineer or the war room moves the ticket, this card has to be redrawn, and
+  // the only handle for that is the id of the message it became.
+  recordId: string;
 }>;
 
 // This route holds two kinds of data about a ticket, and confusing them is
@@ -349,6 +355,7 @@ function buildTaggedWrite(
       },
       delivery: {
         openId: assignment.openId,
+        recordId: record.recordId,
         // Rendered from withTicket.next rather than the literal 待跟进 for the
         // same reason the write above is: the state machine decides what the
         // record's state is, and the card must show whatever it decided.
@@ -1122,12 +1129,18 @@ function productionDependencies(
     // rest of this wiring follows). A missing bot credential therefore surfaces
     // as one record's notifyErrors, inside runShard's per-record try, rather
     // than as a failed build or a dead shard.
-    notifyOwner: (delivery) =>
-      sendFeishuMessage({
+    notifyOwner: async (delivery) => {
+      const messageId = await sendFeishuMessage({
         env: readBotEnv(),
         openId: delivery.openId,
         message: delivery.message,
-      }),
+      });
+      await rememberTicketCard({
+        messageId,
+        recordId: delivery.recordId,
+        audience: "owner",
+      });
+    },
     escalate: escalateToWarRoom,
     // A getter (like cronSecret) so each Cron tick — not each import — gets a
     // fresh aily batch number; createAnalyzeRoute reads this once per request

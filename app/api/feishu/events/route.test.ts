@@ -1131,7 +1131,7 @@ describe("POST /api/feishu/events — VOC war room actions, wired for real", () 
     const [, members] = createChat.mock.calls[0];
     expect(members).toContain("ou_owner");
     expect(members).toContain("ou_fallback");
-    expect(sendToChat).toHaveBeenCalledWith("oc_new_room", expect.anything());
+    expect(sendToChat).toHaveBeenCalledWith("oc_new_room", expect.anything(), expect.any(String),);
     expect(client.updateRecord).toHaveBeenCalledTimes(1);
     const [, fields] = client.updateRecord.mock.calls[0];
     expect(fields["协同群 ID"]).toBe("oc_new_room");

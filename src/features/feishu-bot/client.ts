@@ -8,6 +8,14 @@ type ReplyPayload = Readonly<{
   data: { content: string; msg_type: string };
 }>;
 
+// 更新已发出的卡片. The only way to keep three surfaces — the owner's chat, the
+// engineer's task card and the war room — showing the same ticket state: a card
+// callback can only redraw the card that was clicked, and only twice.
+type PatchPayload = Readonly<{
+  path: { message_id: string };
+  data: { content: string };
+}>;
+
 // "open_id" joined "chat_id" when VOC ticket cards started being routed to the
 // person who owns the row: the bot has no chat id for an owner it has never
 // spoken to, so addressing a chat is not an option there. Both id types share
@@ -32,12 +40,17 @@ export type FeishuBotClient = {
       reply: (
         payload: ReplyPayload,
       ) => Promise<{ code?: number; msg?: string }>;
+      patch: (
+        payload: PatchPayload,
+      ) => Promise<{ code?: number; msg?: string }>;
     };
   };
 };
 
 export class FeishuBotError extends Error {
-  constructor(public readonly code: "reply_failed" | "send_failed") {
+  constructor(
+    public readonly code: "reply_failed" | "send_failed" | "patch_failed",
+  ) {
     super(code);
     this.name = "FeishuBotError";
   }
@@ -108,10 +121,13 @@ export type SendFeishuMessageInput =
       message: FeishuOutboundMessage;
     }>;
 
+// Returns the id of the message it just sent, which is the only handle anything
+// has for updating that card later. Callers that just want it delivered can keep
+// ignoring the return value.
 export async function sendFeishuMessage(
   input: SendFeishuMessageInput,
   createClient: () => FeishuBotClient = () => createFeishuBotClient(input.env),
-): Promise<void> {
+): Promise<string | null> {
   const recipient =
     input.openId === undefined
       ? ({ receive_id_type: "chat_id", receive_id: input.chatId } as const)
@@ -128,6 +144,30 @@ export async function sendFeishuMessage(
 
   if (response.code !== 0) {
     throw new FeishuBotError("send_failed");
+  }
+
+  const data: unknown = (response as { data?: unknown }).data;
+  const messageId =
+    typeof data === "object" && data !== null && "message_id" in data
+      ? (data as { message_id?: unknown }).message_id
+      : undefined;
+  return typeof messageId === "string" && messageId.length > 0 ? messageId : null;
+}
+
+// Rewrites a card already sitting in someone's chat. `card` is the freshly
+// rendered card for whoever is looking at that message, so the state tag and the
+// buttons match what the ticket actually is now.
+export async function patchFeishuCard(
+  input: Readonly<{ env: BotEnv; messageId: string; card: unknown }>,
+  createClient: () => FeishuBotClient = () => createFeishuBotClient(input.env),
+): Promise<void> {
+  const response = await createClient().im.message.patch({
+    path: { message_id: input.messageId },
+    data: { content: JSON.stringify(input.card) },
+  });
+
+  if (response.code !== 0) {
+    throw new FeishuBotError("patch_failed");
   }
 }
 

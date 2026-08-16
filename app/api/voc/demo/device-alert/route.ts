@@ -167,12 +167,13 @@ export const POST = createDeviceAlertRoute({
   getRecords: (id) => readIdentityRecords("device", id),
   getOwnerOpenIds: (id) => readIdentityResponderOpenIds("device", id),
   provider: ruleBasedProvider,
-  sendCard: (openId, card) =>
-    sendFeishuMessage({
+  sendCard: async (openId, card) => {
+    await sendFeishuMessage({
       env: readBotEnv(),
       openId,
       message: { msgType: "interactive", content: JSON.stringify(card) },
-    }),
+    });
+  },
   notify: (input) => notify(input, defaultNotifyDependencies()),
   now: () => Date.now(),
 });

@@ -759,6 +759,11 @@ const NEXT_VOC_ACTION: Readonly<
   >
 > = {
   待跟进: { label: "开始跟进", action: "voc_start_follow_up" },
+  上门中: {
+    label: "回填处理结果",
+    action: "voc_submit_follow_up",
+    note: { label: "现场处理结果", placeholder: "请填写现场检查、处理与更换的配件" },
+  },
   跟进中: {
     label: "提交跟进结果",
     action: "voc_submit_follow_up",
@@ -778,6 +783,7 @@ const STATUS_COLOR_BY_STATE: Readonly<Record<VocState, string>> = {
   无需跟进: "grey",
   待跟进: "orange",
   跟进中: "blue",
+  上门中: "purple",
   待闭环: "yellow",
   已闭环: "green",
 };

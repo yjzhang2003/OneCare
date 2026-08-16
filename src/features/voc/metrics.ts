@@ -53,6 +53,7 @@ const TAGGED_STATES: ReadonlySet<VocState> = new Set<VocState>([
   "无需跟进",
   "待跟进",
   "跟进中",
+  "上门中",
   "待闭环",
   "已闭环",
 ]);

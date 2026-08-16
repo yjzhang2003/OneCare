@@ -108,15 +108,16 @@ export async function notify(
 export function defaultNotifyDependencies(): NotifyDependencies {
   return {
     insert: insertNotification,
-    send: (openId, message) =>
-      sendFeishuMessage({
+    send: async (openId, message) => {
+      await sendFeishuMessage({
         env: readBotEnv(),
         openId,
         message: {
           msgType: "interactive",
           content: JSON.stringify(createNotificationCard(message)),
         },
-      }),
+      });
+    },
     // 设备预警's "record number" is the device id, so its link is the device page rather
     // than a ticket that does not exist.
     ticketHref: (recordNumber) =>

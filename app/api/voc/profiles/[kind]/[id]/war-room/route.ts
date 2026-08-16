@@ -131,11 +131,12 @@ export const POST = createProfileWarRoomRoute({
     }),
   // sendFeishuMessage's input is a union of chatId or openId, never both; this always
   // takes the chatId branch because it only ever posts into the group it just created.
-  sendCard: (chatId, card) =>
-    sendFeishuMessage({
+  sendCard: async (chatId, card) => {
+    await sendFeishuMessage({
       env: readBotEnv(),
       chatId,
       message: { msgType: "interactive", content: JSON.stringify(card) },
-    }),
+    });
+  },
   now: () => Date.now(),
 });

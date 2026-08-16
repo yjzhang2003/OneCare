@@ -10,6 +10,7 @@ import {
   type TenantTokenProvider,
 } from "../../../../../../src/features/bitable/client";
 import { VOC_FIELD_NAMES, type VocRecord } from "../../../../../../src/features/bitable/field-map";
+import { syncTicketCardsInBackground } from "../../../../../../src/features/feishu-bot/card-sync-wiring";
 import { createEngineerTaskCard } from "../../../../../../src/features/feishu-bot/cards";
 import type { FeishuCard } from "../../../../../../src/features/feishu-bot/card-types";
 import { sendFeishuMessage } from "../../../../../../src/features/feishu-bot/client";
@@ -21,6 +22,9 @@ import {
   readProfile,
 } from "../../../../../../src/features/store/workbench-query";
 import { VOC_RECORDS_CACHE_TAG } from "../../../../../../src/features/voc/cache-tags";
+import { rememberTicketCard } from "../../../../../../src/features/store/ticket-cards";
+import { transition } from "../../../../../../src/features/voc/service-event";
+import { transitionFields } from "../../../../../../src/features/voc/transition-fields";
 import { listOwnerRuleRecords } from "../../../../../../src/features/voc/owner-directory";
 import {
   adminOpenIds,
@@ -68,10 +72,14 @@ export type DispatchDependencies = Readonly<{
       }> | null;
     }>
   >;
-  sendCard: (openId: string, card: FeishuCard) => Promise<void>;
+  // Returns the sent message's id so the caller can register the card for later
+  // redraws; null when the transport cannot supply one.
+  sendCard: (openId: string, card: FeishuCard) => Promise<string | null>;
   // The console's copy of this event. Separate from sendCard because the card is the
   // message and this is the row that makes it findable afterwards.
   notify: (input: NotifyInput) => Promise<void>;
+  rememberCard: typeof rememberTicketCard;
+  syncCards: (recordId: string) => Promise<unknown>;
   revalidate: () => void;
   now: () => number;
 }>;
@@ -169,9 +177,27 @@ export function createDispatchRoute(dependencies: DispatchDependencies) {
         });
       }
 
+      // 派工 is a state transition now, not just two columns: a ticket with an engineer
+      // on the way sits in 上门中, so the queue, the cards and the console all say who
+      // holds it. The machine answers whether that move is legal from here; a second
+      // dispatch to another engineer replays into a noop and only rewrites the columns.
+      const outcome = transition(record.state, "派工", {
+        retryCount: record.retryCount,
+        hasOwner: record.ownerOpenIds.length > 0,
+      });
+      if (outcome.kind === "rejected") {
+        return Response.json(
+          { error: "rejected", message: outcome.reason },
+          { status: 422 },
+        );
+      }
+
       const dispatchedAt = dependencies.now();
       try {
         await dependencies.updateRecord(recordId, {
+          ...(outcome.kind === "ok"
+            ? transitionFields(outcome.next, undefined, dispatchedAt)
+            : {}),
           [VOC_FIELD_NAMES.engineer]: [{ id: engineerOpenId }],
           [VOC_FIELD_NAMES.dispatchedAt]: dispatchedAt,
         });
@@ -187,15 +213,28 @@ export function createDispatchRoute(dependencies: DispatchDependencies) {
       // The record already says who is going, so a card that fails to send is a
       // notification problem, not a dispatch that did not happen. Said plainly rather
       // than reported as a failure that would invite a second click.
+      const dispatched: VocRecord =
+        outcome.kind === "ok" ? { ...record, state: outcome.next } : record;
+
       const context_ = await dependencies
         .deviceContext(record.deviceRef)
         .catch(() => ({ total: 0, open: 0, recurrence: null }));
 
+      const engineerCardPayload = {
+        dispatcherName: user.name,
+        model: record.model,
+        userRef: record.userRef,
+        deviceRef: record.deviceRef,
+        deviceTotal: context_.total,
+        deviceOpen: context_.open,
+        recurrence: context_.recurrence,
+      };
+
       try {
-        await dependencies.sendCard(
+        const messageId = await dependencies.sendCard(
           engineerOpenId,
           createEngineerTaskCard({
-            record,
+            record: dispatched,
             tag: {
               summary: record.summary,
               polarity: record.polarity ?? "—",
@@ -211,6 +250,14 @@ export function createDispatchRoute(dependencies: DispatchDependencies) {
             recurrence: context_.recurrence,
           }),
         );
+        // Registered only after a successful send: an id we never got is an id
+        // nothing can redraw, and a row without one would be retried forever.
+        await dependencies.rememberCard({
+          messageId,
+          recordId,
+          audience: "engineer",
+          payload: engineerCardPayload,
+        });
       } catch {
         return Response.json({
           ok: true,
@@ -231,10 +278,15 @@ export function createDispatchRoute(dependencies: DispatchDependencies) {
           summary: record.summary,
           content: record.content,
           severity: record.severity,
-          state: record.state,
+          state: dispatched.state,
           actorName: user.name,
         },
       });
+
+      // The owner's card and the war room's copy both still say 跟进中; the
+      // ticket is 上门中 now, and whoever is looking at either surface should see
+      // that without being told twice.
+      await dependencies.syncCards(recordId);
 
       return Response.json({
         ok: true,
@@ -314,12 +366,15 @@ export const POST = createDispatchRoute({
     };
   },
   notify: (input) => notify(input, defaultNotifyDependencies()),
-  sendCard: (openId, card) =>
-    sendFeishuMessage({
+  sendCard: async (openId, card) => {
+    return await sendFeishuMessage({
       env: readBotEnv(),
       openId,
       message: { msgType: "interactive", content: JSON.stringify(card) },
-    }),
+    });
+  },
+  rememberCard: rememberTicketCard,
+  syncCards: (recordId) => syncTicketCardsInBackground(recordId),
   revalidate: () => revalidateTag(VOC_RECORDS_CACHE_TAG, { expire: 0 }),
   now: () => Date.now(),
 });

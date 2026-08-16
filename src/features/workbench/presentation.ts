@@ -45,6 +45,7 @@ export const STATE_COLOR: Readonly<Record<string, string>> = {
   无需跟进: "gray",
   待跟进: "orange",
   跟进中: "arcoblue",
+  上门中: "magenta",
   待闭环: "purple",
   已闭环: "green",
 };

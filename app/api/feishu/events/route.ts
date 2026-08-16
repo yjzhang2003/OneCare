@@ -2,6 +2,8 @@ import { after } from "next/server";
 
 import { writeRecord } from "../../../../src/features/store/mirror";
 import { readRecordById } from "../../../../src/features/store/records";
+import { syncTicketCardsInBackground } from "../../../../src/features/feishu-bot/card-sync-wiring";
+import { rememberTicketCard } from "../../../../src/features/store/ticket-cards";
 
 import type { VocRecord } from "../../../../src/features/bitable/field-map";
 import {
@@ -446,7 +448,11 @@ export function createAnswerGroupQuestion(
 export type WarRoomActionDependencies = Readonly<{
   fallbackOpenIds: () => Promise<readonly string[]>;
   createChat: (name: string, memberOpenIds: readonly string[]) => Promise<string>;
-  sendToChat: (chatId: string, card: FeishuCard) => Promise<void>;
+  sendToChat: (
+    chatId: string,
+    card: FeishuCard,
+    recordId: string,
+  ) => Promise<void>;
   notifyOperator: (openId: string, text: string) => Promise<void>;
 }>;
 
@@ -475,12 +481,17 @@ function createWarRoomChatForRecord(
 // (never both) — this always takes the chatId branch, since resolveWarRoomAction
 // only ever posts into the war room chat it just created, never to a person.
 // Runs only inside the background task, same as createWarRoomChatForRecord.
-function sendCardToWarRoomChat(chatId: string, card: FeishuCard): Promise<void> {
-  return sendFeishuMessage({
+async function sendCardToWarRoomChat(
+  chatId: string,
+  card: FeishuCard,
+  recordId: string,
+): Promise<void> {
+  const messageId = await sendFeishuMessage({
     env: readBotEnv(),
     chatId,
     message: { msgType: "interactive", content: JSON.stringify(card) },
   });
+  await rememberTicketCard({ messageId, recordId, audience: "war_room" });
 }
 
 // The openId branch of sendFeishuMessage, reusing createTextMessage the same
@@ -489,8 +500,11 @@ function sendCardToWarRoomChat(chatId: string, card: FeishuCard): Promise<void> 
 // createChat/updateRecord/sendToChat failure is reported once the callback
 // itself has already answered with the "creating" toast (see
 // createResolveAction below).
-function notifyOperatorByDirectMessage(openId: string, text: string): Promise<void> {
-  return sendFeishuMessage({ env: readBotEnv(), openId, message: createTextMessage(text) });
+async function notifyOperatorByDirectMessage(
+  openId: string,
+  text: string,
+): Promise<void> {
+  await sendFeishuMessage({ env: readBotEnv(), openId, message: createTextMessage(text) });
 }
 
 const defaultWarRoomDependencies: WarRoomActionDependencies = {
@@ -608,6 +622,12 @@ export function createResolveAction(
   bitable: () => VocActionBitable,
   warRoom: WarRoomActionDependencies = defaultWarRoomDependencies,
   schedule: Scheduler = (task) => after(task),
+  // The clicked card is redrawn twice — once by `result` (the callback's own
+  // allowed update) and once here — because the callback payload does not carry
+  // the message id and im.message.patch is a separate channel that does not spend
+  // the callback's update budget. Two identical renders look like one.
+  syncCardsForRecord: (recordId: string) => Promise<unknown> = (recordId) =>
+    syncTicketCardsInBackground(recordId),
 ): (input: CardActionRequest) => Promise<CardActionResult> {
   return async function resolveAction(input) {
     if (isWarRoomCardAction(input.action)) {
@@ -652,6 +672,14 @@ export function createResolveAction(
       const action = CARD_ACTION_TRANSITIONS[input.action];
       if (!refused && action) {
         schedule(() => notifyHandOff(input.recordId, input.operatorOpenId, action));
+        // 三边同步. The card that was clicked is redrawn by `result` itself — the
+        // callback's own one allowed update — so it is skipped here; what this
+        // catches up is every other surface holding this same ticket. Scheduled
+        // for the same reason the hand-off notice is: one Feishu call per card is
+        // not something a 3-second callback budget can afford.
+        schedule(async () => {
+          await syncCardsForRecord(input.recordId);
+        });
       }
       return result;
     }
@@ -704,8 +732,12 @@ const defaultDependencies: FeishuEventRouteDependencies = {
   createMenuHint: createMenuHintMessage,
   createWelcome: createWelcomeMessage,
   replyMessage: replyToFeishuMessage,
-  sendMessage: sendFeishuMessage,
-  sendDirectMessage: sendFeishuMessage,
+  sendMessage: async (input) => {
+    await sendFeishuMessage(input);
+  },
+  sendDirectMessage: async (input) => {
+    await sendFeishuMessage(input);
+  },
   resolveAction: createResolveAction(storeBackedBitable),
   answerGroupQuestion: createAnswerGroupQuestion(getBitableClient, async (question, facts) => {
     const provider = getAnswerProvider();
@@ -736,12 +768,13 @@ const defaultDependencies: FeishuEventRouteDependencies = {
           producedBy: insight.producedBy,
           openTicketNumbers,
         }),
-      sendCard: (chatId, card) =>
-        sendFeishuMessage({
+      sendCard: async (chatId, card) => {
+        await sendFeishuMessage({
           env: readBotEnv(),
           chatId,
           message: { msgType: "interactive", content: JSON.stringify(card) },
-        }),
+        });
+      },
       now: () => Date.now(),
     }),
 };

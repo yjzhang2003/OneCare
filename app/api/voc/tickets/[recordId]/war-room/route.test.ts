@@ -84,7 +84,7 @@ describe("POST /api/voc/tickets/[recordId]/war-room", () => {
     // group name, its owner, and whoever clicked.
     expect(createChat).toHaveBeenCalledWith("VOC-a3cdc5-冰箱-高", ["ou_owner", "ou_owner"]);
     expect(updateRecord).toHaveBeenCalledWith("rec-1", { "协同群 ID": "oc_new" });
-    expect(sendToChat).toHaveBeenCalledWith("oc_new", expect.anything());
+    expect(sendToChat).toHaveBeenCalledWith("oc_new", expect.anything(), expect.any(String),);
     expect(revalidate).toHaveBeenCalledTimes(1);
   });
 

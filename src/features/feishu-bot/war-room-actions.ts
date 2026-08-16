@@ -19,7 +19,14 @@ export type WarRoomActionInput = Readonly<{
   updateRecord: (recordId: string, fields: Record<string, unknown>) => Promise<void>;
   fallbackOpenIds: () => Promise<readonly string[]>;
   createChat: (name: string, memberOpenIds: readonly string[]) => Promise<string>;
-  sendToChat: (chatId: string, card: FeishuCard) => Promise<void>;
+  // `recordId` travels with the card so the implementation can write the sent
+  // message down against this ticket (see store/ticket-cards.ts): a group card
+  // that nobody can find later is a card that never catches up with the state.
+  sendToChat: (
+    chatId: string,
+    card: FeishuCard,
+    recordId: string,
+  ) => Promise<void>;
   // Real-tenant measurement (2026-08-12, cross-border): getRecord ~651ms +
   // fallbackOpenIds ~742ms + createChat ~195ms (a fast parameter-validation
   // reject, not a real group create) + updateRecord ~753ms + sendToChat
@@ -125,6 +132,7 @@ async function createWarRoomInBackground(
         },
         { fullContent: true },
       ),
+      record.recordId,
     );
   } catch {
     // The group exists and the Base already points to it — a failed post is

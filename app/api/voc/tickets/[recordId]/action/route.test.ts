@@ -60,6 +60,7 @@ function route(
     listMembers,
     listAdmins: async () => [],
     notify: async () => {},
+    syncCards: async () => ({ patched: 0, failed: 0 }),
     session: async () =>
       overrides.user === undefined
         ? { openId: OWNER, name: "张禹健" }
@@ -91,6 +92,7 @@ describe("ticket action route — gating", () => {
       session: async () => null,
       listAdmins: async () => [],
     notify: async () => {},
+    syncCards: async () => ({ patched: 0, failed: 0 }),
     listMembers: async () => [],
       getRecord,
       updateRecord: async () => undefined,
@@ -269,6 +271,7 @@ describe("ticket action route — outcomes", () => {
       session: async () => ({ openId: OWNER, name: "张禹健" }),
       listAdmins: async () => [],
     notify: async () => {},
+    syncCards: async () => ({ patched: 0, failed: 0 }),
     listMembers: async () => [],
       getRecord: async () => {
         throw new Error("bitable down");

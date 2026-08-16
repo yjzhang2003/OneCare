@@ -144,14 +144,16 @@ describe("transition", () => {
     expect(emptyNote.kind).toBe("rejected");
   });
 
-  it("exhaustively checks all 64 state-action combinations for correct noop behavior", () => {
-    // Exactly 8 combinations should return noop (or possibly rejected if guards fail)
+  it("exhaustively checks every state-action combination for correct noop behavior", () => {
     const noopCombinations = new Set([
       "已分析|打标成功",
       "分析失败|打标失败",
       "待跟进|需建单",
       "无需跟进|无需建单",
       "跟进中|开始跟进",
+      // A second 派工 — the owner sending a different engineer — replays instead of
+      // failing: the ticket is already 上门中, and only the engineer columns change.
+      "上门中|派工",
       "待闭环|提交跟进结果",
       "已闭环|确认闭环",
       // 待分析|重试 is special-cased above
@@ -180,7 +182,7 @@ describe("transition", () => {
       }
     }
 
-    // We expect exactly 8 noops (the 7 normal ones + 待分析|重试)
-    expect(noopCount).toBe(8);
+    // The 8 listed replays plus 待分析|重试.
+    expect(noopCount).toBe(9);
   });
 });

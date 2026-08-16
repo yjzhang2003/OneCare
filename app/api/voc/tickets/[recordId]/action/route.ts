@@ -1,5 +1,7 @@
 import { revalidateTag } from "next/cache";
 
+import { syncTicketCardsInBackground } from "../../../../../../src/features/feishu-bot/card-sync-wiring";
+
 import {
   createBitableClient,
   createTenantTokenProvider,
@@ -64,6 +66,8 @@ export type TicketActionDependencies = Readonly<{
   // when a write landed and never otherwise — a revalidation that quietly stops
   // happening leaves a UI that reports success and shows stale data, which is
   // the hardest kind of bug to notice from the outside.
+  // Catches the ticket's other Feishu cards up with the state just written.
+  syncCards: (recordId: string) => Promise<unknown>;
   revalidate: () => void;
   // Who may be named as an owner. Injected like every other boundary here, and read
   // per request rather than cached: a colleague added to the app's scope should be
@@ -292,6 +296,13 @@ export function createTicketActionRoute(dependencies: TicketActionDependencies) 
         await dependencies.notify(event);
       }
 
+      // 三边同步：this ticket's cards are sitting in the owner's chat, the
+      // engineer's chat and the war room, each still drawn at the state it had
+      // when it was sent. Redrawn here rather than notified about, because a
+      // second card saying "it moved" leaves the first one still showing a live
+      // button for a transition that is no longer legal.
+      await dependencies.syncCards(recordId);
+
       return Response.json({
         ok: true,
         message: outcome.message,
@@ -336,6 +347,7 @@ export const POST = createTicketActionRoute({
     }),
   getRecord: (recordId) => getBitableClient().getRecord(recordId),
   notify: (input) => notify(input, defaultNotifyDependencies()),
+  syncCards: (recordId) => syncTicketCardsInBackground(recordId),
   listAdmins: async () =>
     adminOpenIds(
       await listOwnerRuleRecords({

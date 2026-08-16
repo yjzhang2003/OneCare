@@ -22,7 +22,7 @@ describe("replyToFeishuMessage", () => {
   it("replies to the original message with interactive card content", async () => {
     const reply = vi.fn(async () => ({ code: 0, msg: "success" }));
     const create = vi.fn(async () => ({ code: 0, msg: "success" }));
-    const client: FeishuBotClient = { im: { message: { create, reply } } };
+    const client: FeishuBotClient = { im: { message: { create, reply, patch: vi.fn(async () => ({ code: 0 })) } } };
 
     await replyToFeishuMessage(
       {
@@ -45,7 +45,7 @@ describe("replyToFeishuMessage", () => {
   it("creates SDK clients with a silent logger, not just a low logger level", () => {
     const create = vi.fn(async () => ({ code: 0, msg: "success" }));
     const reply = vi.fn(async () => ({ code: 0, msg: "success" }));
-    const client: FeishuBotClient = { im: { message: { create, reply } } };
+    const client: FeishuBotClient = { im: { message: { create, reply, patch: vi.fn(async () => ({ code: 0 })) } } };
     const factory = vi.fn((_options: FeishuSdkClientOptions) => client);
 
     expect(createFeishuBotClient(env, factory)).toBe(client);
@@ -75,7 +75,7 @@ describe("replyToFeishuMessage", () => {
   it("logs nothing at any level, so a failed call cannot leak a token or VOC text", () => {
     const create = vi.fn(async () => ({ code: 0, msg: "success" }));
     const reply = vi.fn(async () => ({ code: 0, msg: "success" }));
-    const client: FeishuBotClient = { im: { message: { create, reply } } };
+    const client: FeishuBotClient = { im: { message: { create, reply, patch: vi.fn(async () => ({ code: 0 })) } } };
     const factory = vi.fn((_options: FeishuSdkClientOptions) => client);
 
     createFeishuBotClient(env, factory);
@@ -104,7 +104,7 @@ describe("replyToFeishuMessage", () => {
       msg: "upstream response containing private details",
     }));
     const create = vi.fn(async () => ({ code: 0, msg: "success" }));
-    const client: FeishuBotClient = { im: { message: { create, reply } } };
+    const client: FeishuBotClient = { im: { message: { create, reply, patch: vi.fn(async () => ({ code: 0 })) } } };
 
     await expect(
       replyToFeishuMessage(
@@ -131,7 +131,7 @@ describe("replyToFeishuMessage", () => {
   it("sends a proactive interactive message to the entered p2p chat", async () => {
     const create = vi.fn(async () => ({ code: 0, msg: "success" }));
     const reply = vi.fn(async () => ({ code: 0, msg: "success" }));
-    const client: FeishuBotClient = { im: { message: { create, reply } } };
+    const client: FeishuBotClient = { im: { message: { create, reply, patch: vi.fn(async () => ({ code: 0 })) } } };
 
     await sendFeishuMessage(
       {
@@ -162,7 +162,7 @@ describe("replyToFeishuMessage", () => {
   it("sends a proactive interactive message to an owner by open_id", async () => {
     const create = vi.fn(async () => ({ code: 0, msg: "success" }));
     const reply = vi.fn(async () => ({ code: 0, msg: "success" }));
-    const client: FeishuBotClient = { im: { message: { create, reply } } };
+    const client: FeishuBotClient = { im: { message: { create, reply, patch: vi.fn(async () => ({ code: 0 })) } } };
 
     await sendFeishuMessage(
       {
@@ -192,7 +192,7 @@ describe("replyToFeishuMessage", () => {
       msg: "upstream response containing private details",
     }));
     const reply = vi.fn(async () => ({ code: 0, msg: "success" }));
-    const client: FeishuBotClient = { im: { message: { create, reply } } };
+    const client: FeishuBotClient = { im: { message: { create, reply, patch: vi.fn(async () => ({ code: 0 })) } } };
 
     await expect(
       sendFeishuMessage(
@@ -212,7 +212,7 @@ describe("replyToFeishuMessage", () => {
       msg: "upstream response containing private details",
     }));
     const reply = vi.fn(async () => ({ code: 0, msg: "success" }));
-    const client: FeishuBotClient = { im: { message: { create, reply } } };
+    const client: FeishuBotClient = { im: { message: { create, reply, patch: vi.fn(async () => ({ code: 0 })) } } };
 
     await expect(
       sendFeishuMessage(

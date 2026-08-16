@@ -5,6 +5,11 @@ export const VOC_STATES = [
   "无需跟进",
   "待跟进",
   "跟进中",
+  // 派工之后、现场结果回填之前。Before this existed, a ticket sat in 跟进中 whether
+  // the 客服 was working it or an engineer was already on site, and the only way to
+  // tell them apart was to notice that 上门工程师 happened to be filled in. Who holds
+  // the ticket right now is exactly what a state is for.
+  "上门中",
   "待闭环",
   "已闭环",
 ] as const;
@@ -18,8 +23,9 @@ export const VOC_STATE_SEQUENCE: Readonly<Record<VocState, number>> = {
   无需跟进: 3,
   待跟进: 4,
   跟进中: 5,
-  待闭环: 6,
-  已闭环: 7,
+  上门中: 6,
+  待闭环: 7,
+  已闭环: 8,
 };
 
 export const VOC_ACTIONS = [
@@ -29,6 +35,7 @@ export const VOC_ACTIONS = [
   "需建单",
   "无需建单",
   "开始跟进",
+  "派工",
   "提交跟进结果",
   "确认闭环",
 ] as const;
@@ -83,8 +90,22 @@ const RULES: readonly Rule[] = [
   },
   { from: "已分析", action: "无需建单", to: "无需跟进" },
   { from: "待跟进", action: "开始跟进", to: "跟进中" },
+  // 派工 reaches 上门中 from either side of 开始跟进: an owner who has already picked
+  // the ticket up, and one who dispatches an engineer the moment it lands. Both are
+  // real — refusing the second would force a meaningless click before every dispatch.
+  { from: "待跟进", action: "派工", to: "上门中" },
+  { from: "跟进中", action: "派工", to: "上门中" },
   {
     from: "跟进中",
+    action: "提交跟进结果",
+    to: "待闭环",
+    guard: (context) => requireText(context.followUpNote, "跟进记录"),
+  },
+  // The engineer's 回填处理结果 and the owner's own 提交跟进结果 are the same
+  // transition seen from two seats: whoever files the result moves the ticket to
+  // 待闭环, and closing it stays the owner's call either way.
+  {
+    from: "上门中",
     action: "提交跟进结果",
     to: "待闭环",
     guard: (context) => requireText(context.followUpNote, "跟进记录"),
